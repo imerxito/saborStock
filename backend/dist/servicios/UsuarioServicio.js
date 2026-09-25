@@ -31,7 +31,7 @@ export class UsuarioServicio {
         const CorreoExiste = await this.UsuarioRepo.obtenerPorCorreo(datos.correo);
         if (CorreoExiste)
             throw Error("ya este correo esta registrado");
-        const hayDueno = Number(await this.UsuarioRepo.ContarAdmin()) > 0;
+        const hayDueno = Number(await this.UsuarioRepo.ContarDueno()) > 0;
         if (Number(hayDueno) === 0) {
             datos.rol = RolUsuario.Dueno;
         }
@@ -41,6 +41,7 @@ export class UsuarioServicio {
         if (cambios.nombre !== undefined && cambios.nombre.trim() === "") {
             throw new Error("El nombre no puede estar vacio");
         }
+        await this.ProtegerDueno(id, cambios);
         await this.UsuarioRepo.actualizarUsuario(id, cambios);
         return this.obtenerPorId(id);
     }
@@ -51,7 +52,7 @@ export class UsuarioServicio {
         const actual = await this.UsuarioRepo.obtenerPorId(id);
         if (!actual || actual.rol !== RolUsuario.Dueno || !actual.activo)
             return;
-        if (Number(await this.UsuarioRepo.ContarAdmin()) <= 1) {
+        if (Number(await this.UsuarioRepo.ContarDueno()) <= 1) {
             throw new Error(`no puedes quitar al ultimo dueño`);
         }
     }

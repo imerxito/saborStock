@@ -21,7 +21,7 @@ export class UsuarioControlador {
     }
     async obtenerPorCerdula(req, res) {
         try {
-            const usuario = await usuarioServicio.obtenerPorId(req.params.cedula);
+            const usuario = await usuarioServicio.obtenerPorCedula(req.params.cedula);
             res.status(200).json(usuario);
         }
         catch (error) {

@@ -16,7 +16,7 @@ function mapaearUsuarioRow(row) {
 export class UsuarioRepositorio {
     async listar() {
         const { data, error } = await supabase
-            .from("usuarios")
+            .from("usuario")
             .select("*");
         if (error) {
             throw new Error(`Error al listar usuarios: ${error.message}`);
@@ -25,7 +25,7 @@ export class UsuarioRepositorio {
     }
     async obtenerPorId(id) {
         const { data, error } = await supabase
-            .from("usuarios")
+            .from("usuario")
             .select("*")
             .eq("id", id)
             .single();
@@ -38,7 +38,7 @@ export class UsuarioRepositorio {
     }
     async obtenerPorCedula(cedula) {
         const { data, error } = await supabase
-            .from("usuarios")
+            .from("usuario")
             .select("*")
             .eq("cedula", cedula)
             .single();
@@ -51,7 +51,7 @@ export class UsuarioRepositorio {
     }
     async obtenerPorCorreo(correo) {
         const { data, error } = await supabase
-            .from("usuarios")
+            .from("usuario")
             .select("*")
             .eq("correo", correo)
             .single();
@@ -64,7 +64,7 @@ export class UsuarioRepositorio {
     }
     async crearUsuario(datos) {
         const { data, error } = await supabase
-            .from("usuarios")
+            .from("usuario")
             .insert({
             nombre: datos.nombre,
             correo: datos.correo,
@@ -93,20 +93,22 @@ export class UsuarioRepositorio {
         if (Object.keys(campos).length === 0)
             return;
         const { error } = await supabase
-            .from("usuarios")
-            .update(id)
+            .from("usuario")
+            .update(campos)
             .eq("id", id);
         if (error)
             throw new Error(`Error al actualizar usuario${error.message}`);
     }
-    async ContarAdmin() {
+    async ContarDueno() {
         const { count, error } = await supabase
-            .from("usuarios")
+            .from("usuario")
             .select("id", { count: "exact", head: true })
-            .eq("rol", RolUsuario.ADMIN)
+            .eq("rol", RolUsuario.Dueno)
             .eq("activo", true);
-        if (error)
-            throw new Error(`Error en el contador:${error.message}`);
+        if (error) {
+            console.error("Error Supabase contarDuenos:", error);
+            throw new Error(`Error en el contador Dueño 1:${error.message}`);
+        }
         return count ?? 0;
     }
 }

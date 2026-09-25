@@ -24,7 +24,7 @@ export class UsuarioControlador{
 
     async obtenerPorCerdula(req:Request<{cedula:string}>,res:Response):Promise<void>{
        try{
-            const usuario = await usuarioServicio.obtenerPorId(req.params.cedula);
+            const usuario = await usuarioServicio.obtenerPorCedula(req.params.cedula);
             res.status(200).json(usuario)
         }catch(error:any){
             res.status(404).json({mensaje: error.message});
@@ -47,6 +47,7 @@ export class UsuarioControlador{
         }catch(error:any){
             res.status(400).json({mensaje: error.message});
         }
+        
     }
 
     async desactivar(req:Request<{id:string}>,res:Response):Promise<void>{
