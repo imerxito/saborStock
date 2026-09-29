@@ -1,3 +1,5 @@
+// servicios/UsuarioServicio.ts
+import { supabase } from "../configuracion/Supabase.js";
 import { RolUsuario } from "../modelos/RolUsuario.js";
 import { UsuarioRepositorio } from "../persistencia/UsuarioRepositorio.js";
 export class UsuarioServicio {
@@ -8,58 +10,72 @@ export class UsuarioServicio {
     async listar() {
         return this.UsuarioRepo.listar();
     }
-    async obtenerPorId(id) {
-        const usuario = await this.UsuarioRepo.obtenerPorId(id);
+    async obtenerPorId(authId) {
+        const usuario = await this.UsuarioRepo.obtenerPorId(authId);
         if (!usuario)
             throw new Error("Usuario no encontrado");
         return usuario;
     }
     async obtenerPorCedula(cedula) {
         const usuario = await this.UsuarioRepo.obtenerPorCedula(cedula);
-        if (!usuario) {
-            throw new Error("Cedula no encontrado");
-        }
+        if (!usuario)
+            throw new Error("Cedula no encontrada");
         return usuario;
     }
     async crear(datos) {
-        if (datos.nombre.trim() === "") {
+        if (datos.nombre.trim() === "")
             throw new Error("El nombre no puede estar vacio");
-        }
         const cedulaExiste = await this.UsuarioRepo.obtenerPorCedula(datos.cedula);
         if (cedulaExiste)
-            throw Error("Ya esta esta cedula");
-        const CorreoExiste = await this.UsuarioRepo.obtenerPorCorreo(datos.correo);
-        if (CorreoExiste)
-            throw Error("ya este correo esta registrado");
-        const hayDueno = Number(await this.UsuarioRepo.ContarDueno()) > 0;
-        if (Number(hayDueno) === 0) {
-            datos.rol = RolUsuario.Dueno;
+            throw new Error("Ya existe esa cedula");
+        const correoExiste = await this.UsuarioRepo.obtenerPorCorreo(datos.correo);
+        if (correoExiste)
+            throw new Error("Ya este correo esta registrado");
+        const hayDueno = (await this.UsuarioRepo.contarDuenos()) > 0;
+        const rol = hayDueno ? (datos.rol ?? RolUsuario.MESERO) : RolUsuario.Dueno;
+        // 1. usuario en Auth
+        const { data: auth, error: errAuth } = await supabase.auth.admin.createUser({
+            email: datos.correo,
+            password: datos.contrasena,
+            email_confirm: true,
+            app_metadata: { rol },
+        });
+        if (errAuth || !auth.user) {
+            throw new Error(errAuth?.message ?? "No se pudo crear el usuario en Auth");
         }
-        return this.UsuarioRepo.crearUsuario(datos);
+        // 2. perfil en la tabla "usuario"
+        try {
+            return await this.UsuarioRepo.crearUsuario({ ...datos, rol }, auth.user.id);
+        }
+        catch (e) {
+            await supabase.auth.admin.deleteUser(auth.user.id); // rollback
+            throw e;
+        }
     }
-    async actualizar(id, cambios) {
+    async actualizar(authId, cambios) {
         if (cambios.nombre !== undefined && cambios.nombre.trim() === "") {
             throw new Error("El nombre no puede estar vacio");
         }
-        await this.ProtegerDueno(id, cambios);
-        await this.UsuarioRepo.actualizarUsuario(id, cambios);
-        return this.obtenerPorId(id);
+        await this.ProtegerDueno(authId, cambios);
+        await this.UsuarioRepo.actualizarUsuario(authId, cambios);
+        return this.obtenerPorId(authId);
     }
-    async ProtegerDueno(id, cambios) {
-        const dejaSerDueno = cambios.activo === false || (cambios.rol !== undefined && cambios.rol !== RolUsuario.Dueno);
+    async ProtegerDueno(authId, cambios) {
+        const dejaSerDueno = cambios.activo === false ||
+            (cambios.rol !== undefined && cambios.rol !== RolUsuario.Dueno);
         if (!dejaSerDueno)
             return;
-        const actual = await this.UsuarioRepo.obtenerPorId(id);
+        const actual = await this.UsuarioRepo.obtenerPorId(authId);
         if (!actual || actual.rol !== RolUsuario.Dueno || !actual.activo)
             return;
-        if (Number(await this.UsuarioRepo.ContarDueno()) <= 1) {
-            throw new Error(`no puedes quitar al ultimo dueño`);
+        if ((await this.UsuarioRepo.contarDuenos()) <= 1) {
+            throw new Error("No puedes quitar al ultimo dueño");
         }
     }
-    async desactivar(id) {
-        return this.actualizar(id, { activo: false });
+    async desactivar(authId) {
+        return this.actualizar(authId, { activo: false });
     }
-    async activar(id) {
-        return this.actualizar(id, { activo: true });
+    async activar(authId) {
+        return this.actualizar(authId, { activo: true });
     }
 }
