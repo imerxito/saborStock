@@ -4,29 +4,29 @@ import { registrar } from '../servicios/AuthServicio';
 import type { DatosRegistrados } from '../tipos/Usuario';
 import '../estilos/principal.css';
 const FORM_INICIAL: DatosRegistrados = {
-nombre: '', correo: '', contrasena: '', cedula: '', telefono: '',
+    nombre: '', correo: '', contrasena: '', cedula: '', telefono: '',
 };
 export function Registro() {
-const [form, setForm] = useState<DatosRegistrados>(FORM_INICIAL);
-const [error, setError] = useState('');
-const [cargando, setCargando] = useState(false);
-const navegar = useNavigate();
-function manejarCambio(e: ChangeEvent<HTMLInputElement>) {
-setForm({ ...form, [e.target.name]: e.target.value });
-}
-async function manejarSubmit(e: FormEvent) {
-e.preventDefault();
-setError('');
-setCargando(true);
-try {
-await registrar(form);
-navegar('/login');
-} catch (err) {
-setError(err instanceof Error ? err.message : 'No se pudo registrar');
-} finally {
-setCargando(false);
-}
-}
+    const [form, setForm] = useState<DatosRegistrados>(FORM_INICIAL);
+    const [error, setError] = useState('');
+    const [cargando, setCargando] = useState(false);
+    const navegar = useNavigate();
+    function manejarCambio(e: ChangeEvent<HTMLInputElement>) {
+        setForm({ ...form, [e.target.name]: e.target.value });
+    }
+    async function manejarSubmit(e: FormEvent) {
+        e.preventDefault();
+        setError('');
+        setCargando(true);
+    try {
+    await registrar(form);
+        navegar('/login');
+    } catch (err) {
+        setError(err instanceof Error ? err.message : 'No se pudo registrar');
+    } finally {
+        setCargando(false);
+    }
+    }
 return (
 <div className="auth-contenedor">
 <div className="auth-tarjeta">
