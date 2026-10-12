@@ -1,7 +1,10 @@
 import express from "express";
 import cors from "cors";
 import usuarioRutas from "./rutas/Usuario.rutas.js";
+import UnidadMedidaRutas from "./rutas/UnidadMedida.rutas.js";
 import authRutas from "./rutas/Auth.rutas.js";
+import  categoriaRutas  from "./rutas/Categoria.rutas.js";
+import seccionRutas from "./rutas/Seccion.rutas.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 import productoRutas from "./rutas/Producto.rutas.js";
 import ingredienteRutas from "./rutas/Ingrediente.rutas.js";
@@ -26,6 +29,10 @@ app.use("/api/usuarios", usuarioRutas);
 app.use("/api/productos", productoRutas);
 app.use("/api/ingredientes", ingredienteRutas);
 app.use("/api/movimientoInventario", movimientoInventarioRutas);
+
+app.use("/api/unidades-medida", UnidadMedidaRutas);
+app.use("/api/categorias", categoriaRutas);
+app.use("/api/secciones", seccionRutas);
 app.use("/auth", authRutas);
 
 app.use(errorMiddleware);
