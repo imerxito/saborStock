@@ -3,6 +3,9 @@ import cors from "cors";
 import usuarioRutas from "./rutas/Usuario.rutas.js";
 import authRutas from "./rutas/Auth.rutas.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
+import productoRutas from "./rutas/Producto.rutas.js";
+import ingredienteRutas from "./rutas/Ingrediente.rutas.js";
+import movimientoInventarioRutas from "./rutas/MovimientoInventario.rutas.js";
 
 const app = express();
 
@@ -20,6 +23,9 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/usuarios", usuarioRutas);
+app.use("/api/productos", productoRutas);
+app.use("/api/ingredientes", ingredienteRutas);
+app.use("/api/movimientoInventario", movimientoInventarioRutas);
 app.use("/auth", authRutas);
 
 app.use(errorMiddleware);
