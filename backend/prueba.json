@@ -1,3 +1,6 @@
 {
-  "nombre":"Caja 1"
+  "id_ingrediente": 1,
+  "tipo": "ENTRADA",
+  "cantidad": 5,
+  "motivo": "Entrada de prueba para verificar el backend"
 }
