@@ -8,7 +8,9 @@ import seccionRutas from "./rutas/Seccion.rutas.js";
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 import productoRutas from "./rutas/Producto.rutas.js";
 import ingredienteRutas from "./rutas/Ingrediente.rutas.js";
+import  CajaRutas  from "./rutas/Caja.rutas.js";
 import movimientoInventarioRutas from "./rutas/MovimientoInventario.rutas.js";
+import { CajaControlador } from "./controladores/CajaControlador.js";
 
 const app = express();
 
@@ -29,10 +31,10 @@ app.use("/api/usuarios", usuarioRutas);
 app.use("/api/productos", productoRutas);
 app.use("/api/ingredientes", ingredienteRutas);
 app.use("/api/movimientoInventario", movimientoInventarioRutas);
-
 app.use("/api/unidades-medida", UnidadMedidaRutas);
 app.use("/api/categorias", categoriaRutas);
 app.use("/api/secciones", seccionRutas);
+app.use("/api/cajas", CajaRutas);
 app.use("/auth", authRutas);
 
 app.use(errorMiddleware);
