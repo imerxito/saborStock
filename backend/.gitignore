@@ -1,2 +1,21 @@
-#Evitar las claves al subir
+# Dependencias de Node.js
+node_modules/
+
+# Archivos generados al compilar TypeScript
+backend/dist/
+
+# Variables de entorno y credenciales
 .env
+.env.*
+!.env.example
+
+# Archivos temporales y logs
+*.log
+npm-debug.log*
+
+# Archivos de configuración local de VS Code
+.vscode/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
