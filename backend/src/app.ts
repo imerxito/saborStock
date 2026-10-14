@@ -11,6 +11,13 @@ import ingredienteRutas from "./rutas/Ingrediente.rutas.js";
 import CajaRutas  from "./rutas/Caja.rutas.js";
 import movimientoInventarioRutas from "./rutas/MovimientoInventario.rutas.js";
 import TurnoCajaRutas from "./rutas/TurnoCaja.rutas.js"
+import MesaRutas from "./rutas/Mesa.rutas.js";
+import ComandaRutas from "./rutas/Comanda.rutas.js";
+import DetalleComandaRutas from "./rutas/DetalleComanda.rutas.js";
+import HistorialMesaRutas from "./rutas/HistorialMesa.rutas.js";
+import FacturaRutas from "./rutas/Factura.rutas.js";
+import DetalleFacturaRutas from "./rutas/DetalleFactura.rutas.js";
+import HistorialCajaRutas from "./rutas/HistorialCaja.rutas.js";
 
 const app = express();
 
@@ -37,6 +44,13 @@ app.use("/api/secciones", seccionRutas);
 app.use("/api/cajas", CajaRutas);
 app.use("/api/turnos-caja", TurnoCajaRutas);
 app.use("/auth", authRutas);
+app.use("/api/mesas", MesaRutas);
+app.use("/api/comandas", ComandaRutas);
+app.use("/api/detalles-comanda", DetalleComandaRutas);
+app.use("/api/historial-mesas", HistorialMesaRutas);
+app.use("/api/facturas", FacturaRutas);
+app.use("/api/detalles-factura", DetalleFacturaRutas);
+app.use("/api/historial-caja", HistorialCajaRutas);
 
 app.use(errorMiddleware);
 
