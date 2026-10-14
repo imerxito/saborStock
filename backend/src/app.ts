@@ -11,6 +11,7 @@ import ingredienteRutas from "./rutas/Ingrediente.rutas.js";
 import movimientoInventarioRutas from "./rutas/MovimientoInventario.rutas.js";
 import MesaRutas from "./rutas/Mesa.rutas.js";
 import ComandaRutas from "./rutas/Comanda.rutas.js";
+import DetalleComandaRutas from "./rutas/DetalleComanda.rutas.js";
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/secciones", seccionRutas);
 app.use("/auth", authRutas);
 app.use("/api/mesas", MesaRutas);
 app.use("/api/comandas", ComandaRutas);
+app.use("/api/detalles-comanda", DetalleComandaRutas);
 
 app.use(errorMiddleware);
 
