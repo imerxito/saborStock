@@ -12,6 +12,7 @@ import movimientoInventarioRutas from "./rutas/MovimientoInventario.rutas.js";
 import MesaRutas from "./rutas/Mesa.rutas.js";
 import ComandaRutas from "./rutas/Comanda.rutas.js";
 import DetalleComandaRutas from "./rutas/DetalleComanda.rutas.js";
+import HistorialMesaRutas from "./rutas/HistorialMesa.rutas.js";
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use("/auth", authRutas);
 app.use("/api/mesas", MesaRutas);
 app.use("/api/comandas", ComandaRutas);
 app.use("/api/detalles-comanda", DetalleComandaRutas);
+app.use("/api/historial-mesas", HistorialMesaRutas);
 
 app.use(errorMiddleware);
 
