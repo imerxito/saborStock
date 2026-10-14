@@ -14,6 +14,7 @@ import ComandaRutas from "./rutas/Comanda.rutas.js";
 import DetalleComandaRutas from "./rutas/DetalleComanda.rutas.js";
 import HistorialMesaRutas from "./rutas/HistorialMesa.rutas.js";
 import FacturaRutas from "./rutas/Factura.rutas.js";
+import DetalleFacturaRutas from "./rutas/DetalleFactura.rutas.js";
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use("/api/comandas", ComandaRutas);
 app.use("/api/detalles-comanda", DetalleComandaRutas);
 app.use("/api/historial-mesas", HistorialMesaRutas);
 app.use("/api/facturas", FacturaRutas);
+app.use("/api/detalles-factura", DetalleFacturaRutas);
 
 app.use(errorMiddleware);
 
