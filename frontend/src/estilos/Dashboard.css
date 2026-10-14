@@ -1,0 +1,37 @@
+.logo {
+  display: flex;
+  align-items: left;
+  justify-content: left;
+}
+
+.logo img,
+.logo svg {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 200px);
+  max-height: 84px;
+  object-fit: contain;
+}
+
+.logo--mezcla img { mix-blend-mode: multiply; }
+
+.logo--marco {
+  width: fit-content;
+  max-width: 100%;
+  padding: 12px 20px;
+  background: var(--paleta-champan);
+  border: 1px solid rgba(244, 233, 205, 0.6);
+  border-radius: 16px;
+  box-shadow: 0 10px 26px rgba(3, 25, 38, 0.30);
+}
+
+.logo--marco img { border-radius: 8px; }
+
+.navegador{
+    display: flex;
+    justify-content: flex-start; 
+    align-items: center;
+    background-color: #333;
+    padding: 0.8rem 2rem;
+}

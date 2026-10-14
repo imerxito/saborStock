@@ -1,27 +1,29 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvier } from './contexto/AuthContexto';
 import { RutaProtegida } from './componentes/RutaProtegida';
-import { Login } from './paginas/Login';
-import { Registro } from './paginas/Registro';
-import { Inicio } from './paginas/Inicio';
+import Inicio from './paginas/Inicio';
+import  Dashboard  from './paginas/Dashboard';
+
 function App() {
-return (
-<BrowserRouter>
-<AuthProvier>
-<Routes>
-<Route path="/login" element={<Login />} />
-<Route path="/registro" element={<Registro />} />
-<Route
-path="/inicio"
-element={
-<RutaProtegida>
-<Inicio />
-</RutaProtegida>
+  return (
+    <BrowserRouter>
+      <AuthProvier>
+        <Routes>
+          {/* /login y /registro usan el MISMO componente para que la transición funcione */}
+          <Route path="/:modo" element={<Inicio />} />
+          <Route
+            path="/inicio"
+            element={
+              <RutaProtegida>
+                <Dashboard />
+              </RutaProtegida>
+            }
+          />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </AuthProvier>
+    </BrowserRouter>
+  );
 }
-/>
-<Route path="*" element={<Navigate to="/login" replace />} />
-</Routes>
-</AuthProvier>
-</BrowserRouter>);
-}
+
 export default App;
