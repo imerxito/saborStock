@@ -9,6 +9,9 @@ import { errorMiddleware } from "./middlewares/error.middleware.js";
 import productoRutas from "./rutas/Producto.rutas.js";
 import ingredienteRutas from "./rutas/Ingrediente.rutas.js";
 import movimientoInventarioRutas from "./rutas/MovimientoInventario.rutas.js";
+import compraRutas from "./rutas/Compra.rutas.js";
+import detalleCompraRutas from "./rutas/DetalleCompra.rutas.js";
+import recetaRutas from "./rutas/Receta.rutas.js";
 
 const app = express();
 
@@ -29,7 +32,9 @@ app.use("/api/usuarios", usuarioRutas);
 app.use("/api/productos", productoRutas);
 app.use("/api/ingredientes", ingredienteRutas);
 app.use("/api/movimientoInventario", movimientoInventarioRutas);
-
+app.use("/api/compras", compraRutas);
+app.use("/api/detalles-compra", detalleCompraRutas);
+app.use("/api/recetas", recetaRutas);
 app.use("/api/unidades-medida", UnidadMedidaRutas);
 app.use("/api/categorias", categoriaRutas);
 app.use("/api/secciones", seccionRutas);
