@@ -1,4 +1,7 @@
 import { supabase } from "../configuracion/Supabase.js";
+import { UsuarioRepositorio } from "../persistencia/UsuarioRepositorio.js";
+
+const usuarioRepositorio = new UsuarioRepositorio();
 
 export class AuthServicio {
     async login(correo: string, contrasena: string) {
@@ -11,12 +14,18 @@ export class AuthServicio {
             throw new Error("Correo o contraseña incorrectos");
         }
 
+        // La fila completa de la tabla "usuario" (trae nombre, cédula, teléfono...)
+        const usuario = await usuarioRepositorio.obtenerPorId(data.user.id);
+
+        if (!usuario) {
+            throw new Error("Tu cuenta no tiene un perfil registrado");
+        }
+        if (!usuario.activo) {
+            throw new Error("Tu usuario está inactivo. Contacta al administrador");
+        }
+
         return {
-            usuario: {
-                id: data.user.id,
-                correo: data.user.email,
-                rol: data.user.app_metadata?.rol,
-            },
+            usuario,
             token: data.session.access_token,
         };
     }
