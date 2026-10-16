@@ -10,7 +10,6 @@ import productoRutas from "./rutas/Producto.rutas.js";
 import ingredienteRutas from "./rutas/Ingrediente.rutas.js";
 import CajaRutas  from "./rutas/Caja.rutas.js";
 import movimientoInventarioRutas from "./rutas/MovimientoInventario.rutas.js";
-<<<<<<< HEAD
 import TurnoCajaRutas from "./rutas/TurnoCaja.rutas.js"
 import MesaRutas from "./rutas/Mesa.rutas.js";
 import ComandaRutas from "./rutas/Comanda.rutas.js";
@@ -19,11 +18,9 @@ import HistorialMesaRutas from "./rutas/HistorialMesa.rutas.js";
 import FacturaRutas from "./rutas/Factura.rutas.js";
 import DetalleFacturaRutas from "./rutas/DetalleFactura.rutas.js";
 import HistorialCajaRutas from "./rutas/HistorialCaja.rutas.js";
-=======
 import compraRutas from "./rutas/Compra.rutas.js";
 import detalleCompraRutas from "./rutas/DetalleCompra.rutas.js";
 import recetaRutas from "./rutas/Receta.rutas.js";
->>>>>>> camila
 
 const app = express();
 
@@ -44,12 +41,9 @@ app.use("/api/usuarios", usuarioRutas);
 app.use("/api/productos", productoRutas);
 app.use("/api/ingredientes", ingredienteRutas);
 app.use("/api/movimientoInventario", movimientoInventarioRutas);
-<<<<<<< HEAD
-=======
 app.use("/api/compras", compraRutas);
 app.use("/api/detalles-compra", detalleCompraRutas);
 app.use("/api/recetas", recetaRutas);
->>>>>>> camila
 app.use("/api/unidades-medida", UnidadMedidaRutas);
 app.use("/api/categorias", categoriaRutas);
 app.use("/api/secciones", seccionRutas);
