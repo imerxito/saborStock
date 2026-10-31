@@ -7,7 +7,9 @@ import {
     Package,
     Truck,
     Users,
+    BarChart3,
     type LucideIcon,
+    ChefHat,
 } from "lucide-react";
 import type { RolUsuario } from "../../tipos/Usuario";
 
@@ -18,6 +20,8 @@ import Productos from "./Productos";
 import Inventario from "./Inventario";
 import Proveedores from "./Provedores";
 import Personal from "./Personal";
+import Reportes from "./Reportes";
+import Cocina from "./Cocina";  
 
 export interface Modulo {
     id: string;
@@ -51,8 +55,16 @@ export const MODULOS: Modulo[] = [
         titulo: "Comandas",
         descripcion: "Pedidos en curso desde la mesa hasta la cocina.",
         icono: ClipboardList,
-        roles: [...GERENCIA, "Mesero", "Cocinero"],
+        roles: [...GERENCIA, "Mesero", "Cocinero","Caja"],
         componente: Comandas,
+    },
+    {
+        id: "cocina",
+        titulo: "Cocina",
+        descripcion: "Pantalla de preparación: despacha las comandas pendientes.",
+        icono: ChefHat,   // impórtalo de lucide-react
+        roles: [...GERENCIA, "Cocinero"],
+        componente: Cocina,
     },
     {
         id: "caja",
@@ -67,7 +79,7 @@ export const MODULOS: Modulo[] = [
         titulo: "Productos",
         descripcion: "Carta, platos y precios.",
         icono: UtensilsCrossed,
-        roles: [...GERENCIA, "Mesero"],
+        roles: [...GERENCIA, "Caja"],
         componente: Productos,
     },
     {
@@ -79,8 +91,8 @@ export const MODULOS: Modulo[] = [
         componente: Inventario,
     },
     {
-        id: "proveedores",
-        titulo: "Proveedores",
+        id: "provedores",
+        titulo: "Provedores",
         descripcion: "Contactos y compras a proveedores.",
         icono: Truck,
         roles: GERENCIA,
@@ -93,6 +105,14 @@ export const MODULOS: Modulo[] = [
         icono: Users,
         roles: GERENCIA,
         componente: Personal,
+    },
+        {
+        id: "reportes",
+        titulo: "Reportes",
+        descripcion: "Ventas, productos más vendidos y rendimiento del equipo.",
+        icono: BarChart3,
+        roles: GERENCIA,
+        componente: Reportes,
     },
 ];
 

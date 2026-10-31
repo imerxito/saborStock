@@ -1,5 +1,14 @@
 import { EstadoComanda } from "./EstadoComanda.js";
 
+export interface ItemComandaDetalle {
+    id: number;
+    idProducto: number;
+    nombreProducto: string;
+    precio?: number;
+    cantidad: number;
+    nota: string | null;
+}
+
 export interface Comanda {
     id: number;
     idMesa: number | null;
@@ -7,6 +16,9 @@ export interface Comanda {
     estado: EstadoComanda;
     observacion: string | null;
     fechaCreacion: Date;
+    mesaNumero?: number | null;
+    usuarioNombre?: string | null;
+    detalles?: ItemComandaDetalle[];
 }
 
 export interface CrearComanda {

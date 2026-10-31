@@ -1,93 +1,164 @@
 import { useEffect, useRef } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { LogIn, UserPlus } from "lucide-react";
 import logo from "../assets/SaborYStock (1).png";
 import { Login } from "./Login";
 import { Registro } from "./Registro";
-import "../estilos/Principal.css"; // al final, para que gane sobre otros CSS
+import "../estilos/principal.css";
 
 type Modo = "login" | "registro";
 
 export default function Auth() {
-  const { modo: param } = useParams(); // viene de la ruta /:modo
+  const { modo: param } = useParams();
   const navigate = useNavigate();
   const modo: Modo = param === "registro" ? "registro" : "login";
+  const esRegistro = modo === "registro";
 
-  const refLogin = useRef<HTMLElement>(null);
-  const refRegistro = useRef<HTMLElement>(null);
+  const loginRef = useRef<HTMLDivElement>(null);
+  const registroRef = useRef<HTMLDivElement>(null);
 
-  // Foco en el primer campo del formulario que aparece
   useEffect(() => {
-    const el = modo === "login" ? refLogin.current : refRegistro.current;
-    const t = setTimeout(() => el?.querySelector("input")?.focus(), 450);
+    const panel = modo === "login" ? loginRef.current : registroRef.current;
+    const t = setTimeout(() => {
+      panel?.querySelector("input")?.focus();
+    }, 500);
     return () => clearTimeout(t);
   }, [modo]);
 
   const cambiar = (nuevo: Modo) => navigate(`/${nuevo}`);
 
-  // Si la URL no es /login ni /registro, vuelve a /login
   if (param !== "login" && param !== "registro") {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <main className="auth-contenedor">
-      <div className={`auth-tarjeta auth-split ${modo === "registro" ? "registro" : ""}`}>
-        {/* Izquierda: tu componente Login */}
-        <section
-          ref={refLogin}
+    <main className="auth-canvas">
+      <h1 className="sr-only">Sabor&amp;Stock — Gestión Gastronómica</h1>
+
+      <div className={`auth-card auth-split${esRegistro ? " modo-registro" : ""}`}>
+
+        {/* ── PANEL LOGIN (izquierda) ── */}
+        <div
+          ref={loginRef}
+          aria-hidden={esRegistro}
           className="auth-panel auth-panel--login"
-          aria-hidden={modo !== "login"}
         >
-          <Login />
-        </section>
+          {/* Logo solo desktop, esquina superior */}
+          <div className="auth-marca-corner">
+            <div className="auth-brand-pill">
+              <img src={logo} alt="Sabor &amp; Stock" />
+            </div>
+            <div className="auth-brand-text">
+              <span className="auth-brand-name">Sabor<span>&</span>Stock</span>
+              <span className="auth-brand-tag">Gestión Gastronómica</span>
+            </div>
+          </div>
+          <div className="auth-panel-inner">
+            <Login />
+          </div>
+        </div>
 
-        {/* Derecha: tu componente Registro */}
-        <section
-          ref={refRegistro}
+        {/* ── PANEL REGISTRO (derecha) ── */}
+        <div
+          ref={registroRef}
+          aria-hidden={!esRegistro}
           className="auth-panel auth-panel--registro"
-          aria-hidden={modo !== "registro"}
         >
-          <Registro />
-        </section>
-
-        {/* Panel visual deslizante */}
-        <aside className="auth-visual" aria-hidden="true">
-          <div className="auth-visual-marca">
-            <div className="auth-logo auth-logo--marco">
-              <img src={logo} alt="" />
+          <div className="auth-marca-corner">
+            <div className="auth-brand-pill">
+              <img src={logo} alt="Sabor &amp; Stock" />
             </div>
-            <span className="auth-marca-nombre">
-              Sabor<span>&amp;</span>Stock
-            </span>
-          </div>
-
-          <div className="auth-visual-textos">
-            <div className="auth-visual-texto auth-visual-texto--login">
-              <h3>¿Aún no tienes cuenta?</h3>
-              <p>Regístrate y empieza en pocos pasos.</p>
-              <button
-                type="button"
-                className="auth-boton-ghost"
-                tabIndex={modo === "login" ? 0 : -1}
-                onClick={() => cambiar("registro")}
-              >
-                Registrarme
-              </button>
-            </div>
-            <div className="auth-visual-texto auth-visual-texto--registro">
-              <h3>¡Bienvenido de nuevo!</h3>
-              <p>Si ya tienes cuenta, ingresa con tus datos.</p>
-              <button
-                type="button"
-                className="auth-boton-ghost"
-                tabIndex={modo === "registro" ? 0 : -1}
-                onClick={() => cambiar("login")}
-              >
-                Iniciar sesión
-              </button>
+            <div className="auth-brand-text">
+              <span className="auth-brand-name">Sabor<span>&</span>Stock</span>
+              <span className="auth-brand-tag">Gestión Gastronómica</span>
             </div>
           </div>
-        </aside>
+          <div className="auth-panel-inner">
+            <Registro />
+          </div>
+        </div>
+
+        {/* ── PANEL VISUAL DESLIZANTE (solo desktop) ── */}
+        <div className="auth-visual" aria-hidden="true">
+          {/* Destellos decorativos */}
+          <div className="auth-visual-glow glow-top" />
+          <div className="auth-visual-glow glow-bottom" />
+          <div className="auth-visual-ring ring-1" />
+          <div className="auth-visual-ring ring-2" />
+
+          {/* Logo centrado */}
+          <div className="auth-visual-logo">
+            <div className="auth-visual-logo-pill">
+              <img src={logo} alt="Sabor &amp; Stock" />
+            </div>
+          </div>
+
+          {/* Texto + botón para login (visible cuando modo=login) */}
+          <div className={`auth-visual-content${!esRegistro ? " visible" : ""}`}>
+            <p className="auth-visual-subtitle">¿Aún no tienes cuenta?</p>
+            <button
+              type="button"
+              onClick={() => cambiar("registro")}
+              className="auth-visual-btn"
+            >
+              <UserPlus size={16} />
+              <span>Registrarme</span>
+            </button>
+          </div>
+
+          {/* Texto + botón para registro (visible cuando modo=registro) */}
+          <div className={`auth-visual-content${esRegistro ? " visible" : ""}`}>
+            <p className="auth-visual-subtitle">¿Ya tienes cuenta?</p>
+            <button
+              type="button"
+              onClick={() => cambiar("login")}
+              className="auth-visual-btn"
+            >
+              <LogIn size={16} />
+              <span>Iniciar sesión</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ── CABECERA MÓVIL ── */}
+        <div className="auth-movil-header">
+          <div className="auth-brand-pill">
+            <img src={logo} alt="Sabor &amp; Stock" />
+          </div>
+          <div className="auth-brand-text">
+            <span className="auth-brand-name">Sabor<span>&</span>Stock</span>
+            <span className="auth-brand-tag">Gestión Gastronómica</span>
+          </div>
+        </div>
+
+        {/* ── PESTAÑAS MÓVIL ── */}
+        <div className="auth-tabs-control auth-movil-tabs" role="tablist">
+          <span
+            aria-hidden="true"
+            className={`auth-tab-indicator${esRegistro ? " desplazado" : ""}`}
+          />
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!esRegistro}
+            className={`auth-tab-btn${!esRegistro ? " active" : ""}`}
+            onClick={() => cambiar("login")}
+          >
+            <LogIn size={15} />
+            <span>Iniciar sesión</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={esRegistro}
+            className={`auth-tab-btn${esRegistro ? " active" : ""}`}
+            onClick={() => cambiar("registro")}
+          >
+            <UserPlus size={15} />
+            <span>Registrarme</span>
+          </button>
+        </div>
+
       </div>
     </main>
   );

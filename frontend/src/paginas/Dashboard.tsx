@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { LogOut, Lock, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import logo from "../assets/SaborYStock (1).png";
 import { useAuth } from "../contexto/AuthContexto";
-import { modulosPorRol } from "./funciones/Modulos";
+import { modulosPorRol } from "./secciones/Modulos";
 import "../estilos/Dashboard.css";
 
 function iniciales(nombre?: string) {
@@ -63,8 +63,6 @@ function Dashboard() {
             </nav>
 
             <aside aria-label="Módulos">
-                <p className="aside__titulo">Módulos</p>
-
                 <div className="aside__lista">
                     {modulos.map((m) => {
                         const Icono = m.icono;
@@ -75,7 +73,8 @@ function Dashboard() {
                                 type="button"
                                 className={`modulo-btn ${esActivo ? "activo" : ""}`}
                                 onClick={() => setIdActivo(m.id)}
-                                title={m.titulo}
+                                title={m.descripcion}
+                                aria-label={m.titulo}
                                 aria-current={esActivo ? "page" : undefined}
                             >
                                 <Icono size={19} />
@@ -98,15 +97,13 @@ function Dashboard() {
 
             <main>
                 {activo && Contenido ? (
-                    <>
-                        <header className="main__cabecera">
-                            <h1>{activo.titulo}</h1>
-                            <p>{activo.descripcion}</p>
-                        </header>
-                        <section key={activo.id} className="contenido-modulo">
-                            <Contenido />
-                        </section>
-                    </>
+                    <section
+                        key={activo.id}
+                        className={`contenido-modulo${activo ? " contenido-modulo--completo" : ""}`}
+                        aria-label={activo.titulo}
+                    >
+                        <Contenido />
+                    </section>
                 ) : (
                     <div className="estado-vacio">
                         <Lock size={32} />

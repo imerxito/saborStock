@@ -2,13 +2,14 @@ import { supabase } from "../configuracion/Supabase.js";
 import { Mesa, MesaRow, CrearMesa, ActualizarMesa } from "../modelos/Mesa.js";
 import { EstadoMesa } from "../modelos/EstadoMesa.js";
 
-function mapearMesaRow(row: MesaRow): Mesa {
+function mapearMesaRow(row: any): Mesa {
   return {
     id: row.id_mesa,
     numero: row.numero,
     estado: row.estado,
     idSeccion: row.id_seccion,
     idUsuario: row.id_usuario,
+    seccionNombre: row.seccion?.nombre ?? "Salón Principal",
   };
 }
 
@@ -16,17 +17,17 @@ export class MesaRepositorio {
   async listar(): Promise<Mesa[]> {
     const { data, error } = await supabase
       .from("mesa")
-      .select("*")
+      .select("*, seccion:id_seccion(id_seccion, nombre)")
       .order("numero", { ascending: true });
 
     if (error) throw new Error(`Error al listar mesas: ${error.message}`);
-    return (data as MesaRow[]).map(mapearMesaRow);
+    return (data || []).map(mapearMesaRow);
   }
 
   async obtenerPorId(id: number): Promise<Mesa | null> {
     const { data, error } = await supabase
       .from("mesa")
-      .select("*")
+      .select("*, seccion:id_seccion(id_seccion, nombre)")
       .eq("id_mesa", id)
       .single();
 
@@ -34,10 +35,10 @@ export class MesaRepositorio {
       if (error.code === "PGRST116") return null;
       throw new Error(`Error al obtener mesa: ${error.message}`);
     }
-    return mapearMesaRow(data as MesaRow);
+    return mapearMesaRow(data);
   }
 
-    async crearMesa(datos: CrearMesa): Promise<Mesa> {
+  async crearMesa(datos: CrearMesa): Promise<Mesa> {
     const { data, error } = await supabase
       .from("mesa")
       .insert({
@@ -46,7 +47,7 @@ export class MesaRepositorio {
         id_seccion: datos.idSeccion,
         id_usuario: datos.idUsuario,
       })
-      .select()
+      .select("*, seccion:id_seccion(id_seccion, nombre)")
       .single();
 
     if (error) {
@@ -54,7 +55,7 @@ export class MesaRepositorio {
       if (error.code === "23503") throw new Error("La sección o el usuario indicado no existe");
       throw new Error(`Error al crear mesa: ${error.message}`);
     }
-    return mapearMesaRow(data as MesaRow);
+    return mapearMesaRow(data);
   }
 
   async actualizarMesa(id: number, cambios: ActualizarMesa): Promise<void> {
@@ -77,6 +78,4 @@ export class MesaRepositorio {
       throw new Error(`Error al actualizar mesa: ${error.message}`);
     }
   }
-
-
 }

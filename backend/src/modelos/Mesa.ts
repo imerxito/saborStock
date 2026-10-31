@@ -6,6 +6,7 @@ export interface Mesa {
     estado: EstadoMesa;
     idSeccion: number;
     idUsuario: number | null;
+    seccionNombre?: string;
 }
 
 export interface CrearMesa {
@@ -28,4 +29,5 @@ export interface MesaRow {
     estado: EstadoMesa;
     id_seccion: number;
     id_usuario: number | null;
+    seccion?: { id_seccion: number; nombre: string } | null;
 }

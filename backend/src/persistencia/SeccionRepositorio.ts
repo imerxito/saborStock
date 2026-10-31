@@ -5,7 +5,7 @@ const Tabla = "seccion";
 
 function filaSeccion(fila:any):Seccion{
     return {
-        id: fila.id,
+        id: fila.id_seccion ?? fila.id,
         nombre: fila.nombre
     };
 }
@@ -19,14 +19,14 @@ export class SeccionRepositorio{
         if(error){
             throw new Error(`Error al listar secciones: ${error.message}`);
         }
-        return data.map(filaSeccion);
+        return (data || []).map(filaSeccion);
     }
 
     async obtenerPorId(id:string):Promise<Seccion|null>{
         const {data,error} = await supabase
         .from(Tabla)
         .select("*")
-        .eq("id",id)
+        .eq("id_seccion",id)
         .maybeSingle();
         if(error){
             throw new Error(`Error al obtener sección por ID: ${error.message}`);
@@ -66,7 +66,7 @@ export class SeccionRepositorio{
         .update({
             nombre: params.nombre
         })
-        .eq("id",id)
+        .eq("id_seccion",id)
         .select()
         .single();
         if(error){
@@ -79,7 +79,7 @@ export class SeccionRepositorio{
         const {error} = await supabase
         .from(Tabla)
         .delete()
-        .eq("id",id);
+        .eq("id_seccion",id);
         if(error){
             throw new Error(`Error al eliminar sección: ${error.message}`);
         }
