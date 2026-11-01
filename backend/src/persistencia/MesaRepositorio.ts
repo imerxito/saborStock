@@ -58,7 +58,40 @@ export class MesaRepositorio {
     return mapearMesaRow(data);
   }
 
-  async actualizarMesa(id: number, cambios: ActualizarMesa): Promise<void> {
+    async contarPorSeccion(idSeccion: number): Promise<number> {
+        const { count, error } = await supabase
+            .from("mesa")
+            .select("id_mesa", { count: "exact", head: true })
+            .eq("id_seccion", idSeccion);
+
+        if (error) throw new Error(`Error al contar mesas de la sección: ${error.message}`);
+        return count ?? 0;
+    }
+
+    async listarNumeros(): Promise<number[]> {
+        const { data, error } = await supabase
+            .from("mesa")
+            .select("numero");
+
+        if (error) throw new Error(`Error al listar números de mesa: ${error.message}`);
+        return (data || []).map((fila: { numero: number }) => Number(fila.numero));
+    }
+
+    async eliminarMesa(id: number): Promise<void> {
+        const { error } = await supabase
+            .from("mesa")
+            .delete()
+            .eq("id_mesa", id);
+
+        if (error) {
+            if (error.code === "23503") {
+                throw new Error("No se puede borrar la mesa porque tiene pedidos o historial asociado");
+            }
+            throw new Error(`Error al eliminar mesa: ${error.message}`);
+        }
+    }
+
+    async actualizarMesa(id: number, cambios: ActualizarMesa): Promise<void> {
     const campos: Record<string, unknown> = {};
     if (cambios.numero !== undefined) campos.numero = cambios.numero;
     if (cambios.estado !== undefined) campos.estado = cambios.estado;

@@ -21,6 +21,7 @@ import HistorialCajaRutas from "./rutas/HistorialCaja.rutas.js";
 import compraRutas from "./rutas/Compra.rutas.js";
 import detalleCompraRutas from "./rutas/DetalleCompra.rutas.js";
 import recetaRutas from "./rutas/Receta.rutas.js";
+import reporteRutas from "./rutas/Reporte.rutas.js";
 
 const app = express();
 
@@ -60,7 +61,7 @@ app.use("/api/historial-mesas", HistorialMesaRutas);
 app.use("/api/facturas", FacturaRutas);
 app.use("/api/detalles-factura", DetalleFacturaRutas);
 app.use("/api/historial-caja", HistorialCajaRutas);
-
+app.use("/api/reportes", reporteRutas);
 app.use(errorMiddleware);
 
 export default app;

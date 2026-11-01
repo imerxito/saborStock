@@ -2,7 +2,7 @@
 import { RolUsuario } from "./RolUsuario.js";
 
 export interface Usuario {
-    id: string;              // = auth_id (el que viaja en el token JWT)
+    id: string;              
     nombre: string;
     correo: string;
     rol: RolUsuario;

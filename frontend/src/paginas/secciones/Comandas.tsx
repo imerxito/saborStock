@@ -10,14 +10,14 @@ type Filtro = "Todas" | EstadoComanda;
 const FILTROS: Filtro[] = ["Todas", ...ESTADOS];
 
 // Clases de Dashboard.css según el estado
-const CLASE_ESTADO: Record<EstadoComanda, string> = {
+const CLASE_ESTADO: Partial<Record<EstadoComanda, string>> = {
     Pendiente: "estado--alerta",
     "En preparación": "estado--info",
     Lista: "estado--ok",
     Entregada: "",
 };
 
-const CLASE_TARJETA: Record<EstadoComanda, string> = {
+const CLASE_TARJETA: Partial<Record<EstadoComanda, string>> = {
     Pendiente: "tarjeta--alerta",
     "En preparación": "tarjeta--info",
     Lista: "tarjeta--ok",
@@ -25,7 +25,7 @@ const CLASE_TARJETA: Record<EstadoComanda, string> = {
 };
 
 // Primero lo que el mesero debe llevar a la mesa, al final lo ya entregado
-const ORDEN: Record<EstadoComanda, number> = {
+const ORDEN: Partial<Record<EstadoComanda, number>> = {
     Lista: 0,
     "En preparación": 1,
     Pendiente: 2,
@@ -62,7 +62,12 @@ function Comandas() {
         () =>
             comandas
                 .filter((c) => filtro === "Todas" || c.estado === filtro)
-                .sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || a.creada - b.creada),
+                .sort(
+                    (a, b) =>
+                        (ORDEN[a.estado] ?? Number.MAX_SAFE_INTEGER) -
+                            (ORDEN[b.estado] ?? Number.MAX_SAFE_INTEGER) ||
+                        a.creada - b.creada
+                ),
         [comandas, filtro]
     );
 
@@ -265,10 +270,10 @@ function Comandas() {
             ) : (
                 <div className="grid-tarjetas">
                     {visibles.map((c) => (
-                        <article key={c.id} className={`tarjeta ${CLASE_TARJETA[c.estado]}`}>
+                        <article key={c.id} className={`tarjeta ${CLASE_TARJETA[c.estado] ?? ""}`}>
                             <div className="tarjeta__encabezado">
                                 <h3 className="tarjeta__valor">Mesa {c.mesa}</h3>
-                                <span className={`estado ${CLASE_ESTADO[c.estado]}`}>{c.estado}</span>
+                                <span className={`estado ${CLASE_ESTADO[c.estado] ?? ""}`}>{c.estado}</span>
                             </div>
 
                             <p className="tarjeta__detalle">

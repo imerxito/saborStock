@@ -49,4 +49,27 @@ export class MesaControlador {
             res.status(400).json({ mensaje: error.message });
         }
     }
+
+    async crearVarias(req: Request, res: Response): Promise<void> {
+        try {
+            const creadas = await mesaServicio.crearVarias(req.body);
+            res.status(201).json(creadas);
+        } catch (error: any) {
+            res.status(400).json({ mensaje: error.message });
+        }
+    }
+
+    async eliminar(req: Request<{ id: string }>, res: Response): Promise<void> {
+        try {
+            const id = Number(req.params.id);
+            if (Number.isNaN(id)) {
+                res.status(400).json({ mensaje: "El id debe ser un numero" });
+                return;
+            }
+            await mesaServicio.eliminar(id);
+            res.status(200).json({ mensaje: "Mesa eliminada correctamente" });
+        } catch (error: any) {
+            res.status(400).json({ mensaje: error.message });
+        }
+    }
 }

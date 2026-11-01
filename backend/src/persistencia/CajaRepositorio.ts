@@ -55,12 +55,18 @@ export class CajaRepositorio {
     }
 
     async eliminarCaja(id: number): Promise<void> {
-        const { error } = await supabase.from("caja").delete().eq("id_caja", id);
+        const { error } = await supabase
+        .from("caja")
+        .delete()
+        .eq("id_caja", id);
         if (error) throw new Error(`Error al eliminar la caja: ${error.message}`);
     }
 
     async cambiarEstado(id: number, activo: boolean): Promise<void> {
-        const { error } = await supabase.from("caja").update({ activo }).eq("id_caja", id);
+        const { error } = await supabase
+        .from("caja")
+        .update({ activo })
+        .eq("id_caja", id);
         if (error) throw new Error(`Error al cambiar estado de la caja: ${error.message}`);
     }
 }

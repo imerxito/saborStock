@@ -17,12 +17,14 @@ import {
   Receipt,
   Sparkles,
   ShoppingBag,
-  RotateCw
+  RotateCw,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '../../contexto/AuthContexto';
 import { useComandas } from '../../contexto/ComandasContexto';
-import { MesaServicio } from '../../servicios/MesaServicio';
+import { MesaServicio, type SeccionBackend } from '../../servicios/MesaServicio';
 import type { MesaBackend, ProductoBackend } from '../../tipos/Comanda';
+import ConfiguracionMesas from './ConfiguracionMesas';
 
 // --- TIPOS DE DATOS ---
 export type CategoriaProducto = 'Platos Fuertes' | 'Comidas Rápidas' | 'Entradas' | 'Bebidas' | 'Postres';
@@ -90,10 +92,13 @@ export default function Mesas() {
   const { comandas, crear, cambiarEstado, recargar, conectadoBackend } = useComandas();
 
   const [mesasRaw, setMesasRaw] = useState<MesaBackend[]>([]);
+  const [secciones, setSecciones] = useState<SeccionBackend[]>([]);
   const [productosMenu, setProductosMenu] = useState<Producto[]>(MENU_RESPALDO);
   const [seccionFiltro, setSeccionFiltro] = useState<string>('Todas');
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [configAbierta, setConfigAbierta] = useState(false);
+  const esDueno = String(usuario?.rol ?? '') === 'Dueno' || String(usuario?.rol ?? '') === 'Dueño';
 
   // Estado del modal de pedido en mesa
   const [mesaSeleccionada, setMesaSeleccionada] = useState<Mesa | null>(null);
@@ -114,12 +119,14 @@ export default function Mesas() {
   const cargarDatosBackend = useCallback(async () => {
     setCargando(true);
     try {
-      const [mesasData, prodsData] = await Promise.all([
+      const [mesasData, prodsData, secsData] = await Promise.all([
         MesaServicio.listarMesas(),
-        MesaServicio.obtenerProductos()
+        MesaServicio.obtenerProductos(),
+        MesaServicio.obtenerSecciones()
       ]);
 
       setMesasRaw(mesasData);
+      setSecciones(secsData);
 
       if (prodsData && prodsData.length > 0) {
         const prodsMapeados: Producto[] = prodsData.map((p) => {
@@ -159,13 +166,16 @@ export default function Mesas() {
 
   // Lista de secciones dinámicas
   const seccionesDisponibles = useMemo(() => {
+    if (secciones.length > 0) {
+      return ['Todas', ...secciones.map((s) => s.nombre)];
+    }
     const setSec = new Set<string>();
     mesasRaw.forEach((m) => {
       if (m.seccionNombre) setSec.add(m.seccionNombre);
     });
     const lista = Array.from(setSec);
     return ['Todas', ...(lista.length > 0 ? lista : ['Salón Principal', 'Piscina', 'Terraza', 'VIP'])];
-  }, [mesasRaw]);
+  }, [mesasRaw, secciones]);
 
   // Cruzar mesas con comandas activas en tiempo real
   const mesas = useMemo<Mesa[]>(() => {
@@ -439,6 +449,16 @@ export default function Mesas() {
             >
               <RotateCw className={`w-4 h-4 ${cargando ? 'animate-spin text-[#3ba28a]' : ''}`} />
             </button>
+
+            {esDueno && (
+              <button
+                onClick={() => setConfigAbierta(true)}
+                className="p-2.5 rounded-xl bg-[#0a2228] border border-[#143d46] text-slate-300 hover:text-white hover:border-[#3ba28a] hover:bg-[#0e2a30] transition-colors"
+                title="Configurar mesas y secciones"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -571,6 +591,17 @@ export default function Mesas() {
       </main>
 
       {/* --- MODAL INTERACTIVO DE ATENCIÓN Y TOMAR PEDIDO --- */}
+      {esDueno && (
+        <ConfiguracionMesas
+          abierto={configAbierta}
+          onCerrar={() => setConfigAbierta(false)}
+          onActualizado={() => {
+            void recargar();
+            void cargarDatosBackend();
+          }}
+        />
+      )}
+
       {mesaSeleccionada && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
           <div className="bg-[#0a2228] border border-[#143d46] rounded-3xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl">

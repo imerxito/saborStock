@@ -162,7 +162,14 @@ function Cocina() {
         const mapa = new Map<string, { cantidad: number; categoria: CategoriaPlato; notas: string[] }>();
         itemsVisibles.forEach((it) => {
             if (categoria !== "TODOS" && it.categoria !== categoria) return;
-            const actual = mapa.get(it.producto) ?? { cantidad: 0, categoria: it.categoria, notas: [] };
+
+            const categoriaItem: CategoriaPlato = (it.categoria ?? "Cocina") as CategoriaPlato;
+            const actual = mapa.get(it.producto) ?? {
+                cantidad: 0,
+                categoria: categoriaItem,
+                notas: [] as string[],
+            };
+
             actual.cantidad += it.cantidad;
             if (it.nota && !actual.notas.includes(it.nota)) actual.notas.push(it.nota);
             mapa.set(it.producto, actual);
