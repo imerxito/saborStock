@@ -32,34 +32,33 @@
   --color-error-fondo: rgba(239, 68, 68, 0.15);
 }
 
-/* Base Global */
+/* Reset Base Global */
 html,
 body,
 #root {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   margin: 0;
   padding: 0;
   background-color: var(--paleta-negro);
   color: var(--color-texto);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  overflow-x: hidden;
+  overflow: hidden !important; /* Bloquea el scroll general de la ventana */
 }
 
-/* Reset general */
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
 /* =========================================
-   2. ESTRUCTURA Y LAYOUT PRINCIPAL
+   2. ESTRUCTURA Y LAYOUT PRINCIPAL (GRID FIJO)
    ========================================= */
 
 .Contenedor {
   --ancho-aside: 250px;
   display: grid;
   grid-template-columns: var(--ancho-aside) 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 60px 1fr; /* Altura estricta para la barra superior */
   grid-template-areas:
     "nav nav"
     "aside main";
@@ -74,22 +73,36 @@ body,
   --ancho-aside: 76px;
 }
 
-/* Área Principal (<main>): Sin fondos ni rellenos blancos */
+/* 
+   Área Principal (<main>): 
+   min-height: 0 y min-width: 0 son obligatorios en CSS Grid 
+   para evitar que tablas o vistas largas desborden la pantalla.
+*/
 .Contenedor > main {
   grid-area: main;
   min-width: 0;
+  min-height: 0; /* EVITA EL DESPLAZAMIENTO DEL DASHBOARD */
   height: 100%;
-  padding: 0;
-  overflow-y: auto;
-  background-color: var(--paleta-negro) !important;
-}
-
-.contenido-modulo {
-  min-height: 100%;
   width: 100%;
   padding: 0;
+  overflow: hidden;
+  background-color: var(--paleta-negro) !important;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Contenedor del módulo activo (Scroll interno únicamente aquí) */
+.contenido-modulo {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
   background: transparent !important;
-  animation: dash-aparecer 0.25s ease-out both;
+  overflow-y: auto; /* Solo hace scroll la página actual */
+  overflow-x: hidden;
+  animation: dash-aparecer 0.2s ease-out both;
 }
 
 .contenido-modulo--completo {
@@ -97,7 +110,7 @@ body,
 }
 
 @keyframes dash-aparecer {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(2px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -111,12 +124,13 @@ body,
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding: 0.6rem 1.25rem;
+  padding: 0.5rem 1.25rem;
   background: linear-gradient(90deg, #09151A, var(--paleta-verde-oscuro));
   border-bottom: 1px solid var(--color-borde);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   position: relative;
   z-index: 50;
+  height: 60px;
 }
 
 .navegador__izq {
@@ -135,7 +149,7 @@ body,
 }
 
 .logo--marco img {
-  max-height: 32px;
+  max-height: 28px;
   width: auto;
   object-fit: contain;
 }
@@ -143,8 +157,8 @@ body,
 .btn-colapsar {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   color: var(--paleta-champan);
   background: rgba(247, 245, 235, 0.08);
   border: 1px solid rgba(247, 245, 235, 0.18);
@@ -171,15 +185,15 @@ body,
 }
 
 .usuario-chip__texto strong { 
-  font-size: 0.9rem; 
+  font-size: 0.85rem; 
   font-weight: 700; 
 }
 
 .avatar {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   color: var(--paleta-negro);
   background: linear-gradient(135deg, var(--paleta-teal), var(--paleta-algamarina));
   border-radius: 50%;
@@ -202,6 +216,7 @@ body,
   overflow-x: hidden;
   overflow-y: auto;
   z-index: 40;
+  min-height: 0;
 }
 
 .aside__lista {
@@ -217,13 +232,13 @@ body,
   align-items: center;
   gap: 0.85rem;
   width: 100%;
-  min-height: 44px;
-  padding: 0.65rem 0.9rem;
+  min-height: 42px;
+  padding: 0.6rem 0.85rem;
   color: rgba(247, 245, 235, 0.7);
   background: transparent;
   border: 0;
   border-radius: 12px;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 600;
   text-align: left;
   white-space: nowrap;
@@ -256,7 +271,7 @@ body,
 .modulo-btn--salir {
   margin-top: 0.5rem;
   border-top: 1px solid var(--color-borde);
-  padding-top: 0.9rem;
+  padding-top: 0.85rem;
 }
 
 .modulo-btn--salir:hover {
@@ -268,30 +283,21 @@ body,
 .Contenedor.colapsado .modulo-btn { justify-content: center; padding-inline: 0; }
 
 /* =========================================
-   5. CONTROL DE CAPAS Y PANELES (KDS Y MÓDULOS)
+   5. COMPONENTES Y CAMPOS GENERALES
    ========================================= */
-
-/* Garantiza que la barra fija de cocina quede sobre los tickets */
-header.sticky {
-  position: sticky;
-  top: 0;
-  z-index: 40 !important;
-  background-color: var(--paleta-verde-oscuro) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 40px;
+  min-height: 38px;
   padding: 0.5rem 1rem;
   color: var(--paleta-champan);
   background: var(--paleta-teal);
   border: 1px solid var(--color-borde-fuerte);
   border-radius: 10px;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
   transition: background-color 0.2s ease, transform 0.1s ease;
@@ -319,12 +325,12 @@ header.sticky {
 .campo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .campo label {
   color: var(--paleta-algamarina);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
@@ -332,13 +338,14 @@ header.sticky {
 .campo select,
 .campo textarea {
   width: 100%;
-  min-height: 40px;
-  padding: 8px 12px;
+  min-height: 38px;
+  padding: 6px 12px;
   color: var(--paleta-champan);
   background: var(--paleta-negro);
   border: 1px solid var(--color-borde-fuerte);
   border-radius: 8px;
   outline: none;
+  font-size: 0.85rem;
 }
 
 .campo input:focus,
