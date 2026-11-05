@@ -14,7 +14,6 @@ import {
 import type { RolUsuario } from "../../tipos/Usuario";
 
 import Mesas from "./Mesas";
-import Comandas from "./Comandas";
 import Caja from "./Caja";
 import Productos from "./Productos";
 import Inventario from "./Inventario";
@@ -51,18 +50,10 @@ export const MODULOS: Modulo[] = [
         componente: Mesas,
     },
     {
-        id: "comandas",
-        titulo: "Comandas",
-        descripcion: "Pedidos en curso desde la mesa hasta la cocina.",
-        icono: ClipboardList,
-        roles: [...GERENCIA, "Mesero", "Cocinero","Caja"],
-        componente: Comandas,
-    },
-    {
         id: "cocina",
         titulo: "Cocina",
         descripcion: "Pantalla de preparación: despacha las comandas pendientes.",
-        icono: ChefHat,   // impórtalo de lucide-react
+        icono: ChefHat,
         roles: [...GERENCIA, "Cocinero"],
         componente: Cocina,
     },
@@ -106,7 +97,7 @@ export const MODULOS: Modulo[] = [
         roles: GERENCIA,
         componente: Personal,
     },
-        {
+    {
         id: "reportes",
         titulo: "Reportes",
         descripcion: "Ventas, productos más vendidos y rendimiento del equipo.",

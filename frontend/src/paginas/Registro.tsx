@@ -63,22 +63,21 @@ export function Registro() {
     return (
         <div className="flex flex-col w-full">
             <div className="mb-3.5">
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#2C696F] bg-[#2C696F]/10 px-2.5 py-1 rounded-full border border-[#2C696F]/20 mb-1.5">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#5BC0DE] bg-[#5BC0DE]/10 px-2.5 py-1 rounded-full border border-[#5BC0DE]/20 mb-1.5">
                     Registro de Cuenta
                 </span>
-                {/* TÍTULO CON COLOR OSCURO #07191D (Cero blanco invisible) */}
-                <h3 className="text-2xl font-black text-[#07191D] tracking-tight">Crea tu cuenta</h3>
-                <p className="text-xs font-semibold text-[#4F7F87] mt-0.5">Registra los datos del administrador del local</p>
+                <h3 className="text-2xl font-black text-[#F4D6B0] tracking-tight">Crea tu cuenta</h3>
+                <p className="text-xs font-semibold text-[#3A506B] mt-0.5">Registra los datos del administrador del local</p>
             </div>
 
             <form onSubmit={manejarSubmit} className="flex flex-col gap-2.5">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div className="flex flex-col gap-1">
-                        <label htmlFor="reg-nombre" className="text-xs font-bold text-[#07191D]">
+                        <label htmlFor="reg-nombre" className="text-xs font-bold text-[#F4D6B0]">
                             Nombre completo
                         </label>
                         <div className="relative flex items-center w-full">
-                            <User className="absolute left-3 text-[#4F7F87] pointer-events-none" size={15} />
+                            <User className="absolute left-3 text-[#5BC0DE] pointer-events-none" size={15} />
                             <input
                                 id="reg-nombre"
                                 name="nombre"
@@ -88,17 +87,17 @@ export function Registro() {
                                 value={String(form.nombre)}
                                 onChange={manejarCambio}
                                 required
-                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#07191D] bg-[#FAF8F2]/60 border border-[#D5CDBC] rounded-xl outline-none transition-all focus:border-[#2C696F] focus:bg-white focus:ring-4 focus:ring-[#2C696F]/15 hover:border-[#B8AF9C] placeholder-[#9EA9AB]"
+                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
                             />
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                        <label htmlFor="reg-correo" className="text-xs font-bold text-[#07191D]">
+                        <label htmlFor="reg-correo" className="text-xs font-bold text-[#F4D6B0]">
                             Correo
                         </label>
                         <div className="relative flex items-center w-full">
-                            <Mail className="absolute left-3 text-[#4F7F87] pointer-events-none" size={15} />
+                            <Mail className="absolute left-3 text-[#5BC0DE] pointer-events-none" size={15} />
                             <input
                                 id="reg-correo"
                                 name="correo"
@@ -108,17 +107,17 @@ export function Registro() {
                                 value={String(form.correo)}
                                 onChange={manejarCambio}
                                 required
-                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#07191D] bg-[#FAF8F2]/60 border border-[#D5CDBC] rounded-xl outline-none transition-all focus:border-[#2C696F] focus:bg-white focus:ring-4 focus:ring-[#2C696F]/15 hover:border-[#B8AF9C] placeholder-[#9EA9AB]"
+                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
                             />
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                        <label htmlFor="reg-cedula" className="text-xs font-bold text-[#07191D]">
+                        <label htmlFor="reg-cedula" className="text-xs font-bold text-[#F4D6B0]">
                             Cédula / ID
                         </label>
                         <div className="relative flex items-center w-full">
-                            <CreditCard className="absolute left-3 text-[#4F7F87] pointer-events-none" size={15} />
+                            <CreditCard className="absolute left-3 text-[#5BC0DE] pointer-events-none" size={15} />
                             <input
                                 id="reg-cedula"
                                 name="cedula"
@@ -128,17 +127,17 @@ export function Registro() {
                                 value={String(form.cedula)}
                                 onChange={manejarCambio}
                                 required
-                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#07191D] bg-[#FAF8F2]/60 border border-[#D5CDBC] rounded-xl outline-none transition-all focus:border-[#2C696F] focus:bg-white focus:ring-4 focus:ring-[#2C696F]/15 hover:border-[#B8AF9C] placeholder-[#9EA9AB]"
+                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
                             />
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                        <label htmlFor="reg-telefono" className="text-xs font-bold text-[#07191D]">
+                        <label htmlFor="reg-telefono" className="text-xs font-bold text-[#F4D6B0]">
                             Teléfono
                         </label>
                         <div className="relative flex items-center w-full">
-                            <Phone className="absolute left-3 text-[#4F7F87] pointer-events-none" size={15} />
+                            <Phone className="absolute left-3 text-[#5BC0DE] pointer-events-none" size={15} />
                             <input
                                 id="reg-telefono"
                                 name="telefono"
@@ -148,17 +147,17 @@ export function Registro() {
                                 value={String(form.telefono)}
                                 onChange={manejarCambio}
                                 required
-                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#07191D] bg-[#FAF8F2]/60 border border-[#D5CDBC] rounded-xl outline-none transition-all focus:border-[#2C696F] focus:bg-white focus:ring-4 focus:ring-[#2C696F]/15 hover:border-[#B8AF9C] placeholder-[#9EA9AB]"
+                                className="w-full h-10 pl-9 pr-3 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
                             />
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-1 sm:col-span-2">
-                        <label htmlFor="reg-contrasena" className="text-xs font-bold text-[#07191D]">
+                        <label htmlFor="reg-contrasena" className="text-xs font-bold text-[#F4D6B0]">
                             Contraseña segura
                         </label>
                         <div className="relative flex items-center w-full">
-                            <Lock className="absolute left-3 text-[#4F7F87] pointer-events-none" size={15} />
+                            <Lock className="absolute left-3 text-[#5BC0DE] pointer-events-none" size={15} />
                             <input
                                 id="reg-contrasena"
                                 name="contrasena"
@@ -168,11 +167,11 @@ export function Registro() {
                                 value={String(form.contrasena)}
                                 onChange={manejarCambio}
                                 required
-                                className="w-full h-10 pl-9 pr-10 text-xs font-semibold text-[#07191D] bg-[#FAF8F2]/60 border border-[#D5CDBC] rounded-xl outline-none transition-all focus:border-[#2C696F] focus:bg-white focus:ring-4 focus:ring-[#2C696F]/15 hover:border-[#B8AF9C] placeholder-[#9EA9AB]"
+                                className="w-full h-10 pl-9 pr-10 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
                             />
                             <button
                                 type="button"
-                                className="absolute right-3 text-[#4F7F87] hover:text-[#07191D] p-1 rounded-lg transition-colors cursor-pointer"
+                                className="absolute right-3 text-[#5BC0DE] hover:text-[#F4D6B0] p-1 rounded-lg transition-colors cursor-pointer"
                                 onClick={() => setMostrarPassword((prev) => !prev)}
                                 aria-label={mostrarPassword ? "Ocultar contraseña" : "Ver contraseña"}
                                 tabIndex={-1}
@@ -184,14 +183,14 @@ export function Registro() {
                 </div>
 
                 {error && (
-                    <div className="flex items-center gap-2 p-2.5 text-xs font-semibold text-[#B91C1C] bg-[#FEF2F2] border border-[#FECACA] rounded-xl">
+                    <div className="flex items-center gap-2 p-2.5 text-xs font-semibold text-[#E57373] bg-[#E57373]/10 border border-[#E57373]/30 rounded-xl">
                         <AlertCircle size={15} className="shrink-0" />
                         <span>{error}</span>
                     </div>
                 )}
 
                 <button
-                    className="flex items-center justify-center gap-2 w-full h-10 mt-1 text-xs font-bold text-white bg-[#2C696F] hover:bg-[#204F54] active:scale-[0.99] rounded-xl shadow-md shadow-[#2C696F]/20 transition-all disabled:opacity-60 cursor-pointer"
+                    className="flex items-center justify-center gap-2 w-full h-10 mt-1 text-xs font-bold text-[#0B132B] bg-[#5BC0DE] hover:bg-[#4CA8C4] active:scale-[0.99] rounded-xl shadow-md shadow-[#5BC0DE]/20 transition-all disabled:opacity-60 cursor-pointer"
                     type="submit"
                     disabled={cargando}
                 >
@@ -209,10 +208,10 @@ export function Registro() {
                 </button>
             </form>
 
-            <div className="mt-3.5 text-center text-xs font-medium text-[#4F7F87]">
+            <div className="mt-3.5 text-center text-xs font-medium text-[#3A506B]">
                 <p>
                     ¿Ya posees cuenta?{" "}
-                    <Link className="text-[#2C696F] font-bold hover:underline ml-1" to="/login">
+                    <Link className="text-[#5BC0DE] font-bold hover:underline ml-1" to="/login">
                         Inicia sesión
                     </Link>
                 </p>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Settings, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Minus, Settings, Trash2, X, LayoutGrid, Layers, ArrowRightLeft } from "lucide-react";
 import { MesaServicio, type SeccionBackend } from "../../servicios/MesaServicio";
 import type { MesaBackend } from "../../tipos/Comanda";
 
@@ -10,19 +10,25 @@ interface Props {
 }
 
 export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }: Props) {
-  const [secciones, setSecciones] = useState<SeccionBackend[]>([]);
+  const [seccionesRaw, setSeccionesRaw] = useState<SeccionBackend[]>([]);
   const [mesas, setMesas] = useState<MesaBackend[]>([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
+  // Pestaña activa ('secciones' o 'mesas')
+  const [tabActiva, setTabActiva] = useState<"secciones" | "mesas">("secciones");
+
+  // Estados de Secciones
   const [nombreSeccion, setNombreSeccion] = useState("");
-  const [ordenSeccion, setOrdenSeccion] = useState(1);
-  const [limiteSeccion, setLimiteSeccion] = useState(10);
+  const [ordenSeccion, setOrdenSeccion] = useState("1");
+  const [limiteSeccion, setLimiteSeccion] = useState("10");
   const [editandoId, setEditandoId] = useState<number | null>(null);
 
+  // Estados de Mesas
   const [idSeccionMesas, setIdSeccionMesas] = useState<number | "">("");
-  const [cantidadMesas, setCantidadMesas] = useState(1);
+  const [filtroSeccionMesaTab, setFiltroSeccionMesaTab] = useState<number | "Todas">("Todas");
+  const [cantidadMesas, setCantidadMesas] = useState("1");
   const [numeroInicial, setNumeroInicial] = useState("");
 
   const cargar = async () => {
@@ -32,13 +38,13 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
         MesaServicio.obtenerSecciones(),
         MesaServicio.listarMesas(),
       ]);
-      setSecciones(secs);
+      setSeccionesRaw(secs);
       setMesas(mesasData);
       if (secs.length > 0 && idSeccionMesas === "") {
         setIdSeccionMesas(secs[0].id);
       }
       const maxOrden = secs.reduce((m, s) => Math.max(m, s.orden ?? 0), 0);
-      if (editandoId === null) setOrdenSeccion(maxOrden + 1);
+      if (editandoId === null) setOrdenSeccion(String(maxOrden + 1));
     } catch (e) {
       setAviso(e instanceof Error ? e.message : "No se pudo cargar la configuración");
     } finally {
@@ -53,6 +59,16 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto]);
 
+  // Secciones ordenadas estrictamente por orden y FIFO por ID
+  const secciones = useMemo(() => {
+    return [...seccionesRaw].sort((a, b) => {
+      const ordenA = a.orden ?? 0;
+      const ordenB = b.orden ?? 0;
+      if (ordenA !== ordenB) return ordenA - ordenB;
+      return (a.id ?? 0) - (b.id ?? 0);
+    });
+  }, [seccionesRaw]);
+
   const mesasPorSeccion = useMemo(() => {
     const mapa = new Map<number, number>();
     mesas.forEach((m) => mapa.set(m.idSeccion, (mapa.get(m.idSeccion) ?? 0) + 1));
@@ -66,9 +82,9 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
   const resetFormaSeccion = (lista = secciones) => {
     setEditandoId(null);
     setNombreSeccion("");
-    setLimiteSeccion(10);
+    setLimiteSeccion("10");
     const maxOrden = lista.reduce((m, s) => Math.max(m, s.orden ?? 0), 0);
-    setOrdenSeccion(maxOrden + 1);
+    setOrdenSeccion(String(maxOrden + 1));
   };
 
   const recargarTodo = async () => {
@@ -85,17 +101,20 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
     setGuardando(true);
     setAviso(null);
     try {
+      const ordenNum = parseInt(ordenSeccion, 10);
+      const limiteNum = parseInt(limiteSeccion, 10);
+
       if (editandoId !== null) {
         await MesaServicio.actualizarSeccion(editandoId, {
           nombre,
-          orden: Number(ordenSeccion),
-          limiteMesas: Number(limiteSeccion),
+          orden: isNaN(ordenNum) ? 1 : ordenNum,
+          limiteMesas: isNaN(limiteNum) ? 10 : limiteNum,
         });
       } else {
         await MesaServicio.crearSeccion({
           nombre,
-          orden: Number(ordenSeccion),
-          limiteMesas: Number(limiteSeccion),
+          orden: isNaN(ordenNum) ? 1 : ordenNum,
+          limiteMesas: isNaN(limiteNum) ? 10 : limiteNum,
         });
       }
       resetFormaSeccion();
@@ -110,20 +129,25 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
   const editarSeccion = (s: SeccionBackend) => {
     setEditandoId(s.id);
     setNombreSeccion(s.nombre);
-    setOrdenSeccion(s.orden);
-    setLimiteSeccion(s.limiteMesas);
+    setOrdenSeccion(String(s.orden));
+    setLimiteSeccion(String(s.limiteMesas));
   };
 
   const cambiarOrden = async (s: SeccionBackend, direccion: -1 | 1) => {
-    const ordenada = [...secciones].sort((a, b) => a.orden - b.orden);
-    const idx = ordenada.findIndex((x) => x.id === s.id);
-    const vecina = ordenada[idx + direccion];
+    const idx = secciones.findIndex((x) => x.id === s.id);
+    const vecina = secciones[idx + direccion];
     if (!vecina) return;
+
     setGuardando(true);
     setAviso(null);
     try {
-      await MesaServicio.actualizarSeccion(s.id, { orden: vecina.orden });
-      await MesaServicio.actualizarSeccion(vecina.id, { orden: s.orden });
+      const ordenOriginalS = s.orden;
+      const ordenOriginalVecina = vecina.orden;
+
+      await MesaServicio.actualizarSeccion(s.id, { orden: -999 });
+      await MesaServicio.actualizarSeccion(vecina.id, { orden: ordenOriginalS });
+      await MesaServicio.actualizarSeccion(s.id, { orden: ordenOriginalVecina });
+
       await recargarTodo();
     } catch (e) {
       setAviso(e instanceof Error ? e.message : "No se pudo reordenar");
@@ -157,24 +181,33 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
       setAviso("Elige una sección para las mesas.");
       return;
     }
-    if (cantidadMesas < 1) {
-      setAviso("Agrega al menos una mesa.");
+    const cantNum = parseInt(cantidadMesas, 10);
+    if (isNaN(cantNum) || cantNum < 1) {
+      setAviso("Agrega al menos una mesa válida.");
       return;
     }
-    if (cantidadMesas > cuposDestino) {
+    if (cantNum > cuposDestino) {
       setAviso(`Solo quedan ${cuposDestino} cupos en esta sección.`);
       return;
     }
     setGuardando(true);
     setAviso(null);
     try {
-      const inicio = numeroInicial.trim() === "" ? undefined : Number(numeroInicial);
+      let inicio: number;
+      if (numeroInicial.trim() !== "" && !isNaN(Number(numeroInicial))) {
+        inicio = Number(numeroInicial);
+      } else {
+        const maxNumeroMesa = mesas.reduce((max, m) => Math.max(max, m.numero), 0);
+        inicio = maxNumeroMesa + 1;
+      }
+
       await MesaServicio.crearMesasLote({
         idSeccion: Number(idSeccionMesas),
-        cantidad: cantidadMesas,
-        numeroInicial: inicio && inicio > 0 ? inicio : undefined,
+        cantidad: cantNum,
+        numeroInicial: inicio,
       });
-      setCantidadMesas(1);
+
+      setCantidadMesas("1");
       setNumeroInicial("");
       await recargarTodo();
     } catch (e) {
@@ -224,240 +257,426 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
 
   if (!abierto) return null;
 
-  const mesasOrdenadas = [...mesas].sort((a, b) => a.numero - b.numero);
+  // Ordenamiento FIFO estricto por ID para que la última mesa agregada quede de última (de izquierda a derecha)
+  const mesasFiltradasPorTab = [...mesas]
+    .filter((m) => filtroSeccionMesaTab === "Todas" || m.idSeccion === filtroSeccionMesaTab)
+    .sort((a, b) => a.id - b.id);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
-      <div className="bg-[#0a2228] border border-[#143d46] rounded-3xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl">
-        <div className="p-4 sm:p-5 bg-[#0e2a30] border-b border-[#143d46] flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+      <div className="bg-[#1C2541] border border-[#3A506B] rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        
+        {/* Encabezado del Modal */}
+        <div className="p-4 sm:p-5 bg-[#0B132B] border-b border-[#3A506B] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#3ba28a] text-[#07191d] flex items-center justify-center shadow-md">
-              <Settings className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-xl bg-[#5BC0DE] text-[#0B132B] flex items-center justify-center shadow-md">
+              <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-extrabold text-white">Configurar mesas y secciones</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Solo el Dueño puede crear, mover o borrar el salón.</p>
+              <h2 className="text-lg font-extrabold text-[#F4D6B0]">Configuración del Salón</h2>
+              <p className="text-[11px] text-[#5BC0DE]">Administra zonas y distribución de mesas.</p>
             </div>
           </div>
           <button
             onClick={onCerrar}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-[#143d46] transition-colors"
+            className="p-2 rounded-xl text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B] transition-colors"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-8">
+        {/* Pestañas (Tabs) de Navegación Interna */}
+        <div className="flex border-b border-[#3A506B] bg-[#0B132B] px-4 pt-3 gap-2 shrink-0">
+          <button
+            onClick={() => setTabActiva("secciones")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-t border-x ${
+              tabActiva === "secciones"
+                ? "bg-[#1C2541] text-[#5BC0DE] border-[#3A506B]"
+                : "bg-transparent text-[#3A506B] border-transparent hover:text-[#F4D6B0]"
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            Secciones Editables ({secciones.length})
+          </button>
+          <button
+            onClick={() => setTabActiva("mesas")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-t border-x ${
+              tabActiva === "mesas"
+                ? "bg-[#1C2541] text-[#5BC0DE] border-[#3A506B]"
+                : "bg-transparent text-[#3A506B] border-transparent hover:text-[#F4D6B0]"
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            Gestión de Mesas ({mesas.length})
+          </button>
+        </div>
+
+        {/* Cuerpo con Scroll Controlado */}
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-5 bg-[#1C2541]">
           {aviso && (
-            <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm rounded-xl px-4 py-3">
+            <div className="bg-[#E57373]/10 border border-[#E57373]/30 text-[#E57373] text-xs rounded-xl px-3 py-2.5 font-semibold">
               {aviso}
             </div>
           )}
 
-          {cargando && <p className="text-sm text-slate-400">Cargando configuración...</p>}
+          {cargando && <p className="text-xs text-[#5BC0DE]">Cargando configuración...</p>}
 
-          <section className="space-y-4">
-            <h3 className="text-sm font-black uppercase tracking-wider text-[#3ba28a]">Secciones</h3>
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-[#0e2a30] border border-[#143d46] rounded-2xl p-4">
-              <label className="md:col-span-5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Nombre
-                <input
-                  type="text"
-                  placeholder="Ej. Terraza"
-                  value={nombreSeccion}
-                  onChange={(e) => setNombreSeccion(e.target.value)}
-                  className="mt-1 w-full bg-[#f3ebd9] text-[#0a2228] font-bold p-3 rounded-xl"
-                />
-              </label>
-              <label className="md:col-span-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Orden
-                <input
-                  type="number"
-                  min={0}
-                  value={ordenSeccion}
-                  onChange={(e) => setOrdenSeccion(Number(e.target.value))}
-                  className="mt-1 w-full bg-[#f3ebd9] text-[#0a2228] font-bold p-3 rounded-xl"
-                />
-              </label>
-              <label className="md:col-span-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Límite
-                <input
-                  type="number"
-                  min={1}
-                  value={limiteSeccion}
-                  onChange={(e) => setLimiteSeccion(Number(e.target.value))}
-                  className="mt-1 w-full bg-[#f3ebd9] text-[#0a2228] font-bold p-3 rounded-xl"
-                />
-              </label>
-              <button
-                onClick={() => void guardarSeccion()}
-                disabled={guardando}
-                className="md:col-span-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold bg-[#3ba28a] text-[#07191d] hover:bg-[#43b399] disabled:opacity-50 self-end"
-              >
-                <Plus className="w-4 h-4" />
-                {editandoId !== null ? "Guardar sección" : "Crear sección"}
-              </button>
-              {editandoId !== null && (
-                <button
-                  onClick={() => resetFormaSeccion()}
-                  className="md:col-span-12 text-xs text-slate-400 hover:text-white"
-                >
-                  Cancelar edición
-                </button>
-              )}
-              <p className="md:col-span-12 text-[11px] text-slate-400">
-                Orden: posición en las pestañas. Límite: máximo de mesas que admite esa zona.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              {secciones.map((s, idx) => {
-                const usadas = mesasPorSeccion.get(s.id) ?? 0;
-                return (
-                  <div
-                    key={s.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 bg-[#0e2a30] border border-[#143d46] rounded-2xl p-3"
-                  >
-                    <div className="flex-1">
-                      <p className="font-bold text-white">{s.nombre}</p>
-                      <p className="text-xs text-slate-400">
-                        Orden {s.orden} · {usadas}/{s.limiteMesas} mesas
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
+          {/* ================= PESTAÑA 1: SECCIONES ================= */}
+          {tabActiva === "secciones" && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              <div className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-4 space-y-3 shadow-inner">
+                <h3 className="text-xs font-black uppercase tracking-wider text-[#5BC0DE]">
+                  {editandoId !== null ? "Editar Sección" : "Crear Nueva Sección"}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <label className="sm:col-span-6 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col">
+                    Nombre
+                    <input
+                      type="text"
+                      placeholder="Ej. Terraza"
+                      value={nombreSeccion}
+                      onChange={(e) => setNombreSeccion(e.target.value)}
+                      className="mt-1 w-full bg-[#1C2541] text-[#F4D6B0] font-bold px-3 rounded-xl text-xs border border-[#3A506B] focus:border-[#5BC0DE] outline-none transition-colors h-[42px]"
+                    />
+                  </label>
+                  
+                  {/* Textfield Orden con botones + y - */}
+                  <label className="sm:col-span-3 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col">
+                    Orden
+                    <div className="mt-1 flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
                       <button
-                        disabled={idx === 0 || guardando}
-                        onClick={() => void cambiarOrden(s, -1)}
-                        className="p-2 rounded-lg border border-[#143d46] text-slate-300 hover:text-white disabled:opacity-30"
-                        title="Subir"
+                        type="button"
+                        onClick={() => {
+                          const val = parseInt(ordenSeccion, 10) || 1;
+                          setOrdenSeccion(String(Math.max(0, val - 1)));
+                        }}
+                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
                       >
-                        <ArrowUp className="w-4 h-4" />
+                        <Minus className="w-3.5 h-3.5" />
                       </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={ordenSeccion}
+                        onChange={(e) => setOrdenSeccion(e.target.value.replace(/[^0-9]/g, ""))}
+                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
+                      />
                       <button
-                        disabled={idx === secciones.length - 1 || guardando}
-                        onClick={() => void cambiarOrden(s, 1)}
-                        className="p-2 rounded-lg border border-[#143d46] text-slate-300 hover:text-white disabled:opacity-30"
-                        title="Bajar"
+                        type="button"
+                        onClick={() => {
+                          const val = parseInt(ordenSeccion, 10) || 0;
+                          setOrdenSeccion(String(val + 1));
+                        }}
+                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
                       >
-                        <ArrowDown className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => editarSeccion(s)}
-                        className="px-3 py-2 rounded-lg text-xs font-bold border border-[#143d46] text-[#3ba28a] hover:bg-[#143d46]"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => void borrarSeccion(s)}
-                        className="p-2 rounded-lg text-rose-400 hover:bg-rose-500/10"
-                        title="Eliminar sección"
-                      >
-                        <Trash2 className="w-4 h-4" />
+                        <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>
-                );
-              })}
-              {secciones.length === 0 && !cargando && (
-                <p className="text-sm text-slate-400">Aún no hay secciones. Crea la primera arriba.</p>
-              )}
-            </div>
-          </section>
+                  </label>
 
-          <section className="space-y-4">
-            <h3 className="text-sm font-black uppercase tracking-wider text-[#3ba28a]">Mesas</h3>
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-[#0e2a30] border border-[#143d46] rounded-2xl p-4">
-              <select
-                value={idSeccionMesas}
-                onChange={(e) => setIdSeccionMesas(e.target.value ? Number(e.target.value) : "")}
-                className="md:col-span-4 bg-[#f3ebd9] text-[#0a2228] font-bold p-3 rounded-xl"
-              >
-                <option value="">Sección</option>
-                {secciones.map((s) => {
-                  const usadas = mesasPorSeccion.get(s.id) ?? 0;
-                  return (
-                    <option key={s.id} value={s.id} disabled={usadas >= s.limiteMesas}>
-                      {s.nombre} ({usadas}/{s.limiteMesas})
-                    </option>
-                  );
-                })}
-              </select>
-              <input
-                type="number"
-                min={1}
-                max={cuposDestino || 1}
-                value={cantidadMesas}
-                onChange={(e) => setCantidadMesas(Math.max(1, Number(e.target.value)))}
-                className="md:col-span-2 bg-[#f3ebd9] text-[#0a2228] font-bold p-3 rounded-xl"
-                title="Cantidad"
-              />
-              <input
-                type="number"
-                min={1}
-                placeholder="N° inicial (opcional)"
-                value={numeroInicial}
-                onChange={(e) => setNumeroInicial(e.target.value)}
-                className="md:col-span-3 bg-[#f3ebd9] text-[#0a2228] font-bold p-3 rounded-xl"
-              />
-              <button
-                onClick={() => void agregarMesas()}
-                disabled={guardando || cuposDestino <= 0 || idSeccionMesas === ""}
-                className="md:col-span-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold bg-[#3ba28a] text-[#07191d] hover:bg-[#43b399] disabled:opacity-40"
-              >
-                <Plus className="w-4 h-4" />
-                Agregar mesa(s)
-              </button>
-              <p className="md:col-span-12 text-[11px] text-slate-400">
-                {seccionDestino
-                  ? `Quedan ${cuposDestino} cupos en ${seccionDestino.nombre}. Puedes agregar varias de una vez; si el número ya existe se usa el siguiente libre.`
-                  : "Elige una sección para ver cuántas mesas caben."}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              {mesasOrdenadas.map((mesa) => (
-                <div
-                  key={mesa.id}
-                  className="flex flex-col sm:flex-row sm:items-center gap-3 bg-[#0e2a30] border border-[#143d46] rounded-2xl p-3"
-                >
-                  <div className="flex-1">
-                    <p className="font-bold text-white">Mesa {mesa.numero}</p>
-                    <p className="text-xs text-slate-400">
-                      {mesa.seccionNombre} · {mesa.estado}
-                    </p>
-                  </div>
-                  <select
-                    value={mesa.idSeccion}
-                    disabled={guardando}
-                    onChange={(e) => void moverMesa(mesa, Number(e.target.value))}
-                    className="bg-[#07191d] border border-[#143d46] text-sm text-white rounded-xl px-3 py-2"
-                    title="Cambiar ubicación"
-                  >
-                    {secciones.map((s) => {
-                      const usadas = mesasPorSeccion.get(s.id) ?? 0;
-                      const llena = s.id !== mesa.idSeccion && usadas >= s.limiteMesas;
-                      return (
-                        <option key={s.id} value={s.id} disabled={llena}>
-                          {s.nombre}
-                          {llena ? " (llena)" : ""}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  {/* Textfield Límite Mesas con botones + y - */}
+                  <label className="sm:col-span-3 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col">
+                    Límite Mesas
+                    <div className="mt-1 flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseInt(limiteSeccion, 10) || 1;
+                          setLimiteSeccion(String(Math.max(1, val - 1)));
+                        }}
+                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={limiteSeccion}
+                        onChange={(e) => setLimiteSeccion(e.target.value.replace(/[^0-9]/g, ""))}
+                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseInt(limiteSeccion, 10) || 0;
+                          setLimiteSeccion(String(val + 1));
+                        }}
+                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </label>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  {editandoId !== null && (
+                    <button
+                      onClick={() => resetFormaSeccion()}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B]/50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  )}
                   <button
-                    onClick={() => void borrarMesa(mesa)}
-                    className="p-2 rounded-lg text-rose-400 hover:bg-rose-500/10"
-                    title="Eliminar mesa"
+                    onClick={() => void guardarSeccion()}
+                    disabled={guardando}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#5BC0DE] text-[#0B132B] hover:bg-[#4CA8C4] disabled:opacity-50 shadow-md transition-colors h-[42px]"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Plus className="w-3.5 h-3.5" />
+                    {editandoId !== null ? "Guardar cambios" : "Crear sección"}
                   </button>
                 </div>
-              ))}
-              {mesasOrdenadas.length === 0 && !cargando && (
-                <p className="text-sm text-slate-400">No hay mesas. Agrégalas por sección arriba.</p>
-              )}
+              </div>
+
+              <div className="space-y-2">
+                {secciones.map((s, idx) => {
+                  const usadas = mesasPorSeccion.get(s.id) ?? 0;
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3 hover:border-[#5BC0DE]/50 transition-colors"
+                    >
+                      <div>
+                        <p className="font-bold text-[#F4D6B0] text-sm">{s.nombre}</p>
+                        <p className="text-[11px] text-[#5BC0DE]">
+                          Orden {s.orden} · {usadas} de {s.limiteMesas} mesas ocupadas
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          disabled={idx === 0 || guardando}
+                          onClick={() => void cambiarOrden(s, -1)}
+                          className="p-1.5 rounded-lg border border-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B] disabled:opacity-30 transition-colors"
+                          title="Subir"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          disabled={idx === secciones.length - 1 || guardando}
+                          onClick={() => void cambiarOrden(s, 1)}
+                          className="p-1.5 rounded-lg border border-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B] disabled:opacity-30 transition-colors"
+                          title="Bajar"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => editarSeccion(s)}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-[#3A506B] text-[#5BC0DE] hover:bg-[#5BC0DE]/10 transition-colors"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => void borrarSeccion(s)}
+                          className="p-1.5 rounded-lg text-[#E57373] hover:bg-[#E57373]/10 transition-colors"
+                          title="Eliminar sección"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {secciones.length === 0 && !cargando && (
+                  <p className="text-xs text-[#5BC0DE] text-center py-6">No hay secciones registradas.</p>
+                )}
+              </div>
             </div>
-          </section>
+          )}
+
+          {/* ================= PESTAÑA 2: MESAS ================= */}
+          {tabActiva === "mesas" && (
+            <div className="space-y-4 animate-in fade-in duration-150">
+              
+              <div className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-4 space-y-3 shadow-inner">
+                <h3 className="text-xs font-black uppercase tracking-wider text-[#5BC0DE]">Agregar Mesas por Lote</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  
+                  {/* Selector de Sección con etiqueta */}
+                  <div className="sm:col-span-4 flex flex-col">
+                    <span className="text-[10px] font-bold text-[#F4D6B0] uppercase tracking-wider mb-1">Sección</span>
+                    <select
+                      value={idSeccionMesas}
+                      onChange={(e) => setIdSeccionMesas(e.target.value ? Number(e.target.value) : "")}
+                      className="bg-[#1C2541] text-[#F4D6B0] font-bold px-3 rounded-xl text-xs border border-[#3A506B] focus:border-[#5BC0DE] outline-none transition-colors h-[42px]"
+                    >
+                      <option value="">Seleccionar sección destino</option>
+                      {secciones.map((s) => {
+                        const usadas = mesasPorSeccion.get(s.id) ?? 0;
+                        return (
+                          <option key={s.id} value={s.id} disabled={usadas >= s.limiteMesas}>
+                            {s.nombre} ({usadas}/{s.limiteMesas})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Textfield Cantidad con botones + y - */}
+                  <div className="sm:col-span-3 flex flex-col">
+                    <span className="text-[10px] font-bold text-[#F4D6B0] uppercase tracking-wider mb-1">Cantidad</span>
+                    <div className="flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseInt(cantidadMesas, 10) || 1;
+                          setCantidadMesas(String(Math.max(1, val - 1)));
+                        }}
+                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={cantidadMesas}
+                        onChange={(e) => setCantidadMesas(e.target.value.replace(/[^0-9]/g, ""))}
+                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
+                        placeholder="1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseInt(cantidadMesas, 10) || 0;
+                          const maxPermitido = cuposDestino || 99;
+                          if (val < maxPermitido) {
+                            setCantidadMesas(String(val + 1));
+                          }
+                        }}
+                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Textfield N° inicial con botones + y - */}
+                  <div className="sm:col-span-2 flex flex-col">
+                    <span className="text-[10px] font-bold text-[#F4D6B0] uppercase tracking-wider mb-1">N° Inicial</span>
+                    <div className="flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = numeroInicial.trim() !== "" ? parseInt(numeroInicial, 10) : (mesas.reduce((max, m) => Math.max(max, m.numero), 0) + 1);
+                          setNumeroInicial(String(Math.max(1, current - 1)));
+                        }}
+                        className="px-1.5 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Auto"
+                        value={numeroInicial}
+                        onChange={(e) => setNumeroInicial(e.target.value.replace(/[^0-9]/g, ""))}
+                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full placeholder-[#3A506B]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const current = numeroInicial.trim() !== "" ? parseInt(numeroInicial, 10) : (mesas.reduce((max, m) => Math.max(max, m.numero), 0) + 1);
+                          setNumeroInicial(String(current + 1));
+                        }}
+                        className="px-1.5 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => void agregarMesas()}
+                    disabled={guardando || cuposDestino <= 0 || idSeccionMesas === ""}
+                    className="sm:col-span-3 flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-[#5BC0DE] text-[#0B132B] hover:bg-[#4CA8C4] disabled:opacity-40 shadow-md transition-colors h-[42px]"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Agregar
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#5BC0DE]">
+                  {seccionDestino
+                    ? `Quedan ${cuposDestino} cupos disponibles en ${seccionDestino.nombre}. Las mesas se ordenan de izquierda a derecha conforme llegan.`
+                    : "Elige una sección para validar los cupos."}
+                </p>
+              </div>
+
+              {/* Filtro de sección */}
+              <div className="flex items-center justify-between gap-2 bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]">
+                <span className="text-xs font-bold text-[#F4D6B0]">Filtrar panel de mesas:</span>
+                <select
+                  value={filtroSeccionMesaTab}
+                  onChange={(e) => setFiltroSeccionMesaTab(e.target.value === "Todas" ? "Todas" : Number(e.target.value))}
+                  className="bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B] text-xs rounded-lg px-3 py-1.5 font-medium outline-none focus:border-[#5BC0DE] transition-colors h-10"
+                >
+                  <option value="Todas">Todas las secciones ({mesas.length})</option>
+                  {secciones.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre} ({mesasPorSeccion.get(s.id) ?? 0})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Panel Grid de Mesas */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {mesasFiltradasPorTab.map((mesa) => (
+                  <div
+                    key={mesa.id}
+                    className="bg-[#0B132B] border-2 border-[#3A506B] hover:border-[#5BC0DE] rounded-2xl p-3 flex flex-col items-center justify-between gap-3 transition-all shadow-md group relative"
+                  >
+                    {/* Botón eliminar en la esquina superior derecha */}
+                    <button
+                      onClick={() => void borrarMesa(mesa)}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg text-[#3A506B] hover:text-[#E57373] hover:bg-[#E57373]/10 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Eliminar mesa"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Número de la mesa */}
+                    <div className="w-12 h-12 rounded-xl bg-[#1C2541] border border-[#3A506B] flex items-center justify-center font-black text-[#F4D6B0] text-lg mt-2">
+                      {mesa.numero}
+                    </div>
+
+                    {/* Sección */}
+                    <span className="text-[10px] text-[#5BC0DE] font-bold uppercase tracking-wider truncate w-full text-center">
+                      {mesa.seccionNombre}
+                    </span>
+
+                    {/* Selector de Zona */}
+                    <div className="w-full pt-2 border-t border-[#3A506B]/60 flex items-center justify-between gap-1">
+                      <span className="text-[9px] font-bold text-[#3A506B] flex items-center gap-1">
+                        <ArrowRightLeft className="w-3 h-3 text-[#5BC0DE]" />
+                      </span>
+                      <select
+                        value={mesa.idSeccion}
+                        disabled={guardando}
+                        onChange={(e) => void moverMesa(mesa, Number(e.target.value))}
+                        className="bg-[#1C2541] border border-[#3A506B] text-[10px] text-[#F4D6B0] rounded-lg px-1.5 py-1 outline-none max-w-[85px] truncate focus:border-[#5BC0DE] transition-colors"
+                        title="Mover a otra sección"
+                      >
+                        {secciones.map((s) => {
+                          const usadas = mesasPorSeccion.get(s.id) ?? 0;
+                          const llena = s.id !== mesa.idSeccion && usadas >= s.limiteMesas;
+                          return (
+                            <option key={s.id} value={s.id} disabled={llena}>
+                              {s.nombre}{llena ? " (llena)" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {mesasFiltradasPorTab.length === 0 && !cargando && (
+                <p className="text-xs text-[#5BC0DE] text-center py-8">No hay mesas registradas en esta sección.</p>
+              )}
+
+            </div>
+          )}
+
         </div>
       </div>
     </div>
