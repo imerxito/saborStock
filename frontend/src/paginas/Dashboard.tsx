@@ -1,9 +1,8 @@
-import { useMemo, useState, Suspense } from "react";
-import { LogOut, Lock, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useMemo, useState, Suspense, useRef } from "react";
+import { LogOut, Lock, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
 import logo from "../assets/SaborYStock (1).png";
 import { useAuth } from "../contexto/AuthContexto";
 import { modulosPorRol } from "./secciones/Modulos";
-import "../estilos/Dashboard.css";
 
 function iniciales(nombre?: string) {
     if (!nombre) return "?";
@@ -15,184 +14,385 @@ function iniciales(nombre?: string) {
         .join("");
 }
 
+function useDragScroll() {
+  const ref = useRef<HTMLDivElement>(null);
+  const isDown = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (!ref.current) return;
+    isDown.current = true;
+    startX.current = e.pageX - ref.current.offsetLeft;
+    scrollLeft.current = ref.current.scrollLeft;
+  };
+
+  const onMouseLeave = () => { isDown.current = false; };
+  const onMouseUp = () => { isDown.current = false; };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDown.current || !ref.current) return;
+    e.preventDefault();
+    const x = e.pageX - ref.current.offsetLeft;
+    const walk = (x - startX.current) * 1.5;
+    ref.current.scrollLeft = scrollLeft.current - walk;
+  };
+
+  return { ref, props: { onMouseDown, onMouseLeave, onMouseUp, onMouseMove } };
+}
+
 function Dashboard() {
     const { usuario, cerrarSesion } = useAuth();
 
+    // Todos los módulos que el rol puede ver (incluye "asistente-ia")
     const modulos = useMemo(
         () => (usuario ? modulosPorRol(usuario.rol) : []),
         [usuario]
     );
 
-    const [idActivo, setIdActivo] = useState<string | null>(null);
-    const [colapsado, setColapsado] = useState(true);
+    // 🆕 El asistente NO se renderiza en el aside; solo en el navbar
+    const modulosSinIA = useMemo(
+        () => modulos.filter((m) => m.id !== "asistente-ia"),
+        [modulos]
+    );
 
-    const activo = modulos.find((m) => m.id === idActivo) ?? modulos[0];
+    const [idActivo, setIdActivo] = useState<string | null>(null);
+    const [colapsado, setColapsado] = useState(false);
+    const sidebarScroll = useDragScroll();
+
+    const [hoveredMod, setHoveredMod] = useState<{ titulo: string; isActive: boolean; top: number; isLogout?: boolean } | null>(null);
+
+    const activo = modulos.find((m) => m.id === idActivo) ?? modulosSinIA[0] ?? modulos[0];
     const Contenido = activo?.componente;
+
+    // 🆕 ¿El rol tiene acceso al asistente? ¿Está activo ahora?
+    const tieneIA = modulos.some((m) => m.id === "asistente-ia");
+    const esIA = activo?.id === "asistente-ia";
 
     const nombreVisible =
         usuario?.nombre?.trim() || usuario?.correo?.split("@")[0] || "Usuario";
 
     return (
         <div 
-            className={`Contenedor ${colapsado ? "colapsado" : ""}`} 
+            className="Contenedor"
             style={{ 
                 backgroundColor: '#0B132B',
-                display: 'grid',
-                gridTemplateRows: 'auto 1fr', // Header arriba, contenido abajo
-                gridTemplateColumns: colapsado ? '0px 1fr' : '64px 1fr',
-                transition: 'grid-template-columns 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                height: '100vh', // Fuerza a que ocupe exactamente la pantalla
-                width: '100vw',  // Evita desbordamiento horizontal
-                overflow: 'hidden' // Evita que aparezca el scrollbar global
+                color: '#F4D6B0',
+                height: '100vh',
+                width: '100vw',
+                overflow: 'hidden',
+                position: 'relative',
+                fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif'
             }}
         >
+            <style>{`
+                *, *::before, *::after { box-sizing: border-box; }
+                html, body, #root { width: 100vw; height: 100vh; margin: 0; padding: 0; overflow: hidden; }
+
+                @keyframes dash-aparecer {
+                    from { opacity: 0; transform: translateY(2px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .contenido-animado { animation: dash-aparecer 0.2s ease-out both; }
+
+                .sidebar-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+                .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+                .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+                .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(91, 192, 222, 0.2); border-radius: 9999px; }
+                .sidebar-scroll:hover::-webkit-scrollbar-thumb { background: rgba(91, 192, 222, 0.4); }
+
+                /* 🆕 Ocultar textos largos en pantallas muy pequeñas */
+                @media (max-width: 420px) {
+                    .marca-texto { display: none !important; }
+                    .asistente-texto { display: none !important; }
+                }
+                @media (max-width: 520px) {
+                    .usuario-nombre { display: none !important; }
+                }
+            `}</style>
             
-            {/* NAVBAR SUPERIOR */}
-            <nav className="navegador" style={{ backgroundColor: '#1C2541', borderBottom: '1px solid #3A506B', gridColumn: '1 / -1' }}>
-                <div className="navegador__izq">
+            {/* NAVBAR SUPERIOR FIJO */}
+            {/* NAVBAR SUPERIOR FIJO */}
+            <nav 
+                style={{ 
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#1C2541', 
+                    borderBottom: '1px solid #3A506B', 
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.5rem 1rem',
+                    height: '60px',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+                    zIndex: 50,
+                    width: '100vw',
+                    gap: '0.5rem'
+                }}
+            >
+                {/* IZQUIERDA: colapsar + [marca + Asistente juntos] */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: 1 }}>
                     <button
                         type="button"
-                        className="btn-colapsar"
                         onClick={() => setColapsado((c) => !c)}
                         aria-label={colapsado ? "Expandir menú" : "Contraer menú"}
                         title={colapsado ? "Expandir menú" : "Contraer menú"}
-                        style={{ color: '#F4D6B0' }}
+                        style={{ 
+                            display: 'grid',
+                            placeItems: 'center',
+                            width: '36px',
+                            height: '36px',
+                            color: '#F4D6B0',
+                            background: 'rgba(244, 214, 176, 0.08)',
+                            border: '1px solid #3A506B',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            flexShrink: 0
+                        }}
                     >
                         {colapsado ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
                     </button>
-                    <div className="logo logo--marco" style={{ backgroundColor: '#0B132B', borderColor: '#3A506B' }}>
-                        <img src={logo} alt="SaborYStock" />
+
+                    {/* 🆕 Marca + Asistente como bloque unido */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
+                        <span
+                            className="marca-texto"
+                            style={{ fontWeight: 'bold', fontSize: '0.95rem', color: '#F4D6B0', whiteSpace: 'nowrap' }}
+                        >
+                            Sabor & Stock
+                        </span>
+
+                        {tieneIA && (
+                            <button
+                                type="button"
+                                onClick={() => setIdActivo("asistente-ia")}
+                                aria-label="Asistente IA"
+                                aria-current={esIA ? "page" : undefined}
+                                title="Asistente IA"
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '5px',
+                                    padding: '0 9px',
+                                    height: '32px',
+                                    borderRadius: '10px',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                    backgroundColor: esIA ? 'rgba(91, 192, 222, 0.15)' : 'rgba(91, 192, 222, 0.08)',
+                                    border: esIA ? '1.5px solid #5BC0DE' : '1px solid #3A506B',
+                                    color: esIA ? '#5BC0DE' : '#F4D6B0',
+                                    fontWeight: 600,
+                                    fontSize: '0.78rem',
+                                    transition: 'all 0.2s ease-out',
+                                    boxShadow: esIA ? '0 0 12px rgba(91, 192, 222, 0.25)' : 'none',
+                                }}
+                            >
+                                <Sparkles size={15} />
+                                <span className="asistente-texto">Asistente</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                <div className="usuario-chip" style={{ backgroundColor: '#0B132B', borderColor: '#3A506B' }}>
-                    <div className="usuario-chip__texto" style={{ color: '#F4D6B0' }}>
+                {/* DERECHA: solo el perfil */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#0B132B', border: '1px solid #3A506B', padding: '4px 10px', borderRadius: '12px', flexShrink: 0 }}>
+                    <div
+                        className="usuario-nombre"
+                        style={{
+                            color: '#F4D6B0',
+                            fontSize: '0.8rem',
+                            maxWidth: '120px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
                         <strong>{nombreVisible}</strong>
                     </div>
-                    <div className="avatar" aria-hidden="true" style={{ backgroundColor: '#5BC0DE', color: '#0B132B' }}>
+                    <div style={{ display: 'grid', placeItems: 'center', width: '32px', height: '32px', backgroundColor: '#5BC0DE', color: '#0B132B', borderRadius: '50%', fontSize: '0.8rem', fontWeight: 800, flexShrink: 0 }}>
                         {iniciales(nombreVisible)}
                     </div>
                 </div>
             </nav>
 
-            {/* SIDEBAR (MENÚ LATERAL) */}
+            {/* MENÚ LATERAL FLOTANTE FIJO (ASIDE) — sin el módulo de IA */}
             <aside 
                 aria-label="Módulos" 
                 style={{ 
+                    position: 'fixed',
+                    top: '60px',
+                    left: 0,
+                    bottom: 0,
                     backgroundColor: '#1C2541', 
-                    borderRight: '1px solid #3A506B',
+                    borderRight: colapsado ? 'none' : '1px solid #3A506B',
                     width: colapsado ? '0px' : '64px',
-                    overflow: 'visible',
                     display: colapsado ? 'none' : 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: colapsado ? '0' : '16px 0',
-                    position: 'relative',
-                    zIndex: 50,
-                    height: '100%' // El menú ocupa el alto disponible sin desbordar
+                    padding: colapsado ? '0' : '12px 0',
+                    zIndex: 40,
+                    overflow: 'hidden',
+                    transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
-                <div className="aside__lista" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', overflow: 'visible' }}>
-                    {modulos.map((m) => {
+                <div 
+                    ref={sidebarScroll.ref}
+                    {...sidebarScroll.props}
+                    className="sidebar-scroll" 
+                    onScroll={() => setHoveredMod(null)}
+                    style={{ 
+                        width: '100%', 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        alignItems: 'center', 
+                        gap: '10px', 
+                        cursor: 'grab',
+                        flex: 1,
+                        overflowY: 'auto',
+                        overflowX: 'hidden',
+                        minHeight: 0
+                    }}
+                >
+                    {modulosSinIA.map((m) => {
                         const Icono = m.icono;
                         const esActivo = m.id === activo?.id;
                         
                         return (
-                            <div key={m.id} className="relative group flex items-center justify-center w-full" style={{ overflow: 'visible' }}>
+                            <div key={m.id} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', flexShrink: 0 }}>
                                 <button
                                     type="button"
-                                    className="relative flex items-center justify-center h-[40px] w-[40px] rounded-full cursor-pointer transition-all duration-200 ease-out"
                                     onClick={() => setIdActivo(m.id)}
                                     aria-current={esActivo ? "page" : undefined}
+                                    onMouseEnter={(e) => {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setHoveredMod({
+                                            titulo: m.titulo,
+                                            isActive: esActivo,
+                                            top: rect.top + rect.height / 2
+                                        });
+                                    }}
+                                    onMouseLeave={() => setHoveredMod(null)}
                                     style={{ 
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        height: '40px',
+                                        width: '40px',
+                                        borderRadius: '50%',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease-out',
                                         backgroundColor: '#1C2541',
                                         border: esActivo ? '1.5px solid #5BC0DE' : '1px solid rgba(58, 80, 107, 0.4)',
                                         boxShadow: esActivo ? '0 0 10px rgba(91, 192, 222, 0.25)' : 'none',
-                                        zIndex: 10
                                     }}
                                 >
-                                    <Icono size={18} style={{ color: esActivo ? '#5BC0DE' : '#F4D6B0', opacity: 1, position: 'relative', zIndex: 2 }} />
-
-                                    {/* Burbuja flotante */}
-                                    <div 
-                                        className="absolute left-0 top-1/2 -translate-y-1/2 h-[40px] pl-[46px] pr-4 rounded-full opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-200 ease-out whitespace-nowrap text-[11px] font-medium tracking-wide flex items-center shadow-2xl"
-                                        style={{ 
-                                            backgroundColor: '#1C2541', 
-                                            border: esActivo ? '1.5px solid #5BC0DE' : '1px solid #3A506B', 
-                                            color: esActivo ? '#5BC0DE' : '#F4D6B0',
-                                            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
-                                            zIndex: 1 
-                                        }}
-                                    >
-                                        {m.titulo}
-                                    </div>
+                                    <Icono size={18} style={{ color: esActivo ? '#5BC0DE' : '#F4D6B0' }} />
                                 </button>
                             </div>
                         );
                     })}
                 </div>
 
-                <div className="relative group flex items-center justify-center w-full" style={{ overflow: 'visible' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', flexShrink: '0', marginTop: 'auto', paddingTop: '10px', borderTop: '1px solid rgba(58, 80, 107, 0.3)' }}>
                     <button
                         type="button"
-                        className="relative flex items-center justify-center h-[40px] w-[40px] rounded-full cursor-pointer transition-all duration-200 ease-out"
                         onClick={cerrarSesion}
+                        onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setHoveredMod({
+                                titulo: 'Cerrar sesión',
+                                isActive: false,
+                                isLogout: true,
+                                top: rect.top + rect.height / 2
+                            });
+                        }}
+                        onMouseLeave={() => setHoveredMod(null)}
                         style={{ 
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '40px',
+                            width: '40px',
+                            borderRadius: '50%',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease-out',
                             backgroundColor: '#1C2541',
-                            border: '1px solid rgba(229, 115, 115, 0.3)',
-                            zIndex: 10
+                            border: '1px solid rgba(217, 119, 6, 0.3)'
                         }}
                     >
-                        <LogOut size={18} style={{ color: '#E57373', opacity: 1, position: 'relative', zIndex: 2 }} />
-
-                        <div 
-                            className="absolute left-0 top-1/2 -translate-y-1/2 h-[40px] pl-[46px] pr-4 rounded-full opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-200 ease-out whitespace-nowrap text-[11px] font-medium tracking-wide flex items-center shadow-2xl"
-                            style={{ 
-                                backgroundColor: '#1C2541', 
-                                border: '1px solid #E57373', 
-                                color: '#E57373',
-                                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
-                                zIndex: 1 
-                            }}
-                        >
-                            Cerrar sesión
-                        </div>
+                        <LogOut size={18} style={{ color: '#D97706' }} />
                     </button>
                 </div>
             </aside>
 
-            {/* CONTENIDO PRINCIPAL CON SCROLL INTERNO */}
+            {/* TOOLTIP DEL SIDEBAR */}
+            {hoveredMod && !colapsado && (
+                <div 
+                    style={{ 
+                        position: 'fixed',
+                        pointerEvents: 'none',
+                        zIndex: 100,
+                        height: '40px',
+                        padding: '0 16px',
+                        borderRadius: '9999px',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        whiteSpace: 'nowrap',
+                        top: hoveredMod.top,
+                        left: '60px',
+                        transform: 'translateY(-50%)',
+                        backgroundColor: '#1C2541', 
+                        border: hoveredMod.isLogout ? '1px solid #D97706' : (hoveredMod.isActive ? '1.5px solid #5BC0DE' : '1px solid #3A506B'), 
+                        color: hoveredMod.isLogout ? '#D97706' : (hoveredMod.isActive ? '#5BC0DE' : '#F4D6B0'),
+                        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)'
+                    }}
+                >
+                    {hoveredMod.titulo}
+                </div>
+            )}
+
+            {/* CONTENEDOR PRINCIPAL */}
             <main 
                 style={{ 
-                    gridColumn: colapsado ? '1 / -1' : 'auto',
-                    height: '100%', 
-                    overflowY: 'auto', // El scroll vertical se genera AQUÍ
-                    overflowX: 'hidden', // Evita scroll horizontal no deseado
-                    position: 'relative'
+                    position: 'absolute',
+                    top: '60px',
+                    left: colapsado ? '0px' : '64px',
+                    right: 0,
+                    bottom: 0,
+                    height: 'calc(100vh - 60px)',
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    backgroundColor: '#0B132B',
+                    transition: 'left 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
             >
                 {activo && Contenido ? (
                     <Suspense 
                         fallback={
-                            <div className="flex h-full w-full items-center justify-center text-[#5BC0DE] font-sans">
+                            <div style={{ display: 'flex', height: '100%', width: '100%', alignItems: 'center', justifyContent: 'center', color: '#5BC0DE' }}>
                                 Cargando módulo...
                             </div>
                         }
                     >
                         <section
                             key={activo.id}
-                            className={`contenido-modulo${activo ? " contenido-modulo--completo" : ""}`}
+                            className="contenido-animado"
+                            style={{ width: '100%', height: '100%' }}
                             aria-label={activo.titulo}
                         >
                             <Contenido />
                         </section>
                     </Suspense>
                 ) : (
-                    <div className="estado-vacio" style={{ color: '#F4D6B0' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px', textAlign: 'center', padding: '20px' }}>
                         <Lock size={32} />
-                        <h2>Sin módulos disponibles</h2>
-                        <p style={{ color: '#5BC0DE' }}>Tu rol todavía no tiene funciones asignadas. Pídele acceso al administrador.</p>
+                        <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Sin módulos disponibles</h2>
+                        <p style={{ color: '#5BC0DE', fontSize: '0.9rem', margin: 0 }}>Tu rol todavía no tiene funciones asignadas. Pídele acceso al administrador.</p>
                     </div>
                 )}
             </main>

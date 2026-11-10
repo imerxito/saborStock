@@ -22,6 +22,7 @@ import compraRutas from "./rutas/Compra.rutas.js";
 import detalleCompraRutas from "./rutas/DetalleCompra.rutas.js";
 import recetaRutas from "./rutas/Receta.rutas.js";
 import reporteRutas from "./rutas/Reporte.rutas.js";
+import ProveedorRutas from "./rutas/Proveedor.rutas.js";
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use("/api/facturas", FacturaRutas);
 app.use("/api/detalles-factura", DetalleFacturaRutas);
 app.use("/api/historial-caja", HistorialCajaRutas);
 app.use("/api/reportes", reporteRutas);
+app.use("/api/proveedores", ProveedorRutas);
 app.use(errorMiddleware);
 
 export default app;

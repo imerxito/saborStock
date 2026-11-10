@@ -1,35 +1,22 @@
-@import "tailwindcss";
-
 /* =========================================
    1. SABOR & STOCK - SISTEMA DE DISEÑO / TEMA
    ========================================= */
 
 :root {
   /* Paleta Corporativa Sabor & Stock */
-  --paleta-negro: #0C1C22;
-  --paleta-verde-oscuro: #112328;
-  --paleta-teal: #386B73;
-  --paleta-teal-claro: #52939E;
-  --paleta-algamarina: #8CBCC4;
-  --paleta-champan: #F7F5EB;
-  --paleta-champan-oscuro: #EAE4D2;
-  --paleta-opalo: #77ACA2;
+  --paleta-fondo: #0B132B;
+  --paleta-superficie: #1C2541;
+  --paleta-borde: #3A506B;
+  --paleta-acceso: #5BC0DE;
+  --paleta-texto: #F4D6B0;
+  --paleta-alerta: #D97706;
 
   /* Colores Semánticos */
-  --color-fondo: var(--paleta-negro);
-  --color-superficie: var(--paleta-verde-oscuro);
-  --color-texto: var(--paleta-champan);
-  --color-borde: #1E3E47;
-  --color-borde-fuerte: #275361;
-  --color-principal: var(--paleta-teal);
-  
-  /* Estados */
-  --color-ok: #10B981;
-  --color-ok-fondo: rgba(16, 185, 129, 0.15);
-  --color-alerta: #F59E0B;
-  --color-alerta-fondo: rgba(245, 158, 11, 0.15);
-  --color-error: #EF4444;
-  --color-error-fondo: rgba(239, 68, 68, 0.15);
+  --color-fondo: var(--paleta-fondo);
+  --color-superficie: var(--paleta-superficie);
+  --color-texto: var(--paleta-texto);
+  --color-borde: var(--paleta-borde);
+  --color-principal: var(--paleta-acceso);
 }
 
 /* Reset Base Global */
@@ -40,10 +27,10 @@ body,
   height: 100vh;
   margin: 0;
   padding: 0;
-  background-color: var(--paleta-negro);
-  color: var(--color-texto);
+  background-color: var(--paleta-fondo) !important;
+  color: var(--paleta-texto) !important;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  overflow: hidden !important; /* Bloquea el scroll general de la ventana */
+  overflow: hidden !important;
 }
 
 *, *::before, *::after {
@@ -51,47 +38,41 @@ body,
 }
 
 /* =========================================
-   2. ESTRUCTURA Y LAYOUT PRINCIPAL (GRID FIJO)
+   2. ESTRUCTURA Y LAYOUT PRINCIPAL (DESKTOP)
    ========================================= */
 
 .Contenedor {
-  --ancho-aside: 250px;
+  --ancho-aside: 64px;
   display: grid;
   grid-template-columns: var(--ancho-aside) 1fr;
-  grid-template-rows: 60px 1fr; /* Altura estricta para la barra superior */
+  grid-template-rows: auto 1fr;
   grid-template-areas:
     "nav nav"
     "aside main";
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background-color: var(--paleta-negro);
-  transition: grid-template-columns 0.3s ease;
+  background-color: var(--paleta-fondo);
+  transition: grid-template-columns 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .Contenedor.colapsado {
-  --ancho-aside: 76px;
+  --ancho-aside: 0px;
 }
 
-/* 
-   Área Principal (<main>): 
-   min-height: 0 y min-width: 0 son obligatorios en CSS Grid 
-   para evitar que tablas o vistas largas desborden la pantalla.
-*/
 .Contenedor > main {
   grid-area: main;
   min-width: 0;
-  min-height: 0; /* EVITA EL DESPLAZAMIENTO DEL DASHBOARD */
+  min-height: 0;
   height: 100%;
   width: 100%;
   padding: 0;
   overflow: hidden;
-  background-color: var(--paleta-negro) !important;
+  background-color: var(--paleta-fondo) !important;
   display: flex;
   flex-direction: column;
 }
 
-/* Contenedor del módulo activo (Scroll interno únicamente aquí) */
 .contenido-modulo {
   flex: 1;
   min-height: 0;
@@ -100,7 +81,7 @@ body,
   height: 100%;
   padding: 0;
   background: transparent !important;
-  overflow-y: auto; /* Solo hace scroll la página actual */
+  overflow-y: auto;
   overflow-x: hidden;
   animation: dash-aparecer 0.2s ease-out both;
 }
@@ -125,8 +106,8 @@ body,
   align-items: center;
   gap: 1rem;
   padding: 0.5rem 1.25rem;
-  background: linear-gradient(90deg, #09151A, var(--paleta-verde-oscuro));
-  border-bottom: 1px solid var(--color-borde);
+  background-color: var(--paleta-superficie);
+  border-bottom: 1px solid var(--paleta-borde);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   position: relative;
   z-index: 50;
@@ -143,8 +124,8 @@ body,
   display: flex;
   align-items: center;
   padding: 4px 12px;
-  background: var(--paleta-champan);
-  border: 1px solid rgba(247, 245, 235, 0.3);
+  background-color: var(--paleta-fondo);
+  border: 1px solid var(--paleta-borde);
   border-radius: 12px;
 }
 
@@ -159,29 +140,34 @@ body,
   place-items: center;
   width: 36px;
   height: 36px;
-  color: var(--paleta-champan);
-  background: rgba(247, 245, 235, 0.08);
-  border: 1px solid rgba(247, 245, 235, 0.18);
+  color: var(--paleta-texto);
+  background: rgba(244, 214, 176, 0.08);
+  border: 1px solid var(--paleta-borde);
   border-radius: 10px;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
 
 .btn-colapsar:hover {
-  background: rgba(247, 245, 235, 0.18);
+  background: rgba(91, 192, 222, 0.15);
+  color: var(--paleta-acceso);
 }
 
 .usuario-chip {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  background-color: var(--paleta-fondo);
+  border: 1px solid var(--paleta-borde);
+  padding: 4px 12px;
+  border-radius: 12px;
 }
 
 .usuario-chip__texto {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  color: var(--paleta-champan);
+  color: var(--paleta-texto);
 }
 
 .usuario-chip__texto strong { 
@@ -194,8 +180,8 @@ body,
   place-items: center;
   width: 36px;
   height: 36px;
-  color: var(--paleta-negro);
-  background: linear-gradient(135deg, var(--paleta-teal), var(--paleta-algamarina));
+  color: var(--paleta-fondo);
+  background-color: var(--paleta-acceso);
   border-radius: 50%;
   font-size: 0.85rem;
   font-weight: 800;
@@ -205,14 +191,19 @@ body,
    4. MENÚ LATERAL (ASIDE)
    ========================================= */
 
+aside {
+  background-color: var(--paleta-superficie) !important;
+  border-right: 1px solid var(--paleta-borde) !important;
+}
+
 .Contenedor > aside {
   grid-area: aside;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1rem 0.75rem;
-  background: linear-gradient(180deg, var(--paleta-negro) 0%, #09151A 100%);
-  border-right: 1px solid var(--color-borde);
+  padding: 16px 0;
+  background-color: var(--paleta-superficie);
+  border-right: 1px solid var(--paleta-borde);
   overflow-x: hidden;
   overflow-y: auto;
   z-index: 40;
@@ -226,62 +217,6 @@ body,
   flex: 1;
 }
 
-.modulo-btn {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  width: 100%;
-  min-height: 42px;
-  padding: 0.6rem 0.85rem;
-  color: rgba(247, 245, 235, 0.7);
-  background: transparent;
-  border: 0;
-  border-radius: 12px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-align: left;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.modulo-btn:hover {
-  color: var(--paleta-champan);
-  background: rgba(247, 245, 235, 0.08);
-}
-
-.modulo-btn.activo {
-  color: var(--paleta-champan);
-  background: rgba(56, 107, 115, 0.35);
-  border: 1px solid var(--color-borde-fuerte);
-}
-
-.modulo-btn.activo::before {
-  content: "";
-  position: absolute;
-  left: -0.75rem;
-  top: 8px;
-  bottom: 8px;
-  width: 4px;
-  border-radius: 0 4px 4px 0;
-  background: var(--paleta-algamarina);
-}
-
-.modulo-btn--salir {
-  margin-top: 0.5rem;
-  border-top: 1px solid var(--color-borde);
-  padding-top: 0.85rem;
-}
-
-.modulo-btn--salir:hover {
-  color: #FFB4AB;
-  background: rgba(239, 68, 68, 0.15);
-}
-
-.Contenedor.colapsado .modulo-btn span { display: none; }
-.Contenedor.colapsado .modulo-btn { justify-content: center; padding-inline: 0; }
-
 /* =========================================
    5. COMPONENTES Y CAMPOS GENERALES
    ========================================= */
@@ -293,9 +228,9 @@ body,
   gap: 0.5rem;
   min-height: 38px;
   padding: 0.5rem 1rem;
-  color: var(--paleta-champan);
-  background: var(--paleta-teal);
-  border: 1px solid var(--color-borde-fuerte);
+  color: var(--paleta-fondo);
+  background: var(--paleta-acceso);
+  border: 1px solid var(--paleta-borde);
   border-radius: 10px;
   font-size: 0.85rem;
   font-weight: 700;
@@ -304,22 +239,8 @@ body,
 }
 
 .btn:hover:not(:disabled) {
-  background: #2A5258;
+  background: rgba(91, 192, 222, 0.9);
   transform: translateY(-1px);
-}
-
-.btn--secundario {
-  background: rgba(56, 107, 115, 0.2);
-  border-color: var(--color-borde-fuerte);
-}
-
-.btn--secundario:hover:not(:disabled) {
-  background: rgba(56, 107, 115, 0.4);
-}
-
-.btn--peligro {
-  background: var(--color-error);
-  border-color: #DC2626;
 }
 
 .campo {
@@ -329,7 +250,7 @@ body,
 }
 
 .campo label {
-  color: var(--paleta-algamarina);
+  color: var(--paleta-acceso);
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -340,9 +261,9 @@ body,
   width: 100%;
   min-height: 38px;
   padding: 6px 12px;
-  color: var(--paleta-champan);
-  background: var(--paleta-negro);
-  border: 1px solid var(--color-borde-fuerte);
+  color: var(--paleta-texto);
+  background: var(--paleta-fondo);
+  border: 1px solid var(--paleta-borde);
   border-radius: 8px;
   outline: none;
   font-size: 0.85rem;
@@ -351,18 +272,59 @@ body,
 .campo input:focus,
 .campo select:focus,
 .campo textarea:focus {
-  border-color: var(--paleta-algamarina);
-  box-shadow: 0 0 0 3px rgba(140, 188, 196, 0.2);
+  border-color: var(--paleta-acceso);
+  box-shadow: 0 0 0 3px rgba(91, 192, 222, 0.2);
 }
 
 /* =========================================
-   6. RESPONSIVO
+   6. RESPONSIVO MÓVIL AUTOMÁTICO (TELÉFONOS)
    ========================================= */
 
-@media (max-width: 820px) {
-  .usuario-chip__texto { display: none; }
-  .Contenedor { --ancho-aside: 200px; }
-  .Contenedor.colapsado { --ancho-aside: 60px; }
+@media (max-width: 767px) {
+  .Contenedor {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100vh !important;
+    width: 100vw !important;
+  }
+
+  .btn-colapsar {
+    display: none !important;
+  }
+
+  .usuario-chip__texto { 
+    display: none !important; 
+  }
+
+  .Contenedor > main {
+    flex: 1 !important;
+    height: calc(100vh - 124px) !important;
+    overflow-y: auto !important;
+  }
+
+  .Contenedor > aside, aside {
+    height: 64px !important;
+    width: 100% !important;
+    flex-direction: row !important;
+    padding: 0 12px !important;
+    border-right: none !important;
+    border-top: 1px solid var(--paleta-borde) !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    align-items: center !important;
+    justify-content: space-around !important;
+    order: 3 !important;
+  }
+
+  .aside__lista {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-around !important;
+    gap: 12px !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

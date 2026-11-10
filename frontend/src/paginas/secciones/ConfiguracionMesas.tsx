@@ -262,59 +262,67 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
     .filter((m) => filtroSeccionMesaTab === "Todas" || m.idSeccion === filtroSeccionMesaTab)
     .sort((a, b) => a.id - b.id);
 
+  // Clases reutilizables para los botones +/- de los campos numéricos
+  const btnStep =
+    "w-9 sm:w-8 h-full flex items-center justify-center bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs shrink-0";
+
   return (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
-      <div className="bg-[#1C2541] border border-[#3A506B] rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center px-2 pt-2 pb-14 sm:p-5 animate-in fade-in duration-200">
+      {/* Tarjeta con margen: se ajusta al espacio visible y nunca ocupa toda la pantalla */}
+      <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-full overflow-hidden flex flex-col shadow-2xl">
         
         {/* Encabezado del Modal */}
-        <div className="p-4 sm:p-5 bg-[#0B132B] border-b border-[#3A506B] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#5BC0DE] text-[#0B132B] flex items-center justify-center shadow-md">
-              <Settings className="w-5 h-5" />
+        <div className="p-3 sm:p-5 bg-[#0B132B] border-b border-[#3A506B] flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-[#5BC0DE] text-[#0B132B] flex items-center justify-center shadow-md">
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-[#F4D6B0]">Configuración del Salón</h2>
-              <p className="text-[11px] text-[#5BC0DE]">Administra zonas y distribución de mesas.</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-extrabold text-[#F4D6B0] truncate">Configuración del Salón</h2>
+              <p className="text-[11px] text-[#5BC0DE] truncate">Administra zonas y distribución de mesas.</p>
             </div>
           </div>
           <button
             onClick={onCerrar}
-            className="p-2 rounded-xl text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B] transition-colors"
+            aria-label="Cerrar"
+            className="p-2 shrink-0 rounded-xl text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Pestañas (Tabs) de Navegación Interna */}
-        <div className="flex border-b border-[#3A506B] bg-[#0B132B] px-4 pt-3 gap-2 shrink-0">
+        <div className="flex border-b border-[#3A506B] bg-[#0B132B] px-2 sm:px-4 pt-2 sm:pt-3 gap-1.5 sm:gap-2 shrink-0 overflow-x-auto [&::-webkit-scrollbar]:hidden touch-pan-x">
           <button
             onClick={() => setTabActiva("secciones")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-t border-x ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-t-xl text-xs font-bold whitespace-nowrap transition-all border-t border-x ${
               tabActiva === "secciones"
                 ? "bg-[#1C2541] text-[#5BC0DE] border-[#3A506B]"
-                : "bg-transparent text-[#3A506B] border-transparent hover:text-[#F4D6B0]"
+                : "bg-transparent text-[#7B8FA8] border-transparent hover:text-[#F4D6B0]"
             }`}
           >
             <Layers className="w-4 h-4" />
-            Secciones Editables ({secciones.length})
+            <span className="sm:hidden">Secciones ({secciones.length})</span>
+            <span className="hidden sm:inline">Secciones Editables ({secciones.length})</span>
           </button>
           <button
             onClick={() => setTabActiva("mesas")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-t border-x ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-t-xl text-xs font-bold whitespace-nowrap transition-all border-t border-x ${
               tabActiva === "mesas"
                 ? "bg-[#1C2541] text-[#5BC0DE] border-[#3A506B]"
-                : "bg-transparent text-[#3A506B] border-transparent hover:text-[#F4D6B0]"
+                : "bg-transparent text-[#7B8FA8] border-transparent hover:text-[#F4D6B0]"
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
-            Gestión de Mesas ({mesas.length})
+            <span className="sm:hidden">Mesas ({mesas.length})</span>
+            <span className="hidden sm:inline">Gestión de Mesas ({mesas.length})</span>
           </button>
         </div>
 
-        {/* Cuerpo con Scroll Controlado */}
-        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-5 bg-[#1C2541]">
+        {/* Cuerpo con scroll único y barra visible */}
+        <div className="p-3 sm:p-5 overflow-y-auto overscroll-contain flex-1 min-h-0 space-y-4 sm:space-y-5 bg-[#1C2541] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0B132B] [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/60 [&::-webkit-scrollbar-thumb]:rounded-full">
           {aviso && (
-            <div className="bg-[#E57373]/10 border border-[#E57373]/30 text-[#E57373] text-xs rounded-xl px-3 py-2.5 font-semibold">
+            <div className="bg-[#E57373]/10 border border-[#E57373]/30 text-[#E57373] text-xs rounded-xl px-3 py-2.5 font-semibold break-words">
               {aviso}
             </div>
           )}
@@ -324,12 +332,12 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
           {/* ================= PESTAÑA 1: SECCIONES ================= */}
           {tabActiva === "secciones" && (
             <div className="space-y-4 animate-in fade-in duration-150">
-              <div className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-4 space-y-3 shadow-inner">
+              <div className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3 sm:p-4 space-y-3 shadow-inner">
                 <h3 className="text-xs font-black uppercase tracking-wider text-[#5BC0DE]">
                   {editandoId !== null ? "Editar Sección" : "Crear Nueva Sección"}
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <label className="sm:col-span-6 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col">
+                <div className="grid grid-cols-2 sm:grid-cols-12 gap-3 items-end">
+                  <label className="col-span-2 sm:col-span-6 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col">
                     Nombre
                     <input
                       type="text"
@@ -340,8 +348,8 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                     />
                   </label>
                   
-                  {/* Textfield Orden con botones + y - */}
-                  <label className="sm:col-span-3 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col">
+                  {/* Orden con botones + y - */}
+                  <label className="col-span-1 sm:col-span-3 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col min-w-0">
                     Orden
                     <div className="mt-1 flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
                       <button
@@ -350,7 +358,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                           const val = parseInt(ordenSeccion, 10) || 1;
                           setOrdenSeccion(String(Math.max(0, val - 1)));
                         }}
-                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className={btnStep}
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
@@ -359,7 +367,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                         inputMode="numeric"
                         value={ordenSeccion}
                         onChange={(e) => setOrdenSeccion(e.target.value.replace(/[^0-9]/g, ""))}
-                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
+                        className="w-full min-w-0 bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
                       />
                       <button
                         type="button"
@@ -367,15 +375,15 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                           const val = parseInt(ordenSeccion, 10) || 0;
                           setOrdenSeccion(String(val + 1));
                         }}
-                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className={btnStep}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </label>
 
-                  {/* Textfield Límite Mesas con botones + y - */}
-                  <label className="sm:col-span-3 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col">
+                  {/* Límite de mesas con botones + y - */}
+                  <label className="col-span-1 sm:col-span-3 text-[11px] font-bold uppercase tracking-wider text-[#F4D6B0] flex flex-col min-w-0">
                     Límite Mesas
                     <div className="mt-1 flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
                       <button
@@ -384,7 +392,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                           const val = parseInt(limiteSeccion, 10) || 1;
                           setLimiteSeccion(String(Math.max(1, val - 1)));
                         }}
-                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className={btnStep}
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
@@ -393,7 +401,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                         inputMode="numeric"
                         value={limiteSeccion}
                         onChange={(e) => setLimiteSeccion(e.target.value.replace(/[^0-9]/g, ""))}
-                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
+                        className="w-full min-w-0 bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
                       />
                       <button
                         type="button"
@@ -401,14 +409,14 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                           const val = parseInt(limiteSeccion, 10) || 0;
                           setLimiteSeccion(String(val + 1));
                         }}
-                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className={btnStep}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </label>
                 </div>
-                <div className="flex items-center justify-end gap-2 pt-2">
+                <div className="flex items-center justify-end gap-2 pt-1 sm:pt-2">
                   {editandoId !== null && (
                     <button
                       onClick={() => resetFormaSeccion()}
@@ -420,7 +428,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                   <button
                     onClick={() => void guardarSeccion()}
                     disabled={guardando}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#5BC0DE] text-[#0B132B] hover:bg-[#4CA8C4] disabled:opacity-50 shadow-md transition-colors h-[42px]"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#5BC0DE] text-[#0B132B] hover:bg-[#4CA8C4] disabled:opacity-50 shadow-md transition-colors h-[42px]"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     {editandoId !== null ? "Guardar cambios" : "Crear sección"}
@@ -434,43 +442,46 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                   return (
                     <div
                       key={s.id}
-                      className="flex items-center justify-between bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3 hover:border-[#5BC0DE]/50 transition-colors"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3 hover:border-[#5BC0DE]/50 transition-colors"
                     >
-                      <div>
-                        <p className="font-bold text-[#F4D6B0] text-sm">{s.nombre}</p>
+                      <div className="min-w-0">
+                        <p className="font-bold text-[#F4D6B0] text-sm truncate">{s.nombre}</p>
                         <p className="text-[11px] text-[#5BC0DE]">
                           Orden {s.orden} · {usadas} de {s.limiteMesas} mesas ocupadas
                         </p>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           disabled={idx === 0 || guardando}
                           onClick={() => void cambiarOrden(s, -1)}
-                          className="p-1.5 rounded-lg border border-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B] disabled:opacity-30 transition-colors"
+                          className="p-2 sm:p-1.5 rounded-lg border border-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B] disabled:opacity-30 transition-colors"
                           title="Subir"
+                          aria-label="Subir"
                         >
-                          <ArrowUp className="w-3.5 h-3.5" />
+                          <ArrowUp className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                         </button>
                         <button
                           disabled={idx === secciones.length - 1 || guardando}
                           onClick={() => void cambiarOrden(s, 1)}
-                          className="p-1.5 rounded-lg border border-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B] disabled:opacity-30 transition-colors"
+                          className="p-2 sm:p-1.5 rounded-lg border border-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B] disabled:opacity-30 transition-colors"
                           title="Bajar"
+                          aria-label="Bajar"
                         >
-                          <ArrowDown className="w-3.5 h-3.5" />
+                          <ArrowDown className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                         </button>
                         <button
                           onClick={() => editarSeccion(s)}
-                          className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-[#3A506B] text-[#5BC0DE] hover:bg-[#5BC0DE]/10 transition-colors"
+                          className="flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg text-[11px] font-bold border border-[#3A506B] text-[#5BC0DE] hover:bg-[#5BC0DE]/10 transition-colors"
                         >
                           Editar
                         </button>
                         <button
                           onClick={() => void borrarSeccion(s)}
-                          className="p-1.5 rounded-lg text-[#E57373] hover:bg-[#E57373]/10 transition-colors"
+                          className="p-2 sm:p-1.5 rounded-lg text-[#E57373] hover:bg-[#E57373]/10 transition-colors"
                           title="Eliminar sección"
+                          aria-label="Eliminar sección"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -487,17 +498,17 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
           {tabActiva === "mesas" && (
             <div className="space-y-4 animate-in fade-in duration-150">
               
-              <div className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-4 space-y-3 shadow-inner">
+              <div className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3 sm:p-4 space-y-3 shadow-inner">
                 <h3 className="text-xs font-black uppercase tracking-wider text-[#5BC0DE]">Agregar Mesas por Lote</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                <div className="grid grid-cols-2 sm:grid-cols-12 gap-3 items-end">
                   
-                  {/* Selector de Sección con etiqueta */}
-                  <div className="sm:col-span-4 flex flex-col">
+                  {/* Selector de Sección */}
+                  <div className="col-span-2 sm:col-span-4 flex flex-col">
                     <span className="text-[10px] font-bold text-[#F4D6B0] uppercase tracking-wider mb-1">Sección</span>
                     <select
                       value={idSeccionMesas}
                       onChange={(e) => setIdSeccionMesas(e.target.value ? Number(e.target.value) : "")}
-                      className="bg-[#1C2541] text-[#F4D6B0] font-bold px-3 rounded-xl text-xs border border-[#3A506B] focus:border-[#5BC0DE] outline-none transition-colors h-[42px]"
+                      className="w-full bg-[#1C2541] text-[#F4D6B0] font-bold px-3 rounded-xl text-xs border border-[#3A506B] focus:border-[#5BC0DE] outline-none transition-colors h-[42px]"
                     >
                       <option value="">Seleccionar sección destino</option>
                       {secciones.map((s) => {
@@ -511,8 +522,8 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                     </select>
                   </div>
 
-                  {/* Textfield Cantidad con botones + y - */}
-                  <div className="sm:col-span-3 flex flex-col">
+                  {/* Cantidad con botones + y - */}
+                  <div className="col-span-1 sm:col-span-3 flex flex-col min-w-0">
                     <span className="text-[10px] font-bold text-[#F4D6B0] uppercase tracking-wider mb-1">Cantidad</span>
                     <div className="flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
                       <button
@@ -521,7 +532,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                           const val = parseInt(cantidadMesas, 10) || 1;
                           setCantidadMesas(String(Math.max(1, val - 1)));
                         }}
-                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className={btnStep}
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
@@ -530,7 +541,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                         inputMode="numeric"
                         value={cantidadMesas}
                         onChange={(e) => setCantidadMesas(e.target.value.replace(/[^0-9]/g, ""))}
-                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
+                        className="w-full min-w-0 bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full"
                         placeholder="1"
                       />
                       <button
@@ -542,15 +553,15 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                             setCantidadMesas(String(val + 1));
                           }
                         }}
-                        className="px-2 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className={btnStep}
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
-                  {/* Textfield N° inicial con botones + y - */}
-                  <div className="sm:col-span-2 flex flex-col">
+                  {/* N° inicial con botones + y - */}
+                  <div className="col-span-1 sm:col-span-2 flex flex-col min-w-0">
                     <span className="text-[10px] font-bold text-[#F4D6B0] uppercase tracking-wider mb-1">N° Inicial</span>
                     <div className="flex items-center bg-[#1C2541] rounded-xl p-0.5 border border-[#3A506B] h-[42px]">
                       <button
@@ -559,7 +570,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                           const current = numeroInicial.trim() !== "" ? parseInt(numeroInicial, 10) : (mesas.reduce((max, m) => Math.max(max, m.numero), 0) + 1);
                           setNumeroInicial(String(Math.max(1, current - 1)));
                         }}
-                        className="px-1.5 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className="w-9 sm:w-6 h-full flex items-center justify-center bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs shrink-0"
                       >
                         <Minus className="w-3 h-3" />
                       </button>
@@ -569,7 +580,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                         placeholder="Auto"
                         value={numeroInicial}
                         onChange={(e) => setNumeroInicial(e.target.value.replace(/[^0-9]/g, ""))}
-                        className="w-full bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full placeholder-[#3A506B]"
+                        className="w-full min-w-0 bg-transparent text-center text-[#F4D6B0] font-bold text-xs outline-none px-1 h-full placeholder-[#3A506B]"
                       />
                       <button
                         type="button"
@@ -577,7 +588,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                           const current = numeroInicial.trim() !== "" ? parseInt(numeroInicial, 10) : (mesas.reduce((max, m) => Math.max(max, m.numero), 0) + 1);
                           setNumeroInicial(String(current + 1));
                         }}
-                        className="px-1.5 h-full bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs"
+                        className="w-9 sm:w-6 h-full flex items-center justify-center bg-[#3A506B] text-[#F4D6B0] hover:bg-[#5BC0DE] hover:text-[#0B132B] rounded-lg transition-colors font-bold text-xs shrink-0"
                       >
                         <Plus className="w-3 h-3" />
                       </button>
@@ -587,7 +598,7 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                   <button
                     onClick={() => void agregarMesas()}
                     disabled={guardando || cuposDestino <= 0 || idSeccionMesas === ""}
-                    className="sm:col-span-3 flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-[#5BC0DE] text-[#0B132B] hover:bg-[#4CA8C4] disabled:opacity-40 shadow-md transition-colors h-[42px]"
+                    className="col-span-2 sm:col-span-3 flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-[#5BC0DE] text-[#0B132B] hover:bg-[#4CA8C4] disabled:opacity-40 shadow-md transition-colors h-[42px]"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Agregar
@@ -601,12 +612,12 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
               </div>
 
               {/* Filtro de sección */}
-              <div className="flex items-center justify-between gap-2 bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]">
                 <span className="text-xs font-bold text-[#F4D6B0]">Filtrar panel de mesas:</span>
                 <select
                   value={filtroSeccionMesaTab}
                   onChange={(e) => setFiltroSeccionMesaTab(e.target.value === "Todas" ? "Todas" : Number(e.target.value))}
-                  className="bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B] text-xs rounded-lg px-3 py-1.5 font-medium outline-none focus:border-[#5BC0DE] transition-colors h-10"
+                  className="w-full sm:w-auto bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B] text-xs rounded-lg px-3 py-1.5 font-medium outline-none focus:border-[#5BC0DE] transition-colors h-10"
                 >
                   <option value="Todas">Todas las secciones ({mesas.length})</option>
                   {secciones.map((s) => (
@@ -618,23 +629,24 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
               </div>
 
               {/* Panel Grid de Mesas */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
                 {mesasFiltradasPorTab.map((mesa) => (
                   <div
                     key={mesa.id}
-                    className="bg-[#0B132B] border-2 border-[#3A506B] hover:border-[#5BC0DE] rounded-2xl p-3 flex flex-col items-center justify-between gap-3 transition-all shadow-md group relative"
+                    className="bg-[#0B132B] border-2 border-[#3A506B] hover:border-[#5BC0DE] rounded-2xl p-2.5 sm:p-3 flex flex-col items-center justify-between gap-2.5 sm:gap-3 transition-all shadow-md group relative"
                   >
-                    {/* Botón eliminar en la esquina superior derecha */}
+                    {/* Eliminar: siempre visible en teléfono (no hay hover), aparece al pasar el mouse en escritorio */}
                     <button
                       onClick={() => void borrarMesa(mesa)}
-                      className="absolute top-2 right-2 p-1.5 rounded-lg text-[#3A506B] hover:text-[#E57373] hover:bg-[#E57373]/10 transition-colors opacity-0 group-hover:opacity-100"
+                      className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 p-1.5 rounded-lg text-[#E57373]/80 sm:text-[#3A506B] hover:text-[#E57373] hover:bg-[#E57373]/10 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                       title="Eliminar mesa"
+                      aria-label={`Eliminar mesa ${mesa.numero}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
 
                     {/* Número de la mesa */}
-                    <div className="w-12 h-12 rounded-xl bg-[#1C2541] border border-[#3A506B] flex items-center justify-center font-black text-[#F4D6B0] text-lg mt-2">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#1C2541] border border-[#3A506B] flex items-center justify-center font-black text-[#F4D6B0] text-base sm:text-lg mt-1 sm:mt-2">
                       {mesa.numero}
                     </div>
 
@@ -644,15 +656,13 @@ export default function ConfiguracionMesas({ abierto, onCerrar, onActualizado }:
                     </span>
 
                     {/* Selector de Zona */}
-                    <div className="w-full pt-2 border-t border-[#3A506B]/60 flex items-center justify-between gap-1">
-                      <span className="text-[9px] font-bold text-[#3A506B] flex items-center gap-1">
-                        <ArrowRightLeft className="w-3 h-3 text-[#5BC0DE]" />
-                      </span>
+                    <div className="w-full pt-2 border-t border-[#3A506B]/60 flex items-center justify-between gap-1.5">
+                      <ArrowRightLeft className="w-3 h-3 text-[#5BC0DE] shrink-0" />
                       <select
                         value={mesa.idSeccion}
                         disabled={guardando}
                         onChange={(e) => void moverMesa(mesa, Number(e.target.value))}
-                        className="bg-[#1C2541] border border-[#3A506B] text-[10px] text-[#F4D6B0] rounded-lg px-1.5 py-1 outline-none max-w-[85px] truncate focus:border-[#5BC0DE] transition-colors"
+                        className="flex-1 min-w-0 sm:max-w-[85px] bg-[#1C2541] border border-[#3A506B] text-[10px] text-[#F4D6B0] rounded-lg px-1.5 py-1.5 sm:py-1 outline-none truncate focus:border-[#5BC0DE] transition-colors"
                         title="Mover a otra sección"
                       >
                         {secciones.map((s) => {

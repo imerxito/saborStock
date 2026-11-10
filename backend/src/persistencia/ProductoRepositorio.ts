@@ -65,19 +65,17 @@ export class ProductoRepositorio {
         return mapearProductoRow(data as ProductoRow);
     }
 
-    async actualizar(
-        id: number,
-        cambios: ActualizarProducto
-    ): Promise<void> {
-        const { error } = await supabase
-            .from("producto")
-            .update(cambios)
-            .eq("id_producto", id);
+    async actualizar(id: number, cambios: ActualizarProducto): Promise<Producto | null> {
+    const { data, error } = await supabase
+        .from("producto")
+        .update(cambios)
+        .eq("id_producto", id)
+        .select("*")
+        .maybeSingle();
 
-        if (error) {
-            throw new Error(`Error al actualizar producto: ${error.message}`);
-        }
-    }
+    if (error) throw new Error(`Error al actualizar producto: ${error.message}`);
+    return data ? mapearProductoRow(data as ProductoRow) : null;
+}
 
     // Marca un producto como inactivo sin borrar su existencia
     async desactivar(id: number): Promise<void> {

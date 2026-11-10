@@ -7,9 +7,11 @@ import {
     Package,
     Truck,
     Users,
+    Sparkles,
     BarChart3,
     type LucideIcon,
     ChefHat,
+    Settings,
 } from "lucide-react";
 import type { RolUsuario } from "../../tipos/Usuario";
 
@@ -21,6 +23,8 @@ import Proveedores from "./Provedores";
 import Personal from "./Personal";
 import Reportes from "./Reportes";
 import Cocina from "./Cocina";  
+import AsistenteIA from "./IA";
+import Configuracion from './Configuracion'; 
 
 export interface Modulo {
     id: string;
@@ -105,6 +109,22 @@ export const MODULOS: Modulo[] = [
         roles: GERENCIA,
         componente: Reportes,
     },
+    {
+        id: "asistente-ia",
+        titulo: "Asistente IA",
+        descripcion: "Analiza ventas, carga productos desde Excel y genera menús visuales.",
+        icono: Sparkles,
+        roles: GERENCIA,
+        componente: AsistenteIA,
+    },
+    {
+        id: "configuracion",
+        titulo: "Configuración",
+        descripcion: "Ajustes del sistema, impresoras, pagos y facturación.",
+        icono: Settings,
+        roles: GERENCIA,
+        componente: Configuracion,
+    }
 ];
 
 export function modulosPorRol(rol: RolUsuario): Modulo[] {

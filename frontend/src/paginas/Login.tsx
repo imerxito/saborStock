@@ -40,15 +40,15 @@ export function Login() {
 
     return (
         <div className="flex flex-col w-full">
-            <div className="mb-5">
+            <div className="mb-4 sm:mb-5">
                 <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#5BC0DE] bg-[#5BC0DE]/10 px-2.5 py-1 rounded-full border border-[#5BC0DE]/20 mb-2">
                     Acceso de Personal
                 </span>
-                <h3 className="text-2xl font-black text-[#F4D6B0] tracking-tight">Bienvenido de nuevo</h3>
+                <h3 className="text-xl sm:text-2xl font-black text-[#F4D6B0] tracking-tight">Bienvenido de nuevo</h3>
                 <p className="text-xs font-semibold text-[#3A506B] mt-0.5">Ingresa tus datos corporativos para abrir turno</p>
             </div>
 
-            <form onSubmit={manejarSubmit} className="flex flex-col gap-3.5">
+            <form onSubmit={manejarSubmit} className="flex flex-col gap-3 [@media(max-height:700px)]:gap-2.5">
                 <div className="flex flex-col gap-1 w-full">
                     <label htmlFor="correo" className="text-xs font-bold text-[#F4D6B0]">
                         Correo electrónico
@@ -64,7 +64,7 @@ export function Login() {
                             onChange={(e) => setCorreo(e.target.value)}
                             autoComplete="email"
                             required
-                            className="w-full h-11 pl-10 pr-4 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
+                            className="w-full h-10 [@media(max-height:700px)]:h-9 pl-10 pr-4 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
                         />
                     </div>
                 </div>
@@ -84,7 +84,7 @@ export function Login() {
                             onChange={(e) => setPassword(e.target.value)}
                             autoComplete="current-password"
                             required
-                            className="w-full h-11 pl-10 pr-11 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
+                            className="w-full h-10 [@media(max-height:700px)]:h-9 pl-10 pr-10 text-xs font-semibold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-xl outline-none transition-all focus:border-[#5BC0DE] focus:ring-4 focus:ring-[#5BC0DE]/15 placeholder-[#3A506B]"
                         />
                         <button
                             type="button"
@@ -106,7 +106,7 @@ export function Login() {
                 )}
 
                 <button
-                    className="flex items-center justify-center gap-2 w-full h-11 mt-1 text-xs font-bold text-[#0B132B] bg-[#5BC0DE] hover:bg-[#4CA8C4] active:scale-[0.99] rounded-xl shadow-md shadow-[#5BC0DE]/20 transition-all disabled:opacity-60 cursor-pointer"
+                    className="flex items-center justify-center gap-2 w-full h-10 [@media(max-height:700px)]:h-9 mt-1 text-xs font-bold text-[#0B132B] bg-[#5BC0DE] hover:bg-[#4CA8C4] active:scale-[0.99] rounded-xl shadow-md shadow-[#5BC0DE]/20 transition-all disabled:opacity-60 cursor-pointer"
                     type="submit"
                     disabled={cargando}
                 >
@@ -124,7 +124,7 @@ export function Login() {
                 </button>
             </form>
 
-            <div className="mt-5 text-center text-xs font-medium text-[#3A506B]">
+            <div className="mt-4 sm:mt-5 text-center text-xs font-medium text-[#3A506B]">
                 <p>
                     ¿No tienes una cuenta activa?{" "}
                     <Link className="text-[#5BC0DE] font-bold hover:underline ml-1" to="/registro">
