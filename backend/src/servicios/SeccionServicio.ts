@@ -1,7 +1,7 @@
 import {SeccionRepositorio} from '../persistencia/SeccionRepositorio.js';
 import {MesaRepositorio} from '../persistencia/MesaRepositorio.js';
 import {Seccion,CrearSeccion,ActualizarSeccion} from '../modelos/Seccion.js';
-import { completarRangos, siguienteNumeroInicio } from '../utilidades/rangoSeccion.js';
+import { completarRangos, siguienteNumeroInicio } from '../utilidades/RangoSeccion.js';
 
 export class SeccionServicio{
     private repo = new SeccionRepositorio();

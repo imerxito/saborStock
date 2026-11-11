@@ -2,7 +2,7 @@ import { Mesa, CrearMesa, ActualizarMesa } from "../modelos/Mesa.js";
 import { EstadoMesa } from "../modelos/EstadoMesa.js";
 import { MesaRepositorio } from "../persistencia/MesaRepositorio.js";
 import { SeccionRepositorio } from "../persistencia/SeccionRepositorio.js";
-import { completarRangos, numeroFin, numerosLibresEnRango } from "../utilidades/rangoSeccion.js";
+import { completarRangos, numeroFin, numerosLibresEnRango } from "../utilidades/RangoSeccion.js";
 
 export class MesaServicio {
     constructor(
