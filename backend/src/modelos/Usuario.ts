@@ -35,6 +35,7 @@ export interface UsuarioRow {
     telefono: string | null;
     correo: string;
     rol: RolUsuario;
-    fecha_inicio: string;
+    fecha_inicio?: string;
+    fecha_registro?: string;
     activo: boolean;
 }

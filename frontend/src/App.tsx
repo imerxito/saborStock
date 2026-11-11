@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvier } from './contexto/AuthContexto';
+import { AuthProvider } from "./contexto/AuthContexto";
 import { ComandasProvider } from './contexto/ComandasContexto';
 import { RutaProtegida } from './componentes/RutaProtegida';
 import Inicio from './paginas/Inicio';
@@ -9,7 +9,7 @@ import './index.css'
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvier>
+      <AuthProvider>
         <ComandasProvider>
           <Routes>
             {/* /login y /registro usan el MISMO componente para que la transición funcione */}
@@ -25,7 +25,7 @@ function App() {
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </ComandasProvider>
-      </AuthProvier>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

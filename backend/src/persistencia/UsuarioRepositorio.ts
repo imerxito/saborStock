@@ -1,9 +1,10 @@
 // persistencia/UsuarioRepositorio.ts
-import { supabase } from "../configuracion/Supabase.js";
+import { supabase, supabaseAdmin } from "../configuracion/Supabase.js"; // 👈 AÑADIDO supabaseAdmin
 import { RolUsuario } from "../modelos/RolUsuario.js";
 import { Usuario, CrearUsuario, ActualizarUsuario, UsuarioRow } from "../modelos/Usuario.js";
 
 function mapaearUsuarioRow(row: UsuarioRow): Usuario {
+    const fechaString = row.fecha_registro ?? row.fecha_inicio ?? new Date().toISOString();
     return {
         id: row.auth_id,
         nombre: row.nombre,
@@ -12,28 +13,20 @@ function mapaearUsuarioRow(row: UsuarioRow): Usuario {
         telefono: row.telefono ?? "",
         rol: row.rol,
         activo: row.activo,
-        fechaRegistro: new Date(row.fecha_inicio),
+        fechaRegistro: new Date(fechaString),
     };
 }
 
 export class UsuarioRepositorio {
     async listar(): Promise<Usuario[]> {
-        const { data, error } = await supabase
-        .from("usuario")
-        .select("*");
-
+        const { data, error } = await supabase.from("usuario").select("*");
         if (error) throw new Error(`Error al listar usuarios: ${error.message}`);
         return (data as UsuarioRow[]).map(mapaearUsuarioRow);
     }
 
-    // authId = el auth_id del token (req.user.id), no el id_usuario interno
     async obtenerPorId(authId: string): Promise<Usuario | null> {
         const { data, error } = await supabase
-            .from("usuario")
-            .select("*")
-            .eq("auth_id", authId)
-            .single();
-
+            .from("usuario").select("*").eq("auth_id", authId).single();
         if (error) {
             if (error.code === "PGRST116") return null;
             throw new Error(`Error al obtener usuario: ${error.message}`);
@@ -43,11 +36,7 @@ export class UsuarioRepositorio {
 
     async obtenerPorCedula(cedula: string): Promise<Usuario | null> {
         const { data, error } = await supabase
-            .from("usuario")
-            .select("*")
-            .eq("cedula", cedula)
-            .single();
-
+            .from("usuario").select("*").eq("cedula", cedula).single();
         if (error) {
             if (error.code === "PGRST116") return null;
             throw new Error(`Error al obtener usuario: ${error.message}`);
@@ -57,11 +46,7 @@ export class UsuarioRepositorio {
 
     async obtenerPorCorreo(correo: string): Promise<Usuario | null> {
         const { data, error } = await supabase
-            .from("usuario")
-            .select("*")
-            .eq("correo", correo)
-            .single();
-            
+            .from("usuario").select("*").eq("correo", correo).single();
         if (error) {
             if (error.code === "PGRST116") return null;
             throw new Error(`Error al obtener usuario: ${error.message}`);
@@ -69,9 +54,9 @@ export class UsuarioRepositorio {
         return mapaearUsuarioRow(data as UsuarioRow);
     }
 
-    // recibe el auth_id ya creado en Auth
     async crearUsuario(datos: CrearUsuario, authId: string): Promise<Usuario> {
-        const { data, error } = await supabase
+        // 👇 CAMBIO: supabaseAdmin en lugar de supabase (omite RLS)
+        const { data, error } = await supabaseAdmin
             .from("usuario")
             .insert({
                 auth_id: authId,
@@ -85,7 +70,8 @@ export class UsuarioRepositorio {
             .single();
 
         if (error) {
-            if (error.code === "23505") throw new Error("Ya existe un usuario con ese correo o cedula");
+            if (error.code === "23505")
+                throw new Error("Ya existe un usuario con ese correo o cedula");
             throw new Error(`Error al crear usuario: ${error.message}`);
         }
         return mapaearUsuarioRow(data as UsuarioRow);
@@ -110,7 +96,6 @@ export class UsuarioRepositorio {
             .select("id_usuario", { count: "exact", head: true })
             .eq("rol", RolUsuario.Dueno)
             .eq("activo", true);
-
         if (error) throw new Error(`Error en el contador: ${error.message}`);
         return count ?? 0;
     }
