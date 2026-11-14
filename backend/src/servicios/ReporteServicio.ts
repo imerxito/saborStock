@@ -87,10 +87,7 @@ export interface DashboardReportes {
 }
 
 const ZONA_HORARIA = "America/Bogota";
-
-// Si ya se generó un reporte igual hace menos de estos minutos, se devuelve ese
-// en vez de volver a llamar a la IA (cuida el límite del plan gratuito).
-const MINUTOS_REUSO = 5;
+const MINUTOS_REUSO = 3;
 
 function hoyEnColombia(): string {
     return new Date().toLocaleDateString("en-CA", { timeZone: ZONA_HORARIA });
@@ -106,14 +103,12 @@ function restarDias(fecha: string, dias: number): string {
     return d.toISOString().slice(0, 10);
 }
 
-// La columna fecha_creacion es "timestamp sin zona" guardado en UTC
 function minutosDesde(fechaUtc: string): number {
     const tieneZona = /(Z|[+-]\d{2}:?\d{2})$/.test(fechaUtc);
     const ms = Date.parse(tieneZona ? fechaUtc : `${fechaUtc}Z`);
     return (Date.now() - ms) / 60000;
 }
 
-// Junta los días del rango en una sola fila por ingrediente
 function agruparPorIngrediente(filas: ResumenDiario[]): ResumenDiario[] {
     const mapa = new Map<number, ResumenDiario>();
 
@@ -143,14 +138,11 @@ export class ReporteServicio {
         return await this.reporteRepositorio.stock(true);
     }
 
-    // Datos del día para pantalla y PDF (sin IA)
     async resumenDia(fecha?: string): Promise<ResumenDiario[]> {
         const dia = fecha ?? hoyEnColombia();
-
         if (!esFechaValida(dia)) {
             throw new Error("La fecha debe tener el formato AAAA-MM-DD");
         }
-
         return await this.reporteRepositorio.resumenPorRango(dia, dia);
     }
 
@@ -168,7 +160,6 @@ export class ReporteServicio {
         }
 
         const fechaFin = fecha ?? hoyEnColombia();
-
         if (!esFechaValida(fechaFin)) {
             throw new Error("La fecha debe tener el formato AAAA-MM-DD");
         }
@@ -185,25 +176,19 @@ export class ReporteServicio {
             return previo;
         }
 
-        const filas = await this.reporteRepositorio.resumenPorRango(
-            fechaInicio,
-            fechaFin
-        );
+        // Obtener datos consolidados del periodo
+        const dashboard = await this.obtenerDashboard(tipo === "DIARIO" ? "Hoy" : "Semana");
+        const filas = await this.reporteRepositorio.resumenPorRango(fechaInicio, fechaFin);
         const resumen = agruparPorIngrediente(filas);
         const bajos = await this.reporteRepositorio.stock(true);
-
-        if (resumen.length === 0 && bajos.length === 0) {
-            throw new Error(
-                "No hay movimientos ni alertas de stock en ese periodo para reportar"
-            );
-        }
 
         const contenido = await this.redactarConIA(
             tipo,
             fechaInicio,
             fechaFin,
             resumen,
-            bajos
+            bajos,
+            dashboard
         );
 
         return await this.reporteRepositorio.crear({
@@ -214,64 +199,104 @@ export class ReporteServicio {
         });
     }
 
-    // La IA solo redacta: los números ya vienen calculados desde SQL
     private async redactarConIA(
         tipo: TipoReporte,
         fechaInicio: string,
         fechaFin: string,
         resumen: ResumenDiario[],
-        bajos: StockIngrediente[]
+        bajos: StockIngrediente[],
+        dashboard?: DashboardReportes
     ): Promise<string> {
         const apiKey = process.env.GEMINI_API_KEY;
-        const modelo = process.env.GEMINI_MODEL;
+        const modelos = [
+            process.env.GEMINI_MODEL?.trim(),
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash"
+        ].filter(Boolean) as string[];
 
-        if (!apiKey) {
-            throw new Error("GEMINI_API_KEY no está definido en las variables de entorno");
-        }
-        if (!modelo) {
-            throw new Error("GEMINI_MODEL no está definido en las variables de entorno");
-        }
-
-        const datos = {
+        const datosReporte = {
             periodo: { tipo, desde: fechaInicio, hasta: fechaFin },
-            movimientos_por_ingrediente: resumen.map((r) => ({
-                ingrediente: r.ingrediente,
-                unidad: r.unidad,
-                entradas: r.entradas,
-                salidas: r.salidas,
-                ajustes: r.ajustes,
-                costo_salidas: r.costo_salidas
-            })),
-            ingredientes_bajo_minimo: bajos.map((s) => ({
+            ventas_totales: dashboard?.resumen.totalGeneradoCajas || 0,
+            gastos_totales: dashboard?.resumen.totalGastosRegistrados || 0,
+            balance_neto: dashboard?.resumen.balanceNeto || 0,
+            propinas: dashboard?.resumen.totalPropinas || 0,
+            productos_destacados: dashboard?.productos.slice(0, 5).map(p => ({
+                producto: p.nombre,
+                unidades: p.unidadesVendidas,
+                ingresos: p.ingresos
+            })) || [],
+            insumos_bajo_minimo: bajos.map((s) => ({
                 ingrediente: s.nombre,
                 unidad: s.unidad,
                 stock: s.stock,
                 stock_minimo: s.stock_minimo,
                 faltante: s.faltante
+            })),
+            movimientos_insumos: resumen.map((r) => ({
+                ingrediente: r.ingrediente,
+                unidad: r.unidad,
+                entradas: r.entradas,
+                salidas: r.salidas,
+                costo_salidas: r.costo_salidas
             }))
         };
 
         const prompt =
-            "Eres analista de inventario de un restaurante en Colombia. " +
-            "Con los datos en JSON escribe un reporte breve en español, con tres partes: " +
-            "1) resumen del periodo, 2) alertas (stock bajo y consumos llamativos), " +
-            "3) recomendaciones de compra. Usa solo los datos dados, no inventes cifras. " +
-            "Los costos están en pesos colombianos. Sé concreto y corto.\n\n" +
-            JSON.stringify(datos);
+            "Eres un consultor experto en administración de restaurantes y gastronomía en Colombia.\n" +
+            `Analiza el siguiente informe operativo del periodo (${tipo.toLowerCase()} del ${fechaInicio} al ${fechaFin}) con datos en JSON:\n` +
+            JSON.stringify(datosReporte, null, 2) + "\n\n" +
+            "Redacta un informe ejecutivo claro, estructurado y profesional en Markdown con las siguientes secciones:\n" +
+            "### 1. Resumen Ejecutivo de Operación y Ventas (ingresos, transacciones y balance neto en pesos colombianos)\n" +
+            "### 2. Rendimiento de Menú y Productos Clave (productos más vendidos e impacto)\n" +
+            "### 3. Diagnóstico de Inventario y Alertas (estado de existencias, insumos críticos y mermas)\n" +
+            "### 4. Recomendaciones Estratégicas para el Restaurante (3 acciones inmediatas para maximizar margen y abastecimiento)\n" +
+            "Sé concreto, directo y utiliza cifras del informe.";
 
-        const ai = new GoogleGenAI({ apiKey });
-        const respuesta = await ai.models.generateContent({
-            model: modelo,
-            contents: prompt
-        });
-
-        const texto = respuesta.text?.trim();
-
-        if (!texto) {
-            throw new Error("La IA no devolvió contenido para el reporte");
+        if (apiKey) {
+            const ai = new GoogleGenAI({ apiKey });
+            for (const mod of modelos) {
+                try {
+                    const respuesta = await ai.models.generateContent({
+                        model: mod,
+                        contents: prompt,
+                        config: {
+                            temperature: 0.3,
+                        }
+                    });
+                    const texto = respuesta.text?.trim();
+                    if (texto) return texto;
+                } catch (err: any) {
+                    console.warn(`Modelo Gemini ${mod} no pudo generar el reporte:`, err?.message);
+                }
+            }
         }
 
-        return texto;
+        // Resumen estructurado local inteligente si no hay IA disponible
+        const totalVentas = (dashboard?.resumen.totalGeneradoCajas || 0).toLocaleString("es-CO");
+        const totalGastos = (dashboard?.resumen.totalGastosRegistrados || 0).toLocaleString("es-CO");
+        const balance = (dashboard?.resumen.balanceNeto || 0).toLocaleString("es-CO");
+        const topProd = dashboard?.resumen.productoTop?.nombre || "Varios";
+
+        return (
+            `### 1. Resumen Ejecutivo de Operación y Ventas\n` +
+            `- **Periodo analizado:** ${tipo} (${fechaInicio} al ${fechaFin})\n` +
+            `- **Ingresos generados:** $${totalVentas} COP\n` +
+            `- **Gastos operativos:** $${totalGastos} COP\n` +
+            `- **Balance neto:** $${balance} COP\n` +
+            `- **Propinas acumuladas:** $${(dashboard?.resumen.totalPropinas || 0).toLocaleString("es-CO")} COP\n\n` +
+            `### 2. Rendimiento de Menú y Productos Clave\n` +
+            `- **Producto más destacado:** ${topProd} (${dashboard?.resumen.productoTop?.unidadesVendidas || 0} unidades vendidas).\n` +
+            `- **Ventas en turno:** Se mantiene flujo operativo constante en las comandas registradas.\n\n` +
+            `### 3. Diagnóstico de Inventario y Alertas\n` +
+            (bajos.length > 0
+                ? `- **Insumos bajo stock mínimo:** ${bajos.map(b => `${b.nombre} (quedan ${b.stock} ${b.unidad})`).join(", ")}.\n`
+                : `- **Inventario general:** Todos los insumos clave se mantienen dentro de los niveles mínimos recomendados.\n`) +
+            `\n### 4. Recomendaciones Estratégicas para el Restaurante\n` +
+            `1. **Reabastecimiento preventivo:** Coordinar compras prioritarias para los insumos con mayor rotación.\n` +
+            `2. **Optimización de turnos:** Asegurar que los cierres de caja y arqueos cuadren diariamente con los comprobantes de pago.\n` +
+            `3. **Promoción cruzada:** Impulsar acompañamientos y bebidas junto al plato principal '${topProd}' para elevar el ticket promedio.`
+        );
     }
 
     async obtenerDashboard(filtro: "Hoy" | "Semana" | "Mes" = "Hoy"): Promise<DashboardReportes> {
@@ -283,20 +308,16 @@ export class ReporteServicio {
             day: "2-digit",
         });
         const fechaHoyStr = formatter.format(ahora);
-        const fechaFinStr = fechaHoyStr;
         let fechaInicioStr = fechaHoyStr;
 
         if (filtro === "Semana") {
-            const d = new Date(`${fechaHoyStr}T00:00:00-05:00`);
+            const d = new Date(`${fechaHoyStr}T12:00:00-05:00`);
             d.setDate(d.getDate() - 6);
             fechaInicioStr = formatter.format(d);
         } else if (filtro === "Mes") {
             const [y, m] = fechaHoyStr.split("-");
             fechaInicioStr = `${y}-${m}-01`;
         }
-
-        const desdeIso = `${fechaInicioStr}T00:00:00.000-05:00`;
-        const hastaIso = `${fechaHoyStr}T23:59:59.999-05:00`;
 
         // 1. Turnos de Caja
         const { data: turnosDb } = await supabase
@@ -307,7 +328,8 @@ export class ReporteServicio {
         const turnosFiltrados = (turnosDb || []).filter((t: any) => {
             if (t.estado === "Abierto") return true;
             if (!t.fecha_apertura) return false;
-            return t.fecha_apertura >= desdeIso && t.fecha_apertura <= hastaIso;
+            const fApStr = String(t.fecha_apertura).slice(0, 10);
+            return fApStr >= fechaInicioStr && fApStr <= fechaHoyStr;
         });
 
         const cajas: DashboardTurnoCaja[] = turnosFiltrados.map((t: any) => {
@@ -360,7 +382,7 @@ export class ReporteServicio {
                 egresosTotales,
                 cierreEstimado,
                 diferencia,
-                fecha: t.fecha_apertura ? t.fecha_apertura.substring(0, 10) : fechaHoyStr,
+                fecha: t.fecha_apertura ? String(t.fecha_apertura).slice(0, 10) : fechaHoyStr,
                 horaApertura: fAp ? fAp.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
                 horaCierre: fCi ? fCi.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: false }) : (t.estado === "Abierto" ? "En curso" : "--:--"),
                 movimientos: movs.map((m: any) => ({
@@ -379,7 +401,8 @@ export class ReporteServicio {
 
         const facturasEnPeriodo = (facturasDb || []).filter((f: any) => {
             if (!f.fecha_emision) return false;
-            return f.fecha_emision >= desdeIso && f.fecha_emision <= hastaIso && f.estado !== "Cancelada";
+            const fFecha = String(f.fecha_emision).slice(0, 10);
+            return fFecha >= fechaInicioStr && fFecha <= fechaHoyStr && f.estado !== "Cancelada";
         });
 
         const { data: todosProductos } = await supabase
@@ -425,7 +448,8 @@ export class ReporteServicio {
         const empleados: DashboardEmpleado[] = (usuariosDb || []).map((u: any) => {
             const comandasEnPeriodo = (u.comanda || []).filter((c: any) => {
                 if (!c.fecha_creacion) return false;
-                return c.fecha_creacion >= desdeIso && c.fecha_creacion <= hastaIso;
+                const cFecha = String(c.fecha_creacion).slice(0, 10);
+                return cFecha >= fechaInicioStr && cFecha <= fechaHoyStr;
             });
             const facturasUsuario = facturasEnPeriodo.filter((f: any) => f.id_usuario === u.id_usuario);
             const totalVendido = facturasUsuario.reduce((acc: number, f: any) => acc + Number(f.total_pagar || 0), 0);
@@ -434,8 +458,8 @@ export class ReporteServicio {
             let ultimoDia = fechaHoyStr;
             const ultFactura = u.factura?.[0]?.fecha_emision;
             const ultComanda = u.comanda?.[0]?.fecha_creacion;
-            if (ultFactura) ultimoDia = ultFactura.substring(0, 10);
-            else if (ultComanda) ultimoDia = ultComanda.substring(0, 10);
+            if (ultFactura) ultimoDia = String(ultFactura).slice(0, 10);
+            else if (ultComanda) ultimoDia = String(ultComanda).slice(0, 10);
 
             return {
                 id: `EMP-${String(u.id_usuario).padStart(2, "0")}`,
@@ -453,27 +477,43 @@ export class ReporteServicio {
         const { data: comprasDb } = await supabase
             .from("compra")
             .select("*, proveedor:id_proveedor(nombre)")
-            .gte("fecha", fechaInicioStr)
-            .lte("fecha", fechaFinStr)
+            .gte("fecha", `${fechaInicioStr}T00:00:00`)
+            .lte("fecha", `${fechaHoyStr}T23:59:59`)
             .order("fecha", { ascending: false });
 
         const { data: egresosCajaDb } = await supabase
             .from("historial_caja")
             .select("*, usuario:id_usuario(nombre)")
             .eq("tipo_pago", "egreso")
-            .gte("fecha_movimiento", desdeIso)
-            .lte("fecha_movimiento", hastaIso)
+            .gte("fecha_movimiento", `${fechaInicioStr}T00:00:00`)
+            .lte("fecha_movimiento", `${fechaHoyStr}T23:59:59`)
             .order("fecha_movimiento", { ascending: false });
 
         const gastos: DashboardGasto[] = [];
 
         for (const c of comprasDb || []) {
+            const facturaTexto = c.factura || "";
+            let categoriaGasto: "Nómina" | "Servicios" | "Compras" | "Otros" = "Compras";
+            if (/mantenimiento|reparaci[oó]n|t[eé]cnico/i.test(facturaTexto) || /mantenimiento/i.test(c.proveedor?.nombre || "")) {
+                categoriaGasto = "Otros";
+            } else if (/servicio|luz|agua|gas|energ[ií]a|internet|arriendo/i.test(facturaTexto) || /servicio/i.test(c.proveedor?.nombre || "")) {
+                categoriaGasto = "Servicios";
+            }
+
+            let concepto = c.proveedor?.nombre ? `Compra a ${c.proveedor.nombre}` : `Compra de Suministros #${c.id_compra}`;
+            if (facturaTexto.includes("|")) {
+                const partes = facturaTexto.split("|");
+                if (partes[1]?.trim()) {
+                    concepto = partes[1].trim();
+                }
+            }
+
             gastos.push({
                 id: `GAS-C${c.id_compra}`,
-                categoria: "Compras",
-                concepto: c.proveedor?.nombre ? `Compra a ${c.proveedor.nombre}` : `Compra de Suministros #${c.id_compra}`,
+                categoria: categoriaGasto,
+                concepto,
                 monto: Number(c.total || 0),
-                fecha: c.fecha ? c.fecha.substring(0, 10) : fechaHoyStr,
+                fecha: c.fecha ? String(c.fecha).slice(0, 10) : fechaHoyStr,
                 detalle: `Factura: ${c.factura || "S/N"} | Estado: ${c.estado || "Completado"}`,
                 responsable: "Administración",
             });
@@ -491,7 +531,7 @@ export class ReporteServicio {
                 categoria,
                 concepto: desc || "Egreso operativo de caja",
                 monto: Number(e.monto || 0),
-                fecha: e.fecha_movimiento ? e.fecha_movimiento.substring(0, 10) : fechaHoyStr,
+                fecha: e.fecha_movimiento ? String(e.fecha_movimiento).slice(0, 10) : fechaHoyStr,
                 detalle: `Turno #${e.id_turno_caja}`,
                 responsable: e.usuario?.nombre || "Cajero",
             });
@@ -529,14 +569,7 @@ export class ReporteServicio {
                 };
             });
         } else {
-            // Insumos base mientras el usuario registra sus primeros ingredientes
-            inventarioGastos = [
-                { id: "INV-01", nombre: "Carne de Res", categoria: "Proteínas", gastoDia: 340000, gastoSemana: 1200000, gastoMes: 4800000, stockActual: "15 kg", estado: "Óptimo" },
-                { id: "INV-02", nombre: "Pechuga de Pollo", categoria: "Proteínas", gastoDia: 0, gastoSemana: 650000, gastoMes: 2400000, stockActual: "0 kg", estado: "Agotado" },
-                { id: "INV-03", nombre: "Queso Mozzarella", categoria: "Lácteos", gastoDia: 85000, gastoSemana: 320000, gastoMes: 1100000, stockActual: "8 kg", estado: "Bajo" },
-                { id: "INV-04", nombre: "Tomate Chonto", categoria: "Verduras", gastoDia: 40000, gastoSemana: 180000, gastoMes: 720000, stockActual: "20 kg", estado: "Óptimo" },
-                { id: "INV-05", nombre: "Papa R-12", categoria: "Tubérculos", gastoDia: 90000, gastoSemana: 420000, gastoMes: 1500000, stockActual: "45 kg", estado: "Óptimo" },
-            ];
+            inventarioGastos = [];
         }
 
         // Resumen
@@ -545,7 +578,8 @@ export class ReporteServicio {
         const balanceNeto = totalGeneradoCajas - totalGastosRegistrados;
         const totalPropinas = empleados.reduce((acc, e) => acc + e.propinas, 0);
         const insumosCriticos = inventarioGastos.filter((i) => i.estado !== "Óptimo").length;
-        const productoTop = productos.length > 0 ? productos[0] : null;
+        const productosConVenta = productos.filter((p) => p.unidadesVendidas > 0);
+        const productoTop = productosConVenta.length > 0 ? productosConVenta[0] : (productos.length > 0 ? productos[0] : null);
 
         return {
             filtro,

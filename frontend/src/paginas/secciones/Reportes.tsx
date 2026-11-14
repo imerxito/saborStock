@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { 
   Calendar, TrendingDown, Users, 
   Package, X, PieChart, BarChart3, 
-  Wallet, Utensils
+  Wallet, Utensils, RotateCw, Sparkles, Copy, Check
 } from "lucide-react";
+import { ReporteServicio } from "../../servicios/ReporteServicio";
 
 // ============================================================
 // 1. TIPOS DE DATOS Y INTERFACES
@@ -65,67 +66,10 @@ interface InsumoGasto {
   estado: "Óptimo" | "Bajo" | "Agotado";
 }
 
-// ============================================================
-// 2. DATOS MOCK ENRIQUECIDOS
-// ============================================================
-const DATA_CAJAS: TurnoCaja[] = [
-  { 
-    id: "CJ-01", cajero: "Ana María", baseInicial: 150000, 
-    ventasEfectivo: 350000, ventasTarjeta: 480000, ventasTransferencia: 150000,
-    totalGenerado: 980000, egresosTotales: 12000, cierreEstimado: 1118000, diferencia: 0, 
-    fecha: "2026-11-02", horaApertura: "08:00", horaCierre: "18:00", 
-    movimientos: [
-      { tipo: "Ingreso", concepto: "Ventas turno mañana", monto: 980000 }, 
-      { tipo: "Egreso", concepto: "Proveedor hielo", monto: 12000 }
-    ] 
-  },
-  { 
-    id: "CJ-02", cajero: "Carlos Pérez", baseInicial: 200000, 
-    ventasEfectivo: 410000, ventasTarjeta: 320000, ventasTransferencia: 210000,
-    totalGenerado: 940000, egresosTotales: 45000, cierreEstimado: 1095000, diferencia: -15000, 
-    fecha: "2026-11-02", horaApertura: "18:00", horaCierre: "02:00", 
-    movimientos: [
-      { tipo: "Ingreso", concepto: "Ventas turno noche", monto: 940000 },
-      { tipo: "Egreso", concepto: "Pago taxi emergencia", monto: 45000 }
-    ] 
-  },
-];
-
-const DATA_EMPLEADOS: RendimientoEmpleado[] = [
-  { id: "EMP-01", nombre: "Carlos Gómez", rol: "Mesero", comandasAtendidas: 24, totalVendido: 850000, propinas: 85000, ultimoDiaTrabajado: "2026-11-02" },
-  { id: "EMP-02", nombre: "Ana María", rol: "Mesera/Cajera", comandasAtendidas: 19, totalVendido: 640000, propinas: 64000, ultimoDiaTrabajado: "2026-11-02" },
-  { id: "EMP-03", nombre: "Andrés Silva", rol: "Mesero", comandasAtendidas: 15, totalVendido: 430000, propinas: 43000, ultimoDiaTrabajado: "2026-11-01" },
-  { id: "EMP-04", nombre: "Laura Restrepo", rol: "Mesera", comandasAtendidas: 18, totalVendido: 510000, propinas: 51000, ultimoDiaTrabajado: "2026-11-02" },
-];
-
-const DATA_GASTOS: GastoRegistro[] = [
-  { id: "GAS-01", categoria: "Nómina", concepto: "Pago Nómina Meseros", monto: 250000, fecha: "2026-11-02", detalle: "Pago correspondiente a turno semanal", responsable: "Administrador" },
-  { id: "GAS-02", categoria: "Servicios", concepto: "Recibo de Energía", monto: 180000, fecha: "2026-11-01", detalle: "Consumo mes de Octubre", responsable: "Gerencia" },
-  { id: "GAS-03", categoria: "Compras", concepto: "Compra de Carnes", monto: 340000, fecha: "2026-11-02", detalle: "Carnicería El Toro - 15kg de res", responsable: "Chef Luis" },
-  { id: "GAS-04", categoria: "Compras", concepto: "Compra de Verduras", monto: 70000, fecha: "2026-11-02", detalle: "Fruver La Huerta - Tomate y Cebolla", responsable: "Chef Luis" },
-  { id: "GAS-05", categoria: "Otros", concepto: "Mantenimiento Aire", monto: 50000, fecha: "2026-11-01", detalle: "Reparación preventiva de compresor", responsable: "Mantenimiento" },
-];
-
-const DATA_PRODUCTOS: ProductoAnalisis[] = [
-  { id: "PRD-01", nombre: "Hamburguesa Especial", categoria: "Platos Fuertes", unidadesVendidas: 48, ingresos: 1056000, precioPromedio: 22000 },
-  { id: "PRD-02", nombre: "Aguarde Antioqueño", categoria: "Licores", unidadesVendidas: 15, ingresos: 975000, precioPromedio: 65000 },
-  { id: "PRD-03", nombre: "Limonada Cerezada", categoria: "Bebidas", unidadesVendidas: 62, ingresos: 558000, precioPromedio: 9000 },
-  { id: "PRD-04", nombre: "Papas a la Francesa", categoria: "Entradas", unidadesVendidas: 38, ingresos: 532000, precioPromedio: 14000 },
-  { id: "PRD-05", nombre: "Cerveza Club Colombia", categoria: "Bebidas", unidadesVendidas: 34, ingresos: 238000, precioPromedio: 7000 },
-];
-
-const DATA_INVENTARIO_GASTOS: InsumoGasto[] = [
-  { id: "INV-01", nombre: "Carne de Res", categoria: "Proteínas", gastoDia: 340000, gastoSemana: 1200000, gastoMes: 4800000, stockActual: "15 kg", estado: "Óptimo" },
-  { id: "INV-02", nombre: "Pechuga de Pollo", categoria: "Proteínas", gastoDia: 0, gastoSemana: 650000, gastoMes: 2400000, stockActual: "0 kg", estado: "Agotado" },
-  { id: "INV-03", nombre: "Queso Mozzarella", categoria: "Lácteos", gastoDia: 85000, gastoSemana: 320000, gastoMes: 1100000, stockActual: "8 kg", estado: "Bajo" },
-  { id: "INV-04", nombre: "Tomate Chonto", categoria: "Verduras", gastoDia: 40000, gastoSemana: 180000, gastoMes: 720000, stockActual: "20 kg", estado: "Óptimo" },
-  { id: "INV-05", nombre: "Papa R-12", categoria: "Tubérculos", gastoDia: 90000, gastoSemana: 420000, gastoMes: 1500000, stockActual: "45 kg", estado: "Óptimo" },
-];
-
 const formatearMoneda = (val: number) => val.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 
 // ============================================================
-// 3. COMPONENTES UI Y GRÁFICAS
+// 2. COMPONENTES UI Y GRÁFICAS
 // ============================================================
 
 const Card = ({ children, className = "", onClick }: { children: React.ReactNode, className?: string, onClick?: () => void }) => (
@@ -154,7 +98,15 @@ const FixedModal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onC
 };
 
 const BarChartWithLabels = ({ items }: { items: { label: string; value: number }[] }) => {
-  const maxVal = Math.max(...items.map(i => i.value), 1);
+  const maxVal = Math.max(...items.map(i => i.value), 0);
+  if (!items || items.length === 0 || maxVal === 0) {
+    return (
+      <div className="flex items-center justify-center h-40 sm:h-52 text-[11px] text-[#5BC0DE]/60 italic">
+        Sin movimientos registrados en este período
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-end justify-between gap-1.5 sm:gap-3 h-40 sm:h-52 pt-6 sm:pt-8 px-1 sm:px-2">
       {items.map((item, idx) => {
@@ -179,7 +131,15 @@ const BarChartWithLabels = ({ items }: { items: { label: string; value: number }
 };
 
 const SlimDonutChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
-  const total = data.reduce((acc, curr) => acc + curr.value, 0) || 1;
+  const total = data.reduce((acc, curr) => acc + curr.value, 0);
+  if (!data || data.length === 0 || total === 0) {
+    return (
+      <div className="flex items-center justify-center py-8 text-[11px] text-[#5BC0DE]/60 italic">
+        Sin movimientos registrados en este período
+      </div>
+    );
+  }
+
   let accumulated = 0;
   const radius = 40; 
   const circumference = 2 * Math.PI * radius;
@@ -210,7 +170,7 @@ const SlimDonutChart = ({ data }: { data: { label: string; value: number; color:
         </div>
       </div>
       <div className="flex flex-col gap-1.5 sm:gap-2 text-[10px] sm:text-xs w-full max-w-[200px]">
-        {data.map((d, i) => (
+        {data.filter(d => d.value > 0).map((d, i) => (
           <div key={i} className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 sm:gap-2 truncate">
               <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
@@ -225,7 +185,7 @@ const SlimDonutChart = ({ data }: { data: { label: string; value: number; color:
 };
 
 // ============================================================
-// 4. COMPONENTE PRINCIPAL
+// 3. COMPONENTE PRINCIPAL
 // ============================================================
 type Seccion = "Resumen" | "Caja" | "Productos" | "Empleados" | "Gastos" | "Inventario";
 
@@ -233,48 +193,112 @@ export default function AnalisisReportes() {
   const [activeTab, setActiveTab] = useState<Seccion>("Resumen");
   const [fechaFiltro, setFechaFiltro] = useState<"Hoy" | "Semana" | "Mes">("Hoy");
 
+  // Estado dinámico desde Backend
+  const [dataCajas, setDataCajas] = useState<TurnoCaja[]>([]);
+  const [dataEmpleados, setDataEmpleados] = useState<RendimientoEmpleado[]>([]);
+  const [dataGastos, setDataGastos] = useState<GastoRegistro[]>([]);
+  const [dataProductos, setDataProductos] = useState<ProductoAnalisis[]>([]);
+  const [dataInsumos, setDataInsumos] = useState<InsumoGasto[]>([]);
+  const [cargando, setCargando] = useState<boolean>(true);
+
   // Modales
   const [modalCaja, setModalCaja] = useState<TurnoCaja | null>(null);
   const [modalGasto, setModalGasto] = useState<GastoRegistro | null>(null);
   const [modalEmpleado, setModalEmpleado] = useState<RendimientoEmpleado | null>(null);
   const [modalProducto, setModalProducto] = useState<ProductoAnalisis | null>(null);
 
-  // Cálculos
-  const totalGeneradoCajas = useMemo(() => DATA_CAJAS.reduce((acc, c) => acc + c.totalGenerado, 0), []);
-  const totalGastosRegistrados = useMemo(() => DATA_GASTOS.reduce((acc, g) => acc + g.monto, 0), []);
-  const totalPropinas = useMemo(() => DATA_EMPLEADOS.reduce((acc, e) => acc + e.propinas, 0), []);
+  // Reporte IA
+  const [modalIA, setModalIA] = useState<boolean>(false);
+  const [generandoIA, setGenerandoIA] = useState<boolean>(false);
+  const [reporteIATexto, setReporteIATexto] = useState<string>("");
+  const [copiado, setCopiado] = useState<boolean>(false);
 
-  // NUEVOS: cálculos para inventario y balance neto
+  const cargarDatos = useCallback(async (filtro: "Hoy" | "Semana" | "Mes") => {
+    setCargando(true);
+    try {
+      const res = await ReporteServicio.obtenerDashboard(filtro);
+      if (res) {
+        setDataCajas(Array.isArray(res.cajas) ? res.cajas : []);
+        setDataEmpleados(Array.isArray(res.empleados) ? res.empleados : []);
+        setDataGastos(Array.isArray(res.gastos) ? res.gastos : []);
+        setDataProductos(Array.isArray(res.productos) ? res.productos : []);
+        setDataInsumos(Array.isArray(res.inventarioGastos) ? res.inventarioGastos : []);
+      }
+    } catch (err: any) {
+      console.warn("Error cargando dashboard:", err);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarDatos(fechaFiltro);
+  }, [fechaFiltro, cargarDatos]);
+
+  // Generar Reporte con Inteligencia Artificial
+  const generarInformeIA = async () => {
+    setGenerandoIA(true);
+    setModalIA(true);
+    try {
+      const tipo = fechaFiltro === "Hoy" ? "DIARIO" : "SEMANAL";
+      const res = await ReporteServicio.generarReporteIA(tipo);
+      setReporteIATexto(res.contenido);
+    } catch (err: any) {
+      setReporteIATexto(`No se pudo generar el reporte: ${err?.message || "Error de conexión"}`);
+    } finally {
+      setGenerandoIA(false);
+    }
+  };
+
+  const copiarInforme = () => {
+    if (reporteIATexto) {
+      void navigator.clipboard.writeText(reporteIATexto);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    }
+  };
+
+  // Cálculos dinámicos
+  const totalGeneradoCajas = useMemo(() => dataCajas.reduce((acc, c) => acc + c.totalGenerado, 0), [dataCajas]);
+  const totalGastosRegistrados = useMemo(() => dataGastos.reduce((acc, g) => acc + g.monto, 0), [dataGastos]);
+  const totalPropinas = useMemo(() => dataEmpleados.reduce((acc, e) => acc + e.propinas, 0), [dataEmpleados]);
+
+  // Cálculos para inventario y balance neto
   const insumosCriticos = useMemo(
-    () => DATA_INVENTARIO_GASTOS.filter(i => i.estado !== "Óptimo"),
-    []
+    () => dataInsumos.filter(i => i.estado !== "Óptimo"),
+    [dataInsumos]
   );
   const agotados = useMemo(
-    () => DATA_INVENTARIO_GASTOS.filter(i => i.estado === "Agotado").length,
-    []
+    () => dataInsumos.filter(i => i.estado === "Agotado").length,
+    [dataInsumos]
   );
   const bajos = useMemo(
-    () => DATA_INVENTARIO_GASTOS.filter(i => i.estado === "Bajo").length,
-    []
+    () => dataInsumos.filter(i => i.estado === "Bajo").length,
+    [dataInsumos]
   );
   const balanceNeto = useMemo(
     () => totalGeneradoCajas - totalGastosRegistrados,
     [totalGeneradoCajas, totalGastosRegistrados]
   );
 
-  // Gráficas con colores de la paleta e indicativos
-  const gastosPorCategoriaData = [
-    { label: "Compras", value: DATA_GASTOS.filter(g => g.categoria === "Compras").reduce((a,b) => a+b.monto, 0), color: "#5BC0DE" },
-    { label: "Nómina", value: DATA_GASTOS.filter(g => g.categoria === "Nómina").reduce((a,b) => a+b.monto, 0), color: "#F4D6B0" },
-    { label: "Servicios", value: DATA_GASTOS.filter(g => g.categoria === "Servicios").reduce((a,b) => a+b.monto, 0), color: "#E57373" },
-    { label: "Otros", value: DATA_GASTOS.filter(g => g.categoria === "Otros").reduce((a,b) => a+b.monto, 0), color: "#FBBF24" },
-  ];
+  const productoTop = useMemo(() => {
+    const conVenta = dataProductos.filter(p => p.unidadesVendidas > 0);
+    return conVenta.length > 0 ? conVenta[0] : null;
+  }, [dataProductos]);
 
-  const cajaMetodosPagoData = [
-    { label: "Efectivo", value: DATA_CAJAS.reduce((a,b)=>a+b.ventasEfectivo,0), color: "#D97706" },
-    { label: "Tarjeta", value: DATA_CAJAS.reduce((a,b)=>a+b.ventasTarjeta,0), color: "#5BC0DE" },
-    { label: "Transferencia", value: DATA_CAJAS.reduce((a,b)=>a+b.ventasTransferencia,0), color: "#F4D6B0" },
-  ];
+  // Gráficas con datos reales
+  const gastosPorCategoriaData = useMemo(() => [
+    { label: "Compras", value: dataGastos.filter(g => g.categoria === "Compras").reduce((a,b) => a+b.monto, 0), color: "#5BC0DE" },
+    { label: "Nómina", value: dataGastos.filter(g => g.categoria === "Nómina").reduce((a,b) => a+b.monto, 0), color: "#F4D6B0" },
+    { label: "Servicios", value: dataGastos.filter(g => g.categoria === "Servicios").reduce((a,b) => a+b.monto, 0), color: "#E57373" },
+    { label: "Otros", value: dataGastos.filter(g => g.categoria === "Otros").reduce((a,b) => a+b.monto, 0), color: "#FBBF24" },
+  ], [dataGastos]);
+
+  const cajaMetodosPagoData = useMemo(() => [
+    { label: "Efectivo", value: dataCajas.reduce((a,b)=>a+b.ventasEfectivo,0), color: "#D97706" },
+    { label: "Tarjeta", value: dataCajas.reduce((a,b)=>a+b.ventasTarjeta,0), color: "#5BC0DE" },
+    { label: "Transferencia", value: dataCajas.reduce((a,b)=>a+b.ventasTransferencia,0), color: "#F4D6B0" },
+  ], [dataCajas]);
 
   const TABS = [
     { id: "Resumen", label: "Resumen", icon: PieChart },
@@ -299,21 +323,41 @@ export default function AnalisisReportes() {
                 </div>
                 <div>
                   <h2 className="text-base sm:text-xl font-bold tracking-tight text-[#F4D6B0]">Reportes y Análisis</h2>
-                  <p className="hidden sm:block text-[11px] text-[#5BC0DE] uppercase tracking-wider font-semibold">Auditoría del Negocio</p>
+                  <p className="hidden sm:block text-[11px] text-[#5BC0DE] uppercase tracking-wider font-semibold">Auditoría del Negocio en Tiempo Real</p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-1 bg-[#3A506B]/30 p-0.5 sm:p-1 rounded-xl border border-[#3A506B] w-full sm:w-auto overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <Calendar className="w-3.5 h-3.5 text-[#5BC0DE] ml-1.5 sm:ml-2 mr-1 shrink-0" />
-                {(["Hoy", "Semana", "Mes"] as const).map(f => (
-                  <button 
-                    key={f} 
-                    onClick={() => setFechaFiltro(f)}
-                    className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all whitespace-nowrap ${fechaFiltro === f ? "bg-[#5BC0DE] text-[#0B132B] shadow-md" : "text-[#F4D6B0] hover:text-white"}`}
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+                <div className="flex items-center gap-1 bg-[#3A506B]/30 p-0.5 sm:p-1 rounded-xl border border-[#3A506B] flex-1 sm:flex-none overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <Calendar className="w-3.5 h-3.5 text-[#5BC0DE] ml-1.5 sm:ml-2 mr-1 shrink-0" />
+                  {(["Hoy", "Semana", "Mes"] as const).map(f => (
+                    <button 
+                      key={f} 
+                      onClick={() => setFechaFiltro(f)}
+                      className={`flex-1 sm:flex-none px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold transition-all whitespace-nowrap ${fechaFiltro === f ? "bg-[#5BC0DE] text-[#0B132B] shadow-md" : "text-[#F4D6B0] hover:text-white"}`}
+                    >
+                      {f === "Hoy" ? "Hoy" : f === "Semana" ? "Esta Semana" : "Este Mes"}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => void cargarDatos(fechaFiltro)}
+                    title="Recargar datos"
+                    className="p-1.5 rounded-lg text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B]/50 transition-colors ml-0.5"
                   >
-                    {f === "Hoy" ? "Hoy" : f === "Semana" ? "Esta Semana" : "Este Mes"}
+                    <RotateCw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} />
                   </button>
-                ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={generarInformeIA}
+                  className="bg-gradient-to-r from-[#D97706] to-[#FBBF24] hover:brightness-110 text-[#0B132B] px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 shrink-0 active:scale-95"
+                  title="Generar análisis inteligente con IA"
+                >
+                  <Sparkles size={14} className="text-[#0B132B]" />
+                  <span>Reporte IA</span>
+                </button>
               </div>
             </div>
 
@@ -376,8 +420,10 @@ export default function AnalisisReportes() {
               {/* 5. Producto Top */}
               <Card onClick={() => setActiveTab("Productos")} className="border-l-4 border-l-[#FBBF24]">
                 <span className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE] uppercase block mb-1">Producto Top</span>
-                <p className="text-sm sm:text-lg font-bold text-[#F4D6B0] truncate">{DATA_PRODUCTOS[0].nombre}</p>
-                <p className="text-[9px] sm:text-[10px] text-[#5BC0DE] mt-2 font-medium">{DATA_PRODUCTOS[0].unidadesVendidas} Unidades Vendidas →</p>
+                <p className="text-sm sm:text-lg font-bold text-[#F4D6B0] truncate">{productoTop?.nombre || 'Sin ventas en el período'}</p>
+                <p className="text-[9px] sm:text-[10px] text-[#5BC0DE] mt-2 font-medium">
+                  {productoTop ? `${productoTop.unidadesVendidas} unidades vendidas →` : 'Sin datos →'}
+                </p>
               </Card>
 
               {/* 6. Insumos Críticos */}
@@ -406,13 +452,13 @@ export default function AnalisisReportes() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Ingresos por Producto</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Principales fuentes de venta</p>
-                <BarChartWithLabels items={DATA_PRODUCTOS.slice(0, 5).map(p => ({ label: p.nombre.split(" ")[0], value: p.ingresos }))} />
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Principales fuentes de venta registradas</p>
+                <BarChartWithLabels items={dataProductos.filter(p => p.ingresos > 0).slice(0, 5).map(p => ({ label: p.nombre.split(" ")[0], value: p.ingresos }))} />
               </Card>
 
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Estructura de Gastos</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Distribución porcentual</p>
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Distribución porcentual de egresos</p>
                 <SlimDonutChart data={gastosPorCategoriaData} />
               </Card>
             </div>
@@ -424,13 +470,13 @@ export default function AnalisisReportes() {
                   <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] flex items-center gap-1.5">
                     <Package className="w-4 h-4 text-[#F97316]" /> Alertas de Inventario
                   </h3>
-                  <p className="text-[10px] sm:text-[11px] text-[#5BC0DE]">Insumos que requieren reabastecimiento</p>
+                  <p className="text-[10px] sm:text-[11px] text-[#5BC0DE]">Insumos que requieren reabastecimiento urgente</p>
                 </div>
                 <button
                   onClick={() => setActiveTab("Inventario")}
                   className="text-[10px] font-bold text-[#5BC0DE] hover:text-[#F4D6B0] transition-colors shrink-0"
                 >
-                  Ver todo →
+                  Ver inventario completo →
                 </button>
               </div>
 
@@ -466,7 +512,7 @@ export default function AnalisisReportes() {
                           Stock: <span className="text-[#F4D6B0] font-semibold">{item.stockActual}</span>
                         </span>
                         <span className="text-[#5BC0DE]">
-                          Gasto día: <span className="text-[#F4D6B0] font-semibold">{formatearMoneda(item.gastoDia)}</span>
+                          Gasto ref: <span className="text-[#F4D6B0] font-semibold">{formatearMoneda(item.gastoDia)}</span>
                         </span>
                       </div>
                     </div>
@@ -485,19 +531,19 @@ export default function AnalisisReportes() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-center">
                 <div className="bg-[#1C2541] p-2 sm:p-3 rounded-xl border border-[#3A506B]">
                   <span className="text-[9px] sm:text-[10px] text-[#5BC0DE] uppercase block font-semibold">Efectivo</span>
-                  <span className="text-xs sm:text-base font-bold text-[#F4D6B0]">{formatearMoneda(DATA_CAJAS.reduce((a,b)=>a+b.ventasEfectivo,0))}</span>
+                  <span className="text-xs sm:text-base font-bold text-[#F4D6B0]">{formatearMoneda(dataCajas.reduce((a,b)=>a+b.ventasEfectivo,0))}</span>
                 </div>
                 <div className="bg-[#1C2541] p-2 sm:p-3 rounded-xl border border-[#3A506B]">
                   <span className="text-[9px] sm:text-[10px] text-[#5BC0DE] uppercase block font-semibold">Tarjeta</span>
-                  <span className="text-xs sm:text-base font-bold text-[#F4D6B0]">{formatearMoneda(DATA_CAJAS.reduce((a,b)=>a+b.ventasTarjeta,0))}</span>
+                  <span className="text-xs sm:text-base font-bold text-[#F4D6B0]">{formatearMoneda(dataCajas.reduce((a,b)=>a+b.ventasTarjeta,0))}</span>
                 </div>
                 <div className="bg-[#1C2541] p-2 sm:p-3 rounded-xl border border-[#3A506B]">
                   <span className="text-[9px] sm:text-[10px] text-[#5BC0DE] uppercase block font-semibold">Transferencia</span>
-                  <span className="text-xs sm:text-base font-bold text-[#F4D6B0]">{formatearMoneda(DATA_CAJAS.reduce((a,b)=>a+b.ventasTransferencia,0))}</span>
+                  <span className="text-xs sm:text-base font-bold text-[#F4D6B0]">{formatearMoneda(dataCajas.reduce((a,b)=>a+b.ventasTransferencia,0))}</span>
                 </div>
                 <div className="bg-[#1C2541] p-2 sm:p-3 rounded-xl border border-[#3A506B]">
                   <span className="text-[9px] sm:text-[10px] text-[#E57373] uppercase block font-semibold">Egresos</span>
-                  <span className="text-xs sm:text-base font-bold text-[#E57373]">{formatearMoneda(DATA_CAJAS.reduce((a,b)=>a+b.egresosTotales,0))}</span>
+                  <span className="text-xs sm:text-base font-bold text-[#E57373]">{formatearMoneda(dataCajas.reduce((a,b)=>a+b.egresosTotales,0))}</span>
                 </div>
               </div>
             </Card>
@@ -511,8 +557,8 @@ export default function AnalisisReportes() {
 
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Volumen por Turno</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Comparativa general generada</p>
-                <BarChartWithLabels items={DATA_CAJAS.map(c => ({ label: c.cajero.split(" ")[0], value: c.totalGenerado }))} />
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Total generado por cada cajero/turno</p>
+                <BarChartWithLabels items={dataCajas.map(c => ({ label: c.cajero.split(" ")[0], value: c.totalGenerado }))} />
               </Card>
             </div>
 
@@ -522,58 +568,64 @@ export default function AnalisisReportes() {
                 <p className="text-[10px] sm:text-[11px] text-[#5BC0DE]">Auditoría detallada de apertura, cierre y arqueos</p>
               </div>
               
-              {/* Tabla Desktop */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
-                      <th className="pb-3 font-semibold">Turno / Cajero</th>
-                      <th className="pb-3 font-semibold">Horario</th>
-                      <th className="pb-3 text-right font-semibold">Base Inicial</th>
-                      <th className="pb-3 text-right font-semibold">Total Generado</th>
-                      <th className="pb-3 text-right font-semibold">Egresos</th>
-                      <th className="pb-3 text-center font-semibold">Estado / Dif.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DATA_CAJAS.map(caja => (
-                      <tr key={caja.id} onClick={() => setModalCaja(caja)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
-                        <td className="py-3 font-medium text-[#F4D6B0]">{caja.cajero} <span className="text-[10px] text-[#5BC0DE] block">ID: {caja.id}</span></td>
-                        <td className="py-3 text-xs text-[#5BC0DE]">{caja.horaApertura} - {caja.horaCierre}</td>
-                        <td className="py-3 text-right text-[#5BC0DE]">{formatearMoneda(caja.baseInicial)}</td>
-                        <td className="py-3 text-right font-bold text-[#F4D6B0]">{formatearMoneda(caja.totalGenerado)}</td>
-                        <td className="py-3 text-right text-[#E57373]">{formatearMoneda(caja.egresosTotales)}</td>
-                        <td className="py-3 text-center">
-                          <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold ${caja.diferencia === 0 ? 'bg-[#5BC0DE]/20 text-[#5BC0DE]' : 'bg-[#E57373]/20 text-[#E57373]'}`}>
-                            {caja.diferencia === 0 ? "Cuadrada" : `Dif: ${formatearMoneda(caja.diferencia)}`}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Tarjetas Mobile */}
-              <div className="md:hidden space-y-2">
-                {DATA_CAJAS.map(caja => (
-                  <div key={caja.id} onClick={() => setModalCaja(caja)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1.5 shadow-sm active:scale-[0.99]">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <span className="font-bold text-xs text-[#F4D6B0]">{caja.cajero}</span>
-                        <span className="text-[9px] text-[#5BC0DE] block">{caja.horaApertura} - {caja.horaCierre}</span>
-                      </div>
-                      <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${caja.diferencia === 0 ? 'bg-[#5BC0DE]/20 text-[#5BC0DE]' : 'bg-[#E57373]/20 text-[#E57373]'}`}>
-                        {caja.diferencia === 0 ? "Cuadrada" : "Diferencia"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between border-t border-[#3A506B]/50 pt-1.5 mt-0.5 text-[10px]">
-                      <span className="text-[#5BC0DE]">Base: {formatearMoneda(caja.baseInicial)}</span>
-                      <span className="font-bold text-[#F4D6B0]">Gen: {formatearMoneda(caja.totalGenerado)}</span>
-                    </div>
+              {dataCajas.length === 0 ? (
+                <div className="text-center py-8 text-xs text-[#5BC0DE]/60">
+                  No hay turnos de caja registrados para este período.
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
+                          <th className="pb-3 font-semibold">Turno / Cajero</th>
+                          <th className="pb-3 font-semibold">Horario</th>
+                          <th className="pb-3 text-right font-semibold">Base Inicial</th>
+                          <th className="pb-3 text-right font-semibold">Total Generado</th>
+                          <th className="pb-3 text-right font-semibold">Egresos</th>
+                          <th className="pb-3 text-center font-semibold">Estado / Dif.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dataCajas.map(caja => (
+                          <tr key={caja.id} onClick={() => setModalCaja(caja)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
+                            <td className="py-3 font-medium text-[#F4D6B0]">{caja.cajero} <span className="text-[10px] text-[#5BC0DE] block">ID: {caja.id}</span></td>
+                            <td className="py-3 text-xs text-[#5BC0DE]">{caja.horaApertura} - {caja.horaCierre}</td>
+                            <td className="py-3 text-right text-[#5BC0DE]">{formatearMoneda(caja.baseInicial)}</td>
+                            <td className="py-3 text-right font-bold text-[#F4D6B0]">{formatearMoneda(caja.totalGenerado)}</td>
+                            <td className="py-3 text-right text-[#E57373]">{formatearMoneda(caja.egresosTotales)}</td>
+                            <td className="py-3 text-center">
+                              <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold ${caja.diferencia === 0 ? 'bg-[#5BC0DE]/20 text-[#5BC0DE]' : 'bg-[#E57373]/20 text-[#E57373]'}`}>
+                                {caja.diferencia === 0 ? "Cuadrada" : `Dif: ${formatearMoneda(caja.diferencia)}`}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
+
+                  <div className="md:hidden space-y-2">
+                    {dataCajas.map(caja => (
+                      <div key={caja.id} onClick={() => setModalCaja(caja)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1.5 shadow-sm active:scale-[0.99]">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-xs text-[#F4D6B0]">{caja.cajero}</span>
+                            <span className="text-[9px] text-[#5BC0DE] block">{caja.horaApertura} - {caja.horaCierre}</span>
+                          </div>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold ${caja.diferencia === 0 ? 'bg-[#5BC0DE]/20 text-[#5BC0DE]' : 'bg-[#E57373]/20 text-[#E57373]'}`}>
+                            {caja.diferencia === 0 ? "Cuadrada" : "Diferencia"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-t border-[#3A506B]/50 pt-1.5 mt-0.5 text-[10px]">
+                          <span className="text-[#5BC0DE]">Base: {formatearMoneda(caja.baseInicial)}</span>
+                          <span className="font-bold text-[#F4D6B0]">Gen: {formatearMoneda(caja.totalGenerado)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </Card>
           </div>
         )}
@@ -584,122 +636,138 @@ export default function AnalisisReportes() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Rendimiento por Producto</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Comparativa de ingresos directos</p>
-                <BarChartWithLabels items={DATA_PRODUCTOS.map(p => ({ label: p.nombre.split(" ")[0], value: p.ingresos }))} />
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Comparativa de ingresos directos facturados</p>
+                <BarChartWithLabels items={dataProductos.filter(p => p.ingresos > 0).slice(0, 6).map(p => ({ label: p.nombre.split(" ")[0], value: p.ingresos }))} />
               </Card>
 
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Participación en Ingresos</h3>
                 <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Cuota porcentual de venta</p>
-                <SlimDonutChart data={DATA_PRODUCTOS.map((p, i) => ({ label: p.nombre, value: p.ingresos, color: ["#5BC0DE", "#F4D6B0", "#D97706", "#E57373", "#4ADE80"][i % 5] }))} />
+                <SlimDonutChart data={dataProductos.filter(p => p.ingresos > 0).slice(0, 5).map((p, i) => ({ label: p.nombre, value: p.ingresos, color: ["#5BC0DE", "#F4D6B0", "#D97706", "#E57373", "#4ADE80"][i % 5] }))} />
               </Card>
             </div>
 
             <Card>
-              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Listado Completo de Productos</h3>
+              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Catálogo y Rendimiento de Productos</h3>
               
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
-                      <th className="pb-3 font-semibold">Producto</th>
-                      <th className="pb-3 font-semibold">Categoría</th>
-                      <th className="pb-3 text-center font-semibold">Unidades Vendidas</th>
-                      <th className="pb-3 text-right font-semibold">Precio Promedio</th>
-                      <th className="pb-3 text-right font-semibold">Ingresos Totales</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DATA_PRODUCTOS.map(prod => (
-                      <tr key={prod.id} onClick={() => setModalProducto(prod)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
-                        <td className="py-3 font-medium text-[#F4D6B0]">{prod.nombre} <span className="text-[10px] text-[#5BC0DE] block">ID: {prod.id}</span></td>
-                        <td className="py-3"><span className="text-[10px] px-2 py-0.5 rounded-md bg-[#3A506B]/40 border border-[#3A506B] text-[#5BC0DE]">{prod.categoria}</span></td>
-                        <td className="py-3 text-center font-bold text-[#F4D6B0]">{prod.unidadesVendidas} unid</td>
-                        <td className="py-3 text-right text-[#5BC0DE]">{formatearMoneda(prod.precioPromedio)}</td>
-                        <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(prod.ingresos)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="md:hidden space-y-2">
-                {DATA_PRODUCTOS.map(prod => (
-                  <div key={prod.id} onClick={() => setModalProducto(prod)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1.5 shadow-sm active:scale-[0.99]">
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold text-xs text-[#F4D6B0]">{prod.nombre}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 bg-[#3A506B]/40 rounded text-[#5BC0DE]">{prod.categoria}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] mt-1">
-                      <span className="text-[#5BC0DE]">{prod.unidadesVendidas} vendidos</span>
-                      <span className="font-bold text-[#5BC0DE]">{formatearMoneda(prod.ingresos)}</span>
-                    </div>
+              {dataProductos.length === 0 ? (
+                <div className="text-center py-8 text-xs text-[#5BC0DE]/60">
+                  No hay productos registrados en el sistema.
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
+                          <th className="pb-3 font-semibold">Producto</th>
+                          <th className="pb-3 font-semibold">Categoría</th>
+                          <th className="pb-3 text-center font-semibold">Unidades Vendidas</th>
+                          <th className="pb-3 text-right font-semibold">Precio Venta</th>
+                          <th className="pb-3 text-right font-semibold">Ingresos Totales</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dataProductos.map(prod => (
+                          <tr key={prod.id} onClick={() => setModalProducto(prod)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
+                            <td className="py-3 font-medium text-[#F4D6B0]">{prod.nombre} <span className="text-[10px] text-[#5BC0DE] block">ID: {prod.id}</span></td>
+                            <td className="py-3"><span className="text-[10px] px-2 py-0.5 rounded-md bg-[#3A506B]/40 border border-[#3A506B] text-[#5BC0DE]">{prod.categoria}</span></td>
+                            <td className="py-3 text-center font-bold text-[#F4D6B0]">{prod.unidadesVendidas} unid</td>
+                            <td className="py-3 text-right text-[#5BC0DE]">{formatearMoneda(prod.precioPromedio)}</td>
+                            <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(prod.ingresos)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
+
+                  <div className="md:hidden space-y-2">
+                    {dataProductos.map(prod => (
+                      <div key={prod.id} onClick={() => setModalProducto(prod)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1.5 shadow-sm active:scale-[0.99]">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-xs text-[#F4D6B0]">{prod.nombre}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 bg-[#3A506B]/40 rounded text-[#5BC0DE]">{prod.categoria}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] mt-1">
+                          <span className="text-[#5BC0DE]">{prod.unidadesVendidas} vendidos</span>
+                          <span className="font-bold text-[#5BC0DE]">{formatearMoneda(prod.ingresos)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </Card>
           </div>
         )}
 
-        {/* ================= RENDIMIENTO ================= */}
+        {/* ================= RENDIMIENTO EMPLEADOS ================= */}
         {activeTab === "Empleados" && (
           <div className="space-y-3 sm:space-y-6 animate-in fade-in duration-300">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Ventas Generadas</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-2">Desempeño por integrante</p>
-                <BarChartWithLabels items={DATA_EMPLEADOS.map(e => ({ label: e.nombre.split(" ")[0], value: e.totalVendido }))} />
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-2">Desempeño por integrante del equipo</p>
+                <BarChartWithLabels items={dataEmpleados.map(e => ({ label: e.nombre.split(" ")[0], value: e.totalVendido }))} />
               </Card>
 
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Distribución de Propinas</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-2">Monto recolectado por mesero</p>
-                <SlimDonutChart data={DATA_EMPLEADOS.map((e, i) => ({ label: e.nombre, value: e.propinas, color: ["#5BC0DE", "#F4D6B0", "#D97706", "#E57373"][i % 4] }))} />
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-2">Monto recolectado por empleado</p>
+                <SlimDonutChart data={dataEmpleados.map((e, i) => ({ label: e.nombre, value: e.propinas, color: ["#5BC0DE", "#F4D6B0", "#D97706", "#E57373"][i % 4] }))} />
               </Card>
             </div>
 
             <Card>
-              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Resumen del Personal</h3>
+              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Resumen de Desempeño del Personal</h3>
               
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
-                      <th className="pb-3 font-semibold">Empleado</th>
-                      <th className="pb-3 text-center font-semibold">Comandas</th>
-                      <th className="pb-3 text-right font-semibold">Ventas</th>
-                      <th className="pb-3 text-right font-semibold">Propinas</th>
-                      <th className="pb-3 text-center font-semibold">Último Turno</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DATA_EMPLEADOS.map(emp => (
-                      <tr key={emp.id} onClick={() => setModalEmpleado(emp)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
-                        <td className="py-3 font-medium text-[#F4D6B0]">{emp.nombre} <span className="text-[10px] text-[#5BC0DE] block">{emp.rol}</span></td>
-                        <td className="py-3 text-center text-[#F4D6B0]">{emp.comandasAtendidas}</td>
-                        <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</td>
-                        <td className="py-3 text-right font-bold text-[#F4D6B0]">{formatearMoneda(emp.propinas)}</td>
-                        <td className="py-3 text-center text-xs text-[#5BC0DE]">{emp.ultimoDiaTrabajado}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="md:hidden space-y-2">
-                {DATA_EMPLEADOS.map(emp => (
-                  <div key={emp.id} onClick={() => setModalEmpleado(emp)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm active:scale-[0.99]">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-xs text-[#F4D6B0]">{emp.nombre} <span className="text-[9px] text-[#5BC0DE]">({emp.rol})</span></span>
-                      <span className="text-[10px] font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</span>
-                    </div>
-                    <div className="flex justify-between text-[10px] text-[#5BC0DE] mt-1">
-                      <span>{emp.comandasAtendidas} comandas</span>
-                      <span>Prop: {formatearMoneda(emp.propinas)}</span>
-                    </div>
+              {dataEmpleados.length === 0 ? (
+                <div className="text-center py-8 text-xs text-[#5BC0DE]/60">
+                  No se encontraron registros de empleados en el sistema.
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
+                          <th className="pb-3 font-semibold">Empleado</th>
+                          <th className="pb-3 text-center font-semibold">Comandas</th>
+                          <th className="pb-3 text-right font-semibold">Ventas</th>
+                          <th className="pb-3 text-right font-semibold">Propinas</th>
+                          <th className="pb-3 text-center font-semibold">Último Turno</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dataEmpleados.map(emp => (
+                          <tr key={emp.id} onClick={() => setModalEmpleado(emp)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
+                            <td className="py-3 font-medium text-[#F4D6B0]">{emp.nombre} <span className="text-[10px] text-[#5BC0DE] block">{emp.rol}</span></td>
+                            <td className="py-3 text-center text-[#F4D6B0]">{emp.comandasAtendidas}</td>
+                            <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</td>
+                            <td className="py-3 text-right font-bold text-[#F4D6B0]">{formatearMoneda(emp.propinas)}</td>
+                            <td className="py-3 text-center text-xs text-[#5BC0DE]">{emp.ultimoDiaTrabajado}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
+
+                  <div className="md:hidden space-y-2">
+                    {dataEmpleados.map(emp => (
+                      <div key={emp.id} onClick={() => setModalEmpleado(emp)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm active:scale-[0.99]">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-xs text-[#F4D6B0]">{emp.nombre} <span className="text-[9px] text-[#5BC0DE]">({emp.rol})</span></span>
+                          <span className="text-[10px] font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px] text-[#5BC0DE] mt-1">
+                          <span>{emp.comandasAtendidas} comandas</span>
+                          <span>Prop: {formatearMoneda(emp.propinas)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </Card>
           </div>
         )}
@@ -716,51 +784,59 @@ export default function AnalisisReportes() {
 
               <Card>
                 <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Comparativa de Egresos</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-2">Monto total invertido</p>
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-2">Monto total registrado por rubro</p>
                 <BarChartWithLabels items={gastosPorCategoriaData.map(g => ({ label: g.label, value: g.value }))} />
               </Card>
             </div>
 
             <Card>
-              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Registro de Egresos</h3>
+              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Registro Detallado de Egresos</h3>
               
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
-                      <th className="pb-3 font-semibold">Concepto</th>
-                      <th className="pb-3 font-semibold">Categoría</th>
-                      <th className="pb-3 font-semibold">Fecha</th>
-                      <th className="pb-3 text-right font-semibold">Monto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DATA_GASTOS.map(gasto => (
-                      <tr key={gasto.id} onClick={() => setModalGasto(gasto)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
-                        <td className="py-3 font-medium text-[#F4D6B0]">{gasto.concepto} <span className="text-[10px] text-[#5BC0DE] block">{gasto.detalle}</span></td>
-                        <td className="py-3"><span className="text-[10px] px-2 py-0.5 rounded-md bg-[#3A506B]/40 border border-[#3A506B] text-[#5BC0DE]">{gasto.categoria}</span></td>
-                        <td className="py-3 text-xs text-[#5BC0DE]">{gasto.fecha}</td>
-                        <td className="py-3 text-right font-bold text-[#E57373]">{formatearMoneda(gasto.monto)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="md:hidden space-y-2">
-                {DATA_GASTOS.map(gasto => (
-                  <div key={gasto.id} onClick={() => setModalGasto(gasto)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm active:scale-[0.99]">
-                    <div className="flex justify-between items-start gap-2">
-                      <span className="font-bold text-xs text-[#F4D6B0] truncate">{gasto.concepto}</span>
-                      <span className="text-[10px] font-bold text-[#E57373] shrink-0">{formatearMoneda(gasto.monto)}</span>
-                    </div>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-[9px] px-1.5 py-0.5 bg-[#3A506B]/40 rounded text-[#5BC0DE]">{gasto.categoria}</span>
-                      <span className="text-[9px] text-[#5BC0DE]">{gasto.fecha}</span>
-                    </div>
+              {dataGastos.length === 0 ? (
+                <div className="text-center py-8 text-xs text-[#5BC0DE]/60">
+                  No hay gastos ni egresos registrados en este período.
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
+                          <th className="pb-3 font-semibold">Concepto</th>
+                          <th className="pb-3 font-semibold">Categoría</th>
+                          <th className="pb-3 font-semibold">Fecha</th>
+                          <th className="pb-3 text-right font-semibold">Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dataGastos.map(gasto => (
+                          <tr key={gasto.id} onClick={() => setModalGasto(gasto)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
+                            <td className="py-3 font-medium text-[#F4D6B0]">{gasto.concepto} <span className="text-[10px] text-[#5BC0DE] block">{gasto.detalle}</span></td>
+                            <td className="py-3"><span className="text-[10px] px-2 py-0.5 rounded-md bg-[#3A506B]/40 border border-[#3A506B] text-[#5BC0DE]">{gasto.categoria}</span></td>
+                            <td className="py-3 text-xs text-[#5BC0DE]">{gasto.fecha}</td>
+                            <td className="py-3 text-right font-bold text-[#E57373]">{formatearMoneda(gasto.monto)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
+
+                  <div className="md:hidden space-y-2">
+                    {dataGastos.map(gasto => (
+                      <div key={gasto.id} onClick={() => setModalGasto(gasto)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm active:scale-[0.99]">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="font-bold text-xs text-[#F4D6B0] truncate">{gasto.concepto}</span>
+                          <span className="text-[10px] font-bold text-[#E57373] shrink-0">{formatearMoneda(gasto.monto)}</span>
+                        </div>
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-[9px] px-1.5 py-0.5 bg-[#3A506B]/40 rounded text-[#5BC0DE]">{gasto.categoria}</span>
+                          <span className="text-[9px] text-[#5BC0DE]">{gasto.fecha}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </Card>
           </div>
         )}
@@ -770,68 +846,76 @@ export default function AnalisisReportes() {
           <div className="space-y-3 sm:space-y-6 animate-in fade-in duration-300">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               <Card>
-                <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Gasto en Insumos Clave</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Inversión mensual en materias primas</p>
-                <BarChartWithLabels items={DATA_INVENTARIO_GASTOS.map(i => ({ label: i.nombre.split(" ")[0], value: i.gastoMes }))} />
+                <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Gasto Proyectado en Insumos</h3>
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Inversión mensual estimada en materias primas</p>
+                <BarChartWithLabels items={dataInsumos.slice(0, 6).map(i => ({ label: i.nombre.split(" ")[0], value: i.gastoMes }))} />
               </Card>
 
               <Card>
-                <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Proporción de Gasto</h3>
-                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Distribución acumulada</p>
-                <SlimDonutChart data={DATA_INVENTARIO_GASTOS.map((i, idx) => ({ label: i.nombre, value: i.gastoMes, color: ["#5BC0DE", "#F4D6B0", "#D97706", "#E57373", "#60A5FA"][idx % 5] }))} />
+                <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-1">Distribución del Stock</h3>
+                <p className="text-[10px] sm:text-[11px] text-[#5BC0DE] mb-3">Proporción de inversión por insumo</p>
+                <SlimDonutChart data={dataInsumos.slice(0, 5).map((i, idx) => ({ label: i.nombre, value: i.gastoMes, color: ["#5BC0DE", "#F4D6B0", "#D97706", "#E57373", "#60A5FA"][idx % 5] }))} />
               </Card>
             </div>
 
             <Card>
-              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Auditoría de Inventario</h3>
+              <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Auditoría de Insumos e Inventario</h3>
               
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
-                      <th className="pb-3 font-semibold">Insumo</th>
-                      <th className="pb-3 font-semibold">Categoría</th>
-                      <th className="pb-3 font-semibold">Stock Actual</th>
-                      <th className="pb-3 text-right font-semibold">Gasto Día</th>
-                      <th className="pb-3 text-right font-semibold">Gasto Mes</th>
-                      <th className="pb-3 text-center font-semibold">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {DATA_INVENTARIO_GASTOS.map(item => (
-                      <tr key={item.id} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors">
-                        <td className="py-3 font-medium text-[#F4D6B0]">{item.nombre} <span className="text-[10px] text-[#5BC0DE] block">ID: {item.id}</span></td>
-                        <td className="py-3"><span className="text-[10px] px-2 py-0.5 rounded-md bg-[#3A506B]/40 border border-[#3A506B] text-[#5BC0DE]">{item.categoria}</span></td>
-                        <td className="py-3 text-[#F4D6B0] font-semibold">{item.stockActual}</td>
-                        <td className="py-3 text-right text-[#5BC0DE]">{formatearMoneda(item.gastoDia)}</td>
-                        <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(item.gastoMes)}</td>
-                        <td className="py-3 text-center">
-                          <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold ${item.estado === 'Óptimo' ? 'bg-[#4ADE80]/20 text-[#4ADE80]' : item.estado === 'Agotado' ? 'bg-[#E57373]/20 text-[#E57373]' : 'bg-[#FBBF24]/20 text-[#FBBF24]'}`}>
+              {dataInsumos.length === 0 ? (
+                <div className="text-center py-8 text-xs text-[#5BC0DE]/60">
+                  No hay insumos registrados en el inventario.
+                </div>
+              ) : (
+                <>
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
+                          <th className="pb-3 font-semibold">Insumo</th>
+                          <th className="pb-3 font-semibold">Categoría</th>
+                          <th className="pb-3 font-semibold">Stock Actual</th>
+                          <th className="pb-3 text-right font-semibold">Gasto Día (est.)</th>
+                          <th className="pb-3 text-right font-semibold">Gasto Mes (est.)</th>
+                          <th className="pb-3 text-center font-semibold">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dataInsumos.map(item => (
+                          <tr key={item.id} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors">
+                            <td className="py-3 font-medium text-[#F4D6B0]">{item.nombre} <span className="text-[10px] text-[#5BC0DE] block">ID: {item.id}</span></td>
+                            <td className="py-3"><span className="text-[10px] px-2 py-0.5 rounded-md bg-[#3A506B]/40 border border-[#3A506B] text-[#5BC0DE]">{item.categoria}</span></td>
+                            <td className="py-3 text-[#F4D6B0] font-semibold">{item.stockActual}</td>
+                            <td className="py-3 text-right text-[#5BC0DE]">{formatearMoneda(item.gastoDia)}</td>
+                            <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(item.gastoMes)}</td>
+                            <td className="py-3 text-center">
+                              <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold ${item.estado === 'Óptimo' ? 'bg-[#4ADE80]/20 text-[#4ADE80]' : item.estado === 'Agotado' ? 'bg-[#E57373]/20 text-[#E57373]' : 'bg-[#FBBF24]/20 text-[#FBBF24]'}`}>
+                                {item.estado}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="md:hidden space-y-2">
+                    {dataInsumos.map(item => (
+                      <div key={item.id} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-xs text-[#F4D6B0] truncate">{item.nombre}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${item.estado === 'Óptimo' ? 'bg-[#4ADE80]/20 text-[#4ADE80]' : item.estado === 'Agotado' ? 'bg-[#E57373]/20 text-[#E57373]' : 'bg-[#FBBF24]/20 text-[#FBBF24]'}`}>
                             {item.estado}
                           </span>
-                        </td>
-                      </tr>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-[#5BC0DE] mt-1">
+                          <span>Stock: {item.stockActual}</span>
+                          <span>Gasto Mes: {formatearMoneda(item.gastoMes)}</span>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="md:hidden space-y-2">
-                {DATA_INVENTARIO_GASTOS.map(item => (
-                  <div key={item.id} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm">
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold text-xs text-[#F4D6B0] truncate">{item.nombre}</span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${item.estado === 'Óptimo' ? 'bg-[#4ADE80]/20 text-[#4ADE80]' : item.estado === 'Agotado' ? 'bg-[#E57373]/20 text-[#E57373]' : 'bg-[#FBBF24]/20 text-[#FBBF24]'}`}>
-                        {item.estado}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] text-[#5BC0DE] mt-1">
-                      <span>Stock: {item.stockActual}</span>
-                      <span>Gasto Mes: {formatearMoneda(item.gastoMes)}</span>
-                    </div>
                   </div>
-                ))}
-              </div>
+                </>
+              )}
             </Card>
           </div>
         )}
@@ -839,6 +923,52 @@ export default function AnalisisReportes() {
       </main>
 
       {/* ================= MODALES EMERGENTES ================= */}
+
+      {/* MODAL REPORTE IA */}
+      <FixedModal isOpen={modalIA} onClose={() => setModalIA(false)} title="Análisis de Inteligencia Artificial">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-[#3A506B]/30 p-3 rounded-xl border border-[#3A506B]">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-[#FBBF24]" />
+              <div>
+                <p className="text-xs font-bold text-[#F4D6B0]">Consultor Gastronómico IA</p>
+                <p className="text-[10px] text-[#5BC0DE]">Análisis de rendimiento, menú, inventario y finanzas</p>
+              </div>
+            </div>
+            {reporteIATexto && !generandoIA && (
+              <button
+                type="button"
+                onClick={copiarInforme}
+                className="flex items-center gap-1 bg-[#1C2541] hover:bg-[#3A506B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs px-2.5 py-1.5 rounded-lg border border-[#3A506B] transition-colors"
+              >
+                {copiado ? <Check size={14} className="text-[#4ADE80]" /> : <Copy size={14} />}
+                <span>{copiado ? "Copiado" : "Copiar"}</span>
+              </button>
+            )}
+          </div>
+
+          {generandoIA ? (
+            <div className="py-12 flex flex-col items-center justify-center space-y-3 text-[#5BC0DE]">
+              <RotateCw className="w-8 h-8 animate-spin text-[#FBBF24]" />
+              <p className="text-xs font-medium">Analizando métricas y redactando informe...</p>
+            </div>
+          ) : (
+            <div className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-4 text-xs sm:text-sm text-[#F4D6B0] leading-relaxed whitespace-pre-wrap font-sans [scrollbar-width:thin]">
+              {reporteIATexto}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setModalIA(false)}
+              className="px-4 py-2 bg-[#5BC0DE] text-[#0B132B] font-semibold rounded-xl text-xs hover:bg-[#5BC0DE]/90 transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </FixedModal>
 
       <FixedModal isOpen={!!modalCaja} onClose={() => setModalCaja(null)} title={`Arqueo - ${modalCaja?.id}`}>
         {modalCaja && (
@@ -850,14 +980,18 @@ export default function AnalisisReportes() {
             </div>
             <h4 className="text-[10px] sm:text-xs font-bold text-[#5BC0DE] uppercase pt-2">Movimientos</h4>
             <div className="space-y-2">
-              {modalCaja.movimientos.map((m, i) => (
-                <div key={i} className="flex justify-between bg-[#3A506B]/30 p-2.5 sm:p-3 rounded-xl text-xs sm:text-sm border border-[#3A506B]">
-                  <span className="truncate pr-2">{m.concepto}</span>
-                  <span className={`font-bold shrink-0 ${m.tipo === "Ingreso" ? "text-[#5BC0DE]" : "text-[#E57373]"}`}>
-                    {m.tipo === "Ingreso" ? "+" : "-"}{formatearMoneda(m.monto)}
-                  </span>
-                </div>
-              ))}
+              {modalCaja.movimientos.length === 0 ? (
+                <div className="text-center py-3 text-xs text-[#5BC0DE]/60">Sin movimientos registrados</div>
+              ) : (
+                modalCaja.movimientos.map((m, i) => (
+                  <div key={i} className="flex justify-between bg-[#3A506B]/30 p-2.5 sm:p-3 rounded-xl text-xs sm:text-sm border border-[#3A506B]">
+                    <span className="truncate pr-2">{m.concepto}</span>
+                    <span className={`font-bold shrink-0 ${m.tipo === "Ingreso" ? "text-[#5BC0DE]" : "text-[#E57373]"}`}>
+                      {m.tipo === "Ingreso" ? "+" : "-"}{formatearMoneda(m.monto)}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </>
         )}

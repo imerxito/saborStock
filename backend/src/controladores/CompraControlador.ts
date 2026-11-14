@@ -5,6 +5,15 @@ const compraServicio = new CompraServicio();
 
 export class CompraControlador {
 
+    async obtenerSiguienteFactura(req: Request, res: Response): Promise<void> {
+        try {
+            const factura = await compraServicio.generarSiguienteFactura();
+            res.status(200).json({ factura });
+        } catch (error: any) {
+            res.status(500).json({ mensaje: error.message });
+        }
+    }
+
     async listar(req: Request, res: Response): Promise<void> {
         try {
             const compras = await compraServicio.listar();

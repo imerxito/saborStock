@@ -38,11 +38,15 @@ type Proveedor = {
   activo: boolean;
 };
 
+type TipoGasto = "Insumo" | "Mantenimiento" | "Servicios" | "Otros";
+
 type CompraInsumo = {
   id: string | number;
   id_compra: number;
   id_proveedor: number;
-  id_insumo: number;
+  id_insumo?: number;
+  tipoGasto: TipoGasto;
+  concepto?: string;
   cantidad: number;
   costoTotal: number;
   fecha: string;
@@ -58,7 +62,9 @@ type FormProveedor = {
 };
 
 type FormCompra = {
+  tipoGasto: TipoGasto;
   id_proveedor: string;
+  concepto: string;
   id_categoria: string;
   id_insumo: string;
   cantidad: string;
@@ -67,66 +73,18 @@ type FormCompra = {
   factura: string;
 };
 
-const CATEGORIAS_INICIALES: CategoriaIngrediente[] = [
-  { id: 1, nombre: "Carnes & Proteínas" },
-  { id: 2, nombre: "Lácteos & Quesos" },
-  { id: 3, nombre: "Verduras & Vegetales" },
-  { id: 4, nombre: "Bebidas & Embotellados" },
-  { id: 5, nombre: "Salsas & Aliños" },
-  { id: 6, nombre: "Panadería & Abarrotes" },
-  { id: 7, nombre: "Frutas Frescas" },
-  { id: 8, nombre: "Especias & Condimentos" },
-  { id: 9, nombre: "Embutidos & Fiambres" },
-  { id: 10, nombre: "Postres & Dulces" },
-];
-
-const UNIDADES_INICIALES: UnidadMedida[] = [
-  { id_unidad: 1, nombre: "Kilogramo", abreviatura: "kg", descripcion: "Medida de peso en kilos", activo: true },
-  { id_unidad: 2, nombre: "Gramo", abreviatura: "g", descripcion: "Medida de peso en gramos", activo: true },
-  { id_unidad: 3, nombre: "Litro", abreviatura: "l", descripcion: "Medida de volumen en litros", activo: true },
-  { id_unidad: 4, nombre: "Mililitro", abreviatura: "ml", descripcion: "Medida de volumen en mililitros", activo: true },
-  { id_unidad: 5, nombre: "Unidades", abreviatura: "und", descripcion: "Conteo por piezas u unidades", activo: true },
-];
-
-const INICIAL: Insumo[] = [
-  { id: 1, codigo: "ING-001", nombre: "Arroz", id_unidad: 1, id_categoria: 6, stock: 12, minimo: 10, maximo: 40, precioReferencia: 2500, caducidad: "2027-06-15" },
-  { id: 2, codigo: "ING-002", nombre: "Aceite", id_unidad: 3, id_categoria: 5, stock: 25, minimo: 8, maximo: 40, precioReferencia: 8500, caducidad: "2027-12-01" },
-  { id: 3, codigo: "ING-003", nombre: "Pollo", id_unidad: 1, id_categoria: 1, stock: 0, minimo: 5, maximo: 30, precioReferencia: 12000, caducidad: "2026-05-10" },
-  { id: 4, codigo: "ING-004", nombre: "Carne Molida Premium", id_unidad: 1, id_categoria: 1, stock: 15.5, minimo: 5.0, maximo: 35.0, precioReferencia: 28000, caducidad: "2026-06-20" },
-  { id: 5, codigo: "ING-005", nombre: "Pechuga de Pollo Fileteada", id_unidad: 1, id_categoria: 1, stock: 22.0, minimo: 8.0, maximo: 40.0, precioReferencia: 22000, caducidad: "2026-06-18" },
-  { id: 6, codigo: "ING-006", nombre: "Pan Brioche Hamburguesa", id_unidad: 5, id_categoria: 6, stock: 48.0, minimo: 20.0, maximo: 100.0, precioReferencia: 2000, caducidad: "2026-05-25" },
-  { id: 7, codigo: "ING-007", nombre: "Queso Cheddar Laminado", id_unidad: 5, id_categoria: 2, stock: 12.0, minimo: 15.0, maximo: 50.0, precioReferencia: 1200, caducidad: "2026-07-10" },
-  { id: 8, codigo: "ING-008", nombre: "Tomate Orgánico", id_unidad: 1, id_categoria: 3, stock: 3.2, minimo: 4.0, maximo: 20.0, precioReferencia: 4500, caducidad: "2026-05-15" },
-  { id: 9, codigo: "ING-009", nombre: "Cerveza Club Colombia 330ml", id_unidad: 5, id_categoria: 4, stock: 72.0, minimo: 24.0, maximo: 150.0, precioReferencia: 3800, caducidad: "2027-01-10" },
-  { id: 10, codigo: "ING-010", nombre: "Coca-Cola 400ml Botella", id_unidad: 5, id_categoria: 4, stock: 36.0, minimo: 12.0, maximo: 80.0, precioReferencia: 2500, caducidad: "2027-03-15" }
-];
-
-const PROVEEDORES_INICIALES: Proveedor[] = [
-  { id: 1, nombre: "Distribuidora Cárnica del Sinú", contacto: "Carlos Mendoza", telefono: "3014567890", email: "ventas@carnicsinu.com", categoriaSuministro: "Carnes & Proteínas", activo: true },
-  { id: 2, nombre: "Abastos y Abarrotes El Mayorista", contacto: "Ana Lucía Paternina", telefono: "3109876543", email: "pedidos@elmayorista.co", categoriaSuministro: "Panadería & Abarrotes", activo: true },
-  { id: 3, nombre: "Lácteos y Derivados del Norte", contacto: "Ernesto Baquero", telefono: "3201122334", email: "contacto@lacteosnorte.com", categoriaSuministro: "Lácteos & Quesos", activo: true },
-  { id: 4, nombre: "Central de Verduras y Frutas Frescas", contacto: "Maritza Soto", telefono: "3156677889", email: "ventas@frutivercentral.com", categoriaSuministro: "Verduras & Vegetales", activo: true },
-  { id: 5, nombre: "Bebidas y Licores La 14", contacto: "Jorge Iván Restrepo", telefono: "3008765432", email: "distribucion@lalicorera14.com", categoriaSuministro: "Bebidas & Embotellados", activo: true },
-  { id: 6, nombre: "Salsas y Especias del Valle", contacto: "Diana Carolina Paz", telefono: "3123456789", email: "compras@salsasvalle.com", categoriaSuministro: "Salsas & Aliños", activo: true },
-  { id: 7, nombre: "Panificadora Central S.A.", contacto: "Roberto Gómez", telefono: "3145678901", email: "ventas@panificadoracentral.com", categoriaSuministro: "Panadería & Abarrotes", activo: true },
-  { id: 8, nombre: "Embutidos y Fiambres Premium", contacto: "Sandra Milena Ríos", telefono: "3187654321", email: "contacto@embutidospremium.co", categoriaSuministro: "Embutidos & Fiambres", activo: true },
-  { id: 9, nombre: "Aseo Total Institucional", contacto: "Luis Alberto Mora", telefono: "3219876543", email: "pedidos@aseototal.com", categoriaSuministro: "Abarrotes (Aseo)", activo: true },
-  { id: 10, nombre: "Postres y Dulces Caseros", contacto: "Marta Lucía Sánchez", telefono: "3176543210", email: "ventas@postrescaseros.com", categoriaSuministro: "Postres & Dulces", activo: true },
-  // Nuevos 5 Proveedores
-  { id: 11, nombre: "Pescados y Mariscos del Pacífico", contacto: "Hernán Cortés", telefono: "3112223344", email: "ventas@mariscospacifico.com", categoriaSuministro: "Carnes & Proteínas", activo: true },
-  { id: 12, nombre: "Granos y Cereales El Sol", contacto: "Inés Valencia", telefono: "3165556677", email: "pedidos@elsolgranos.com", categoriaSuministro: "Panadería & Abarrotes", activo: true },
-  { id: 13, nombre: "Café de Origen y Aromáticas", contacto: "Valentina Ríos", telefono: "3023334455", email: "compras@cafedeorigen.co", categoriaSuministro: "Bebidas & Embotellados", activo: true },
-  { id: 14, nombre: "Quesos Artesanales de la Sabana", contacto: "Pedro Nel Gómez", telefono: "3134445566", email: "ventas@lacteossabana.com", categoriaSuministro: "Lácteos & Quesos", activo: true },
-  { id: 15, nombre: "Distribuidora de Frutas Tropicales", contacto: "Gloria Patricia Paz", telefono: "3101112233", email: "contacto@frutastropicales.com", categoriaSuministro: "Frutas Frescas", activo: true }
-];
-
-const COMPRAS_INICIALES: CompraInsumo[] = [
-  { id: "1", id_compra: 1, id_proveedor: 1, id_insumo: 4, cantidad: 20, costoTotal: 560000, fecha: "2026-05-01", factura: "FAC-9012" },
-  { id: "2", id_compra: 2, id_proveedor: 2, id_insumo: 1, cantidad: 50, costoTotal: 125000, fecha: "2026-05-03", factura: "FAC-3456" },
-  { id: "3", id_compra: 3, id_proveedor: 3, id_insumo: 7, cantidad: 30, costoTotal: 36000, fecha: "2026-05-04", factura: "FAC-7881" },
-  { id: "4", id_compra: 4, id_proveedor: 4, id_insumo: 8, cantidad: 15, costoTotal: 67500, fecha: "2026-05-05", factura: "FAC-1102" },
-  { id: "5", id_compra: 5, id_proveedor: 5, id_insumo: 9, cantidad: 100, costoTotal: 380000, fecha: "2026-05-06", factura: "FAC-4432" },
-  { id: "6", id_compra: 6, id_proveedor: 6, id_insumo: 2, cantidad: 10, costoTotal: 85000, fecha: "2026-05-07", factura: "FAC-8899" }
+const CATEGORIAS_PROVEEDOR_PRESET = [
+  "Carnes & Proteínas",
+  "Panadería & Abarrotes",
+  "Lácteos & Quesos",
+  "Verduras & Vegetales",
+  "Bebidas & Embotellados",
+  "Salsas & Aliños",
+  "Frutas Frescas",
+  "Embutidos & Fiambres",
+  "Mantenimiento & Reparaciones",
+  "Servicios Públicos & Operativos",
+  "Otros Gastos Operativos",
 ];
 
 const FORM_PROVEEDOR_VACIO: FormProveedor = {
@@ -138,7 +96,9 @@ const FORM_PROVEEDOR_VACIO: FormProveedor = {
 };
 
 const FORM_COMPRA_VACIO: FormCompra = {
+  tipoGasto: "Insumo",
   id_proveedor: "1",
+  concepto: "",
   id_categoria: "1",
   id_insumo: "1",
   cantidad: "",
@@ -181,11 +141,12 @@ export default function ProveedoresCompras() {
   const [unidades, setUnidades] = useState<UnidadMedida[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
-  const [selectedCategoriaFiltro, setSelectedCategoriaFiltro] = useState<number | 'todas'>('todas');
+  const [selectedFiltro, setSelectedFiltro] = useState<string>("todas");
   const categoriasScroll = useDragScroll();
 
   const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
   const [mostrarModalCompra, setMostrarModalCompra] = useState(false);
+  const [cargandoFactura, setCargandoFactura] = useState(false);
 
   const [formProveedor, setFormProveedor] = useState<FormProveedor>(FORM_PROVEEDOR_VACIO);
   const [formCompra, setFormCompra] = useState<FormCompra>(FORM_COMPRA_VACIO);
@@ -212,27 +173,72 @@ export default function ProveedoresCompras() {
           contacto: p.contacto ?? "",
           telefono: p.telefono ?? "",
           email: p.correo ?? "",
-          categoriaSuministro: p.categoria_suministro ?? categoriasMap.get(p.id_categoria_ingrediente ?? -1) ?? "",
+          categoriaSuministro: p.categoria_suministro ?? categoriasMap.get(p.id_categoria_ingrediente ?? -1) ?? "General",
           activo: p.activo ?? true,
         }))
       );
 
-      const comprasMap = new Map((comprasData || []).map((c) => [c.id_compra, c]));
-      setCompras(
-        (detallesData || []).map((d) => {
-          const compra = comprasMap.get(d.id_compra);
-          return {
-            id: `${d.id_compra}-${d.id_ingrediente}`,
-            id_compra: d.id_compra,
-            id_proveedor: compra?.id_proveedor ?? 0,
-            id_insumo: d.id_ingrediente,
-            cantidad: Number(d.cantidad),
-            costoTotal: Number(d.cantidad) * Number(d.precio_aplicado),
-            fecha: (compra?.fecha ?? "").slice(0, 10),
-            factura: compra?.factura ?? "",
-          };
-        })
-      );
+      const detallesPorCompra = new Map<number, Array<{ id_compra: number; id_ingrediente: number; cantidad: number; precio_aplicado: number }>>();
+      for (const d of detallesData || []) {
+        const arr = detallesPorCompra.get(d.id_compra) || [];
+        arr.push(d);
+        detallesPorCompra.set(d.id_compra, arr);
+      }
+
+      const listaCompras: CompraInsumo[] = [];
+      for (const c of comprasData || []) {
+        const detalles = detallesPorCompra.get(c.id_compra);
+        const facturaStr = c.factura || "";
+        let tipo: TipoGasto = "Insumo";
+        let conceptoExtra = "";
+
+        if (facturaStr.includes("|")) {
+          const partes = facturaStr.split("|");
+          conceptoExtra = partes[1]?.trim() || "";
+        }
+
+        if (/mantenimiento|reparaci[oó]n|t[eé]cnico/i.test(facturaStr) || /mantenimiento/i.test(conceptoExtra)) {
+          tipo = "Mantenimiento";
+        } else if (/servicio|luz|agua|gas|energ[ií]a|internet|arriendo/i.test(facturaStr) || /servicio/i.test(conceptoExtra)) {
+          tipo = "Servicios";
+        } else if (!detalles || detalles.length === 0) {
+          tipo = conceptoExtra ? "Otros" : "Insumo";
+        }
+
+        const facturaCodigoLimpio = facturaStr.split("|")[0].trim() || `FAC-${String(c.id_compra).padStart(3, "0")}`;
+
+        if (detalles && detalles.length > 0) {
+          for (const d of detalles) {
+            listaCompras.push({
+              id: `${c.id_compra}-${d.id_ingrediente}`,
+              id_compra: c.id_compra,
+              id_proveedor: c.id_proveedor,
+              id_insumo: d.id_ingrediente,
+              tipoGasto: tipo,
+              concepto: conceptoExtra,
+              cantidad: Number(d.cantidad),
+              costoTotal: Number(d.cantidad) * Number(d.precio_aplicado),
+              fecha: (c.fecha || "").slice(0, 10),
+              factura: facturaCodigoLimpio,
+            });
+          }
+        } else {
+          // Gasto operativo sin inventario de ingredientes
+          listaCompras.push({
+            id: `compra-${c.id_compra}`,
+            id_compra: c.id_compra,
+            id_proveedor: c.id_proveedor,
+            id_insumo: undefined,
+            tipoGasto: tipo === "Insumo" ? "Otros" : tipo,
+            concepto: conceptoExtra || "Gasto Operativo",
+            cantidad: 1,
+            costoTotal: Number(c.total || 0),
+            fecha: (c.fecha || "").slice(0, 10),
+            factura: facturaCodigoLimpio,
+          });
+        }
+      }
+      setCompras(listaCompras);
 
       setInsumos(
         (insumosData || []).map((i) => ({
@@ -268,6 +274,14 @@ export default function ProveedoresCompras() {
     void cargarDatos();
   }, []);
 
+  const categoriasProveedorOpciones = useMemo(() => {
+    const set = new Set([
+      ...CATEGORIAS_PROVEEDOR_PRESET,
+      ...categorias.map((c) => c.nombre),
+    ]);
+    return Array.from(set);
+  }, [categorias]);
+
   const insumosFormFiltrados = useMemo(() => {
     const catId = Number(formCompra.id_categoria);
     return insumos.filter((i) => i.id_categoria === catId);
@@ -277,18 +291,57 @@ export default function ProveedoresCompras() {
     const q = busqueda.trim().toLowerCase();
     return compras.filter((c) => {
       const prov = proveedores.find((p) => p.id === c.id_proveedor);
-      const ins = insumos.find((i) => i.id === c.id_insumo);
+      const ins = c.id_insumo ? insumos.find((i) => i.id === c.id_insumo) : null;
 
-      const matchSearch = q === '' || 
-        (prov && prov.nombre.toLowerCase().includes(q)) || 
-        (ins && ins.nombre.toLowerCase().includes(q)) || 
-        c.factura.toLowerCase().includes(q);
+      const matchSearch =
+        q === "" ||
+        (prov && prov.nombre.toLowerCase().includes(q)) ||
+        (ins && ins.nombre.toLowerCase().includes(q)) ||
+        (c.concepto && c.concepto.toLowerCase().includes(q)) ||
+        c.factura.toLowerCase().includes(q) ||
+        c.tipoGasto.toLowerCase().includes(q);
 
-      const matchCat = selectedCategoriaFiltro === 'todas' || (ins && ins.id_categoria === selectedCategoriaFiltro);
+      let matchFilter = true;
+      if (selectedFiltro === "todas") {
+        matchFilter = true;
+      } else if (selectedFiltro.startsWith("tipo:")) {
+        const tipoReq = selectedFiltro.replace("tipo:", "");
+        matchFilter = c.tipoGasto === tipoReq;
+      } else if (selectedFiltro.startsWith("cat:")) {
+        const catIdReq = Number(selectedFiltro.replace("cat:", ""));
+        matchFilter = Boolean(ins && ins.id_categoria === catIdReq);
+      }
 
-      return matchSearch && matchCat;
+      return matchSearch && matchFilter;
     });
-  }, [compras, proveedores, insumos, busqueda, selectedCategoriaFiltro]);
+  }, [compras, proveedores, insumos, busqueda, selectedFiltro]);
+
+  const abrirModalCompra = async () => {
+    setErrorCompra("");
+    setCargandoFactura(true);
+    setMostrarModalCompra(true);
+
+    try {
+      const sigFactura = await ProveedoresServicio.obtenerSiguienteFactura();
+      setFormCompra((prev) => ({
+        ...FORM_COMPRA_VACIO,
+        id_proveedor: proveedores[0]?.id ? String(proveedores[0].id) : "1",
+        id_categoria: categorias[0]?.id ? String(categorias[0].id) : "1",
+        id_insumo: insumos[0]?.id ? String(insumos[0].id) : "1",
+        factura: sigFactura || "FAC-001",
+      }));
+    } catch {
+      setFormCompra((prev) => ({
+        ...FORM_COMPRA_VACIO,
+        id_proveedor: proveedores[0]?.id ? String(proveedores[0].id) : "1",
+        id_categoria: categorias[0]?.id ? String(categorias[0].id) : "1",
+        id_insumo: insumos[0]?.id ? String(insumos[0].id) : "1",
+        factura: "FAC-001",
+      }));
+    } finally {
+      setCargandoFactura(false);
+    }
+  };
 
   const guardarProveedor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -311,7 +364,7 @@ export default function ProveedoresCompras() {
         telefono: telefono || null,
         correo: email || null,
         id_categoria_ingrediente: categoria?.id ?? null,
-        categoria_suministro: categoria?.nombre ?? formProveedor.categoriaSuministro,
+        categoria_suministro: formProveedor.categoriaSuministro,
       });
       await cargarDatos();
       setMostrarModalProveedor(false);
@@ -325,51 +378,118 @@ export default function ProveedoresCompras() {
   const guardarCompra = async (e: React.FormEvent) => {
     e.preventDefault();
     const id_proveedor = Number(formCompra.id_proveedor);
-    const id_insumo = Number(formCompra.id_insumo);
-    const cantidad = Number(formCompra.cantidad);
     const costoTotal = Number(formCompra.costoTotal);
     const fecha = formCompra.fecha;
+    const tipo = formCompra.tipoGasto;
     const factura = formCompra.factura.trim();
 
-    if (Number.isNaN(cantidad) || cantidad <= 0) return setErrorCompra("Ingresa una cantidad válida mayor a 0.");
-    if (Number.isNaN(costoTotal) || costoTotal < 0) return setErrorCompra("Ingresa un costo total válido.");
-    if (!factura) return setErrorCompra("El número de factura o recibo es obligatorio.");
-    if (!id_insumo) return setErrorCompra("Debes seleccionar un insumo válido.");
-    if (!proveedores.some((p) => p.id === id_proveedor)) return setErrorCompra("Selecciona un proveedor válido.");
-    if (!insumos.some((i) => i.id === id_insumo)) return setErrorCompra("Selecciona un insumo válido.");
+    if (Number.isNaN(costoTotal) || costoTotal <= 0) {
+      return setErrorCompra("Ingresa un costo total válido mayor a $0.");
+    }
+    if (!proveedores.some((p) => p.id === id_proveedor)) {
+      return setErrorCompra("Selecciona un proveedor válido.");
+    }
 
-    try {
-      await ProveedoresServicio.crearCompra({
-        id_proveedor,
-        fecha,
-        estado: "RECIBIDA",
-        total: costoTotal,
-        factura,
-        detalles: [
-          {
-            id_ingrediente: id_insumo,
-            cantidad,
-            precio_aplicado: cantidad > 0 ? costoTotal / cantidad : 0,
-          },
-        ],
-      });
-      await cargarDatos();
-      setMostrarModalCompra(false);
-      setFormCompra(FORM_COMPRA_VACIO);
-      setErrorCompra("");
-    } catch (err: any) {
-      setErrorCompra(err?.message || "No se pudo registrar la compra en el backend.");
+    if (tipo === "Insumo") {
+      const id_insumo = Number(formCompra.id_insumo);
+      const cantidad = Number(formCompra.cantidad);
+
+      if (Number.isNaN(cantidad) || cantidad <= 0) return setErrorCompra("Ingresa una cantidad válida mayor a 0.");
+      if (!id_insumo || !insumos.some((i) => i.id === id_insumo)) return setErrorCompra("Debes seleccionar un insumo válido.");
+
+      try {
+        await ProveedoresServicio.crearCompra({
+          id_proveedor,
+          fecha,
+          estado: "RECIBIDA",
+          total: costoTotal,
+          factura: factura || null,
+          detalles: [
+            {
+              id_ingrediente: id_insumo,
+              cantidad,
+              precio_aplicado: cantidad > 0 ? costoTotal / cantidad : 0,
+            },
+          ],
+        });
+        await cargarDatos();
+        setMostrarModalCompra(false);
+        setFormCompra(FORM_COMPRA_VACIO);
+        setErrorCompra("");
+      } catch (err: any) {
+        setErrorCompra(err?.message || "No se pudo registrar la compra en el backend.");
+      }
+    } else {
+      // Mantenimiento, Servicios, u Otros Gastos Operativos
+      const concepto = formCompra.concepto.trim();
+      if (!concepto) {
+        return setErrorCompra("Ingresa la descripción o concepto del gasto (ej. Mantenimiento freidora, Pago recibo energía).");
+      }
+
+      const facturaFinal = factura ? `${factura} | [${tipo}] ${concepto}` : `[${tipo}] ${concepto}`;
+
+      try {
+        await ProveedoresServicio.crearCompra({
+          id_proveedor,
+          fecha,
+          estado: "RECIBIDA",
+          total: costoTotal,
+          factura: facturaFinal,
+          detalles: [],
+        });
+        await cargarDatos();
+        setMostrarModalCompra(false);
+        setFormCompra(FORM_COMPRA_VACIO);
+        setErrorCompra("");
+      } catch (err: any) {
+        setErrorCompra(err?.message || "No se pudo registrar el gasto en el backend.");
+      }
     }
   };
 
   const eliminarCompra = async (id: number) => {
-    if (window.confirm("¿Estás seguro de eliminar este registro de compra?")) {
+    if (window.confirm("¿Estás seguro de eliminar este registro de compra o gasto?")) {
       try {
         await ProveedoresServicio.eliminarCompra(id);
         await cargarDatos();
       } catch (err: any) {
         alert(err?.message || "No se pudo eliminar la compra en el backend.");
       }
+    }
+  };
+
+  // Identificación cromática sobria y profesional sin emojis
+  const renderBadgeTipo = (tipo: TipoGasto) => {
+    switch (tipo) {
+      case "Insumo":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+            Insumo
+          </span>
+        );
+      case "Mantenimiento":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+            Mantenimiento
+          </span>
+        );
+      case "Servicios":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>
+            Servicios
+          </span>
+        );
+      case "Otros":
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0"></span>
+            Otros Gastos
+          </span>
+        );
     }
   };
 
@@ -389,10 +509,12 @@ export default function ProveedoresCompras() {
                 <div className="flex items-center gap-2">
                   <h2 className="text-base sm:text-lg font-bold tracking-tight text-[#F4D6B0]">Proveedores & Compras</h2>
                   <span className="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded-full bg-[#3A506B]/40 text-[#5BC0DE] border border-[#5BC0DE]/30 font-mono font-medium">
-                    Gestión Comercial
+                    Gastos & Compras Operativas
                   </span>
                 </div>
-                <p className="hidden sm:block text-[11px] text-[#5BC0DE]/80">Control de gastos por proveedor, facturas y asociación directa con categorías de insumos</p>
+                <p className="hidden sm:block text-[11px] text-[#5BC0DE]/80">
+                  Control de compras de insumos, gastos de mantenimiento, servicios y facturación automática
+                </p>
               </div>
             </div>
 
@@ -405,17 +527,17 @@ export default function ProveedoresCompras() {
                 <svg className="w-3.5 h-3.5 text-[#5BC0DE]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
-                Proveedor
+                Nuevo Proveedor
               </button>
               <button
                 type="button"
-                onClick={() => setMostrarModalCompra(true)}
+                onClick={abrirModalCompra}
                 className="w-full md:w-auto justify-center bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] px-3 py-2 md:py-1.5 rounded-xl text-xs font-semibold transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                Registrar Compra
+                Registrar Compra / Gasto
               </button>
             </div>
           </div>
@@ -432,57 +554,92 @@ export default function ProveedoresCompras() {
               </span>
               <input
                 className="w-full bg-[#0B132B] border border-[#3A506B] rounded-xl pl-9 pr-3 py-2 text-base sm:text-xs text-[#F4D6B0] placeholder-[#5BC0DE]/50 focus:outline-none focus:border-[#5BC0DE]"
-                placeholder="Buscar por proveedor, insumo o factura..."
+                placeholder="Buscar por proveedor, insumo, concepto o factura..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
-            <div className="text-xs text-[#5BC0DE] font-medium shrink-0 self-end sm:self-auto">
-              Registros: <span className="text-[#F4D6B0] font-bold">{comprasFiltradas.length}</span>
+            <div className="text-xs text-[#5BC0DE] font-medium shrink-0 self-end sm:self-auto flex items-center gap-2">
+              <span>Registros:</span>
+              <span className="text-[#F4D6B0] font-bold bg-[#0B132B] px-2 py-0.5 rounded-lg border border-[#3A506B]">
+                {comprasFiltradas.length}
+              </span>
             </div>
           </div>
 
-          {/* Filtro horizontal de Categorías */}
+          {/* Filtro horizontal de Categorías y Tipos de Gasto con colores */}
           <div className="max-w-7xl mx-auto relative group">
-            <div 
+            <div
               ref={categoriasScroll.ref}
               {...categoriasScroll.props}
               className="flex items-center gap-1.5 overflow-x-auto pb-2 pt-0.5 cursor-grab active:cursor-grabbing select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:[scrollbar-width:thin] md:[&::-webkit-scrollbar]:block md:[&::-webkit-scrollbar]:h-1.5 md:[&::-webkit-scrollbar-thumb]:rounded-full md:[&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]"
             >
               <span className="text-[10px] sm:text-[11px] font-bold text-[#5BC0DE] uppercase shrink-0 flex items-center gap-1 mr-1">
-                Categorías:
+                Filtros:
               </span>
               <button
                 type="button"
-                onClick={() => setSelectedCategoriaFiltro('todas')}
+                onClick={() => setSelectedFiltro("todas")}
                 className={`px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold whitespace-nowrap transition-all border shrink-0 ${
-                  selectedCategoriaFiltro === 'todas'
-                    ? 'bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow'
-                    : 'bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]'
+                  selectedFiltro === "todas"
+                    ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow"
+                    : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]"
                 }`}
               >
-                Todas ({compras.length})
+                Todos ({compras.length})
               </button>
 
+              {/* Botones por Tipo de Gasto con indicadores de color */}
+              {[
+                { id: "tipo:Insumo", label: "Insumos", tipo: "Insumo", dotColor: "bg-emerald-400", activeColor: "border-emerald-400/60" },
+                { id: "tipo:Mantenimiento", label: "Mantenimiento", tipo: "Mantenimiento", dotColor: "bg-amber-400", activeColor: "border-amber-400/60" },
+                { id: "tipo:Servicios", label: "Servicios Públicos", tipo: "Servicios", dotColor: "bg-sky-400", activeColor: "border-sky-400/60" },
+                { id: "tipo:Otros", label: "Otros Gastos", tipo: "Otros", dotColor: "bg-purple-400", activeColor: "border-purple-400/60" },
+              ].map((f) => {
+                const count = compras.filter((c) => c.tipoGasto === f.tipo).length;
+                const isSelected = selectedFiltro === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setSelectedFiltro(f.id)}
+                    className={`px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5 shrink-0 ${
+                      isSelected
+                        ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow"
+                        : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]"
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${f.dotColor}`}></span>
+                    <span>{f.label}</span>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-[#1C2541] text-[#5BC0DE]" : "bg-[#1C2541] text-[#5BC0DE]/70"}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+
+              <span className="text-[#3A506B] mx-1">|</span>
+
+              {/* Categorías de Insumos */}
               {categorias.map((cat) => {
                 const count = compras.filter((c) => {
-                  const ins = insumos.find((i) => i.id === c.id_insumo);
+                  const ins = c.id_insumo ? insumos.find((i) => i.id === c.id_insumo) : null;
                   return ins && ins.id_categoria === cat.id;
                 }).length;
-                const isSelected = selectedCategoriaFiltro === cat.id;
+                const isSelected = selectedFiltro === `cat:${cat.id}`;
                 return (
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => setSelectedCategoriaFiltro(cat.id)}
+                    onClick={() => setSelectedFiltro(`cat:${cat.id}`)}
                     className={`px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5 shrink-0 ${
                       isSelected
-                        ? 'bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow'
-                        : 'bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]'
+                        ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow"
+                        : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]"
                     }`}
                   >
                     <span>{cat.nombre}</span>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-[#1C2541] text-[#5BC0DE]' : 'bg-[#1C2541] text-[#5BC0DE]/70'}`}>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-[#1C2541] text-[#5BC0DE]" : "bg-[#1C2541] text-[#5BC0DE]/70"}`}>
                       {count}
                     </span>
                   </button>
@@ -496,15 +653,15 @@ export default function ProveedoresCompras() {
       {/* Contenido Principal con Scroll */}
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] flex flex-col">
         <section className="bg-[#1C2541] border border-[#3A506B] rounded-xl sm:rounded-2xl shadow-xl flex-1 flex flex-col">
-          
           {/* VISTA ESCRITORIO: TABLA SUAVIZADA (FILAS FLOTANTES) */}
           <div className="hidden md:block overflow-x-auto w-full p-2">
             <table className="w-full text-left border-separate border-spacing-y-2">
               <thead className="sticky top-0 z-30 bg-[#1C2541]">
                 <tr className="text-[#5BC0DE] text-[11px] font-semibold uppercase tracking-wider">
                   <th className="py-3 px-4 bg-[#1C2541] first:rounded-l-xl">Fecha / Factura</th>
+                  <th className="py-3 px-4 bg-[#1C2541]">Tipo</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Proveedor</th>
-                  <th className="py-3 px-4 bg-[#1C2541]">Insumo Adquirido</th>
+                  <th className="py-3 px-4 bg-[#1C2541]">Insumo o Concepto de Gasto</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Categoría</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Cantidad</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Costo Total</th>
@@ -514,17 +671,17 @@ export default function ProveedoresCompras() {
               <tbody>
                 {comprasFiltradas.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-[#5BC0DE]/60 bg-[#0B132B] rounded-xl border border-[#3A506B]">
+                    <td colSpan={8} className="py-12 text-center text-[#5BC0DE]/60 bg-[#0B132B] rounded-xl border border-[#3A506B]">
                       <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
-                      {busqueda || selectedCategoriaFiltro !== 'todas' ? "Ninguna compra coincide con los filtros." : "Aún no hay compras registradas."}
+                      {busqueda || selectedFiltro !== "todas" ? "Ningún gasto o compra coincide con los filtros." : "Aún no hay compras ni gastos registrados."}
                     </td>
                   </tr>
                 ) : (
                   comprasFiltradas.map((c) => {
                     const prov = proveedores.find((p) => p.id === c.id_proveedor);
-                    const ins = insumos.find((i) => i.id === c.id_insumo);
+                    const ins = c.id_insumo ? insumos.find((i) => i.id === c.id_insumo) : null;
                     const uni = ins ? unidades.find((u) => u.id_unidad === ins.id_unidad) : null;
                     const cat = ins ? categorias.find((catId) => catId.id === ins.id_categoria) : null;
 
@@ -532,24 +689,42 @@ export default function ProveedoresCompras() {
                       <tr key={c.id} className="group">
                         <td className="py-3 px-4 bg-[#0B132B] border-y border-l border-[#3A506B]/60 rounded-l-xl group-hover:bg-[#152036] transition-all">
                           <div className="font-mono text-xs text-[#F4D6B0] font-semibold">{c.fecha}</div>
-                          <span className="text-[10px] font-mono text-[#5BC0DE]">{c.factura}</span>
+                          <span className="text-[10px] font-mono text-[#5BC0DE] font-medium">{c.factura}</span>
                         </td>
                         <td className="py-3 px-4 bg-[#0B132B] border-y border-[#3A506B]/60 group-hover:bg-[#152036] transition-all">
-                          <div className="font-semibold text-[#F4D6B0] text-xs">{prov ? prov.nombre : "Desconocido"}</div>
-                          <span className="text-[10px] text-[#5BC0DE]">{prov ? prov.telefono : ""}</span>
+                          {renderBadgeTipo(c.tipoGasto)}
                         </td>
                         <td className="py-3 px-4 bg-[#0B132B] border-y border-[#3A506B]/60 group-hover:bg-[#152036] transition-all">
-                          <div className="text-xs font-semibold text-[#F4D6B0]">{ins ? ins.nombre : "Eliminado"}</div>
-                          {ins?.codigo && <span className="text-[10px] font-mono text-[#5BC0DE]">{ins.codigo}</span>}
+                          <div className="font-semibold text-[#F4D6B0] text-xs">{prov ? prov.nombre : "Proveedor #" + c.id_proveedor}</div>
+                          <span className="text-[10px] text-[#5BC0DE]">{prov ? prov.telefono || prov.email : ""}</span>
+                        </td>
+                        <td className="py-3 px-4 bg-[#0B132B] border-y border-[#3A506B]/60 group-hover:bg-[#152036] transition-all">
+                          {c.tipoGasto === "Insumo" ? (
+                            <>
+                              <div className="text-xs font-semibold text-[#F4D6B0]">{ins ? ins.nombre : "Insumo #" + c.id_insumo}</div>
+                              {ins?.codigo && <span className="text-[10px] font-mono text-[#5BC0DE]">{ins.codigo}</span>}
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-xs font-semibold text-[#F4D6B0]">{c.concepto || "Gasto Operativo"}</div>
+                              <span className="text-[10px] text-[#5BC0DE]/80">{c.tipoGasto}</span>
+                            </>
+                          )}
                         </td>
                         <td className="py-3 px-4 bg-[#0B132B] border-y border-[#3A506B]/60 group-hover:bg-[#152036] transition-all">
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1C2541] text-[#5BC0DE] border border-[#3A506B] whitespace-nowrap">
-                            {cat ? cat.nombre : "General"}
+                            {cat ? cat.nombre : c.tipoGasto === "Mantenimiento" ? "Mantenimiento" : c.tipoGasto === "Servicios" ? "Servicios Públicos" : "General"}
                           </span>
                         </td>
                         <td className="py-3 px-4 bg-[#0B132B] border-y border-[#3A506B]/60 group-hover:bg-[#152036] transition-all">
                           <div className="font-mono text-xs text-[#F4D6B0] font-bold">
-                            {c.cantidad} <span className="lowercase text-[#5BC0DE] font-normal">{uni ? uni.abreviatura : "ud"}</span>
+                            {c.tipoGasto === "Insumo" ? (
+                              <>
+                                {c.cantidad} <span className="lowercase text-[#5BC0DE] font-normal">{uni ? uni.abreviatura : "ud"}</span>
+                              </>
+                            ) : (
+                              <span className="text-[#5BC0DE] font-normal text-[11px]">1 servicio</span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3 px-4 bg-[#0B132B] border-y border-[#3A506B]/60 group-hover:bg-[#152036] transition-all">
@@ -584,39 +759,50 @@ export default function ProveedoresCompras() {
                 <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-                No se encontraron compras.
+                No se encontraron compras ni gastos.
               </div>
             ) : (
               comprasFiltradas.map((c) => {
                 const prov = proveedores.find((p) => p.id === c.id_proveedor);
-                const ins = insumos.find((i) => i.id === c.id_insumo);
+                const ins = c.id_insumo ? insumos.find((i) => i.id === c.id_insumo) : null;
                 const uni = ins ? unidades.find((u) => u.id_unidad === ins.id_unidad) : null;
                 const cat = ins ? categorias.find((catId) => catId.id === ins.id_categoria) : null;
 
                 return (
                   <div key={c.id} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1.5 shadow-sm active:scale-[0.99] transition-transform">
-                    {/* Cabecera: Factura y Fecha */}
+                    {/* Cabecera: Factura, Tipo y Monto */}
                     <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0 pr-1">
-                        <span className="block font-mono font-bold text-xs text-[#5BC0DE] truncate">{c.factura}</span>
-                        <span className="block text-[10px] text-[#F4D6B0]/70 mt-0.5">{c.fecha}</span>
+                      <div className="min-w-0 pr-1 flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-xs text-[#5BC0DE] truncate">{c.factura}</span>
+                          {renderBadgeTipo(c.tipoGasto)}
+                        </div>
+                        <span className="text-[10px] text-[#F4D6B0]/70">{c.fecha}</span>
                       </div>
-                      <span className="shrink-0 font-mono font-bold text-emerald-400 text-sm">${c.costoTotal.toLocaleString()}</span>
+                      <span className="shrink-0 font-mono font-bold text-emerald-400 text-sm">
+                        ${c.costoTotal.toLocaleString()}
+                      </span>
                     </div>
 
-                    {/* Proveedor e Insumo */}
+                    {/* Proveedor e Insumo / Concepto */}
                     <div className="mt-1 border-t border-[#3A506B]/50 pt-1.5">
                       <p className="text-[10px] text-[#5BC0DE] font-semibold">Proveedor:</p>
-                      <p className="text-[11px] text-[#F4D6B0] font-medium truncate">{prov ? prov.nombre : "Desconocido"}</p>
-                      
-                      <p className="text-[10px] text-[#5BC0DE] font-semibold mt-1">Insumo:</p>
-                      <p className="text-[11px] text-[#F4D6B0] font-medium truncate">{ins ? ins.nombre : "Eliminado"} ({c.cantidad} {uni?.abreviatura || 'ud'})</p>
+                      <p className="text-[11px] text-[#F4D6B0] font-medium truncate">{prov ? prov.nombre : "Proveedor #" + c.id_proveedor}</p>
+
+                      <p className="text-[10px] text-[#5BC0DE] font-semibold mt-1">
+                        {c.tipoGasto === "Insumo" ? "Insumo Adquirido:" : "Concepto del Gasto:"}
+                      </p>
+                      <p className="text-[11px] text-[#F4D6B0] font-medium truncate">
+                        {c.tipoGasto === "Insumo"
+                          ? `${ins ? ins.nombre : "Insumo #" + c.id_insumo} (${c.cantidad} ${uni?.abreviatura || "ud"})`
+                          : c.concepto || "Gasto Operativo"}
+                      </p>
                     </div>
 
                     {/* Categoría y Acciones */}
                     <div className="flex items-center justify-between border-t border-[#3A506B]/50 pt-2 mt-1">
                       <span className="text-[9px] px-2 py-0.5 bg-[#1C2541] rounded-md text-[#5BC0DE] border border-[#3A506B]">
-                        {cat ? cat.nombre : 'General'}
+                        {cat ? cat.nombre : c.tipoGasto === "Mantenimiento" ? "Mantenimiento" : c.tipoGasto === "Servicios" ? "Servicios" : "General"}
                       </span>
                       <button
                         type="button"
@@ -633,7 +819,6 @@ export default function ProveedoresCompras() {
               })
             )}
           </div>
-
         </section>
       </main>
 
@@ -646,9 +831,13 @@ export default function ProveedoresCompras() {
                 <span className="w-2.5 h-2.5 rounded-full bg-[#5BC0DE]"></span>
                 Registrar Nuevo Proveedor
               </h3>
-              <button 
+              <button
                 type="button"
-                onClick={() => { setMostrarModalProveedor(false); setErrorProveedor(""); setFormProveedor(FORM_PROVEEDOR_VACIO); }}
+                onClick={() => {
+                  setMostrarModalProveedor(false);
+                  setErrorProveedor("");
+                  setFormProveedor(FORM_PROVEEDOR_VACIO);
+                }}
                 className="text-[#5BC0DE] hover:text-[#F4D6B0] transition text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center bg-[#0B132B] border border-[#3A506B]"
               >
                 ✕
@@ -665,7 +854,7 @@ export default function ProveedoresCompras() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Nombre del Proveedor *</label>
                   <input
-                    placeholder="Ej. Distribuidora de Alimentos SAS"
+                    placeholder="Ej. Distribuidora Cárnica o Técnico Electrodomésticos"
                     className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
                     value={formProveedor.nombre}
                     onChange={(e) => setFormProveedor({ ...formProveedor, nombre: e.target.value })}
@@ -691,15 +880,15 @@ export default function ProveedoresCompras() {
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Categoría Principal</label>
+                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Categoría de Suministro</label>
                     <select
                       className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
                       value={formProveedor.categoriaSuministro}
                       onChange={(e) => setFormProveedor({ ...formProveedor, categoriaSuministro: e.target.value })}
                     >
-                      {categorias.map((cat) => (
-                        <option key={cat.id} value={cat.nombre} className="bg-[#0B132B] text-[#F4D6B0]">
-                          {cat.nombre}
+                      {categoriasProveedorOpciones.map((cat) => (
+                        <option key={cat} value={cat} className="bg-[#0B132B] text-[#F4D6B0]">
+                          {cat}
                         </option>
                       ))}
                     </select>
@@ -721,7 +910,11 @@ export default function ProveedoresCompras() {
                 <button
                   type="button"
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#0B132B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs font-medium border border-[#3A506B]"
-                  onClick={() => { setMostrarModalProveedor(false); setErrorProveedor(""); setFormProveedor(FORM_PROVEEDOR_VACIO); }}
+                  onClick={() => {
+                    setMostrarModalProveedor(false);
+                    setErrorProveedor("");
+                    setFormProveedor(FORM_PROVEEDOR_VACIO);
+                  }}
                 >
                   Cancelar
                 </button>
@@ -737,18 +930,22 @@ export default function ProveedoresCompras() {
         </div>
       )}
 
-      {/* MODAL: Registrar Compra */}
+      {/* MODAL: Registrar Compra / Gasto (Identificado con colores, sin emojis) */}
       {mostrarModalCompra && (
         <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 pointer-events-auto">
-          <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl h-[100dvh] sm:h-auto sm:max-h-[85dvh] flex flex-col overflow-hidden">
+          <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl h-[100dvh] sm:h-auto sm:max-h-[90dvh] flex flex-col overflow-hidden">
             <div className="bg-[#0B132B] px-4 sm:px-6 py-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-3 border-b border-[#3A506B] flex justify-between items-center shrink-0">
               <h3 className="font-bold text-[#F4D6B0] flex items-center gap-2 text-sm sm:text-base">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#5BC0DE]"></span>
-                Registrar Compra de Insumo
+                Registrar Compra o Gasto Operativo
               </h3>
-              <button 
+              <button
                 type="button"
-                onClick={() => { setMostrarModalCompra(false); setErrorCompra(""); setFormCompra(FORM_COMPRA_VACIO); }}
+                onClick={() => {
+                  setMostrarModalCompra(false);
+                  setErrorCompra("");
+                  setFormCompra(FORM_COMPRA_VACIO);
+                }}
                 className="text-[#5BC0DE] hover:text-[#F4D6B0] transition text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center bg-[#0B132B] border border-[#3A506B]"
               >
                 ✕
@@ -762,9 +959,42 @@ export default function ProveedoresCompras() {
                     {errorCompra}
                   </div>
                 )}
-                
+
+                {/* Selector Tipo de Registro / Gasto con Colores Sobrios */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Proveedor *</label>
+                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Tipo de Registro *</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: "Insumo", label: "Insumo", desc: "Inventario", dotColor: "bg-emerald-400", activeBg: "bg-emerald-500/15 border-emerald-400 text-emerald-300" },
+                      { id: "Mantenimiento", label: "Mantenimiento", desc: "Equipos", dotColor: "bg-amber-400", activeBg: "bg-amber-500/15 border-amber-400 text-amber-300" },
+                      { id: "Servicios", label: "Servicios", desc: "Públicos", dotColor: "bg-sky-400", activeBg: "bg-sky-500/15 border-sky-400 text-sky-300" },
+                      { id: "Otros", label: "Otros Gastos", desc: "Operativos", dotColor: "bg-purple-400", activeBg: "bg-purple-500/15 border-purple-400 text-purple-300" },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setFormCompra({ ...formCompra, tipoGasto: t.id as TipoGasto })}
+                        className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                          formCompra.tipoGasto === t.id
+                            ? `${t.activeBg} font-bold shadow-md ring-1 ring-white/10`
+                            : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]/60"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${t.dotColor}`}></span>
+                          <span className="text-xs font-semibold">{t.label}</span>
+                        </div>
+                        <div className="text-[9px] opacity-75 font-medium">{t.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Proveedor / Prestador */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">
+                    {formCompra.tipoGasto === "Insumo" ? "Proveedor del Insumo *" : "Proveedor / Prestador del Servicio *"}
+                  </label>
                   <select
                     className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
                     value={formCompra.id_proveedor}
@@ -772,87 +1002,137 @@ export default function ProveedoresCompras() {
                   >
                     {proveedores.map((p) => (
                       <option key={p.id} value={p.id} className="bg-[#0B132B] text-[#F4D6B0]">
-                        {p.nombre}
+                        {p.nombre} {p.categoriaSuministro ? `(${p.categoriaSuministro})` : ""}
                       </option>
                     ))}
                   </select>
                 </div>
-                
+
+                {/* Campos para INSUMO (Stock) */}
+                {formCompra.tipoGasto === "Insumo" ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Categoría de Insumo *</label>
+                        <select
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                          value={formCompra.id_categoria}
+                          onChange={(e) => {
+                            const newCatId = e.target.value;
+                            const firstIns = insumos.find((i) => i.id_categoria === Number(newCatId));
+                            setFormCompra({
+                              ...formCompra,
+                              id_categoria: newCatId,
+                              id_insumo: firstIns ? String(firstIns.id) : "",
+                            });
+                          }}
+                        >
+                          {categorias.map((cat) => (
+                            <option key={cat.id} value={cat.id} className="bg-[#0B132B] text-[#F4D6B0]">
+                              {cat.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Insumo Adquirido *</label>
+                        <select
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                          value={formCompra.id_insumo}
+                          onChange={(e) => setFormCompra({ ...formCompra, id_insumo: e.target.value })}
+                        >
+                          {insumosFormFiltrados.length === 0 ? (
+                            <option value="" disabled className="bg-[#0B132B] text-[#F4D6B0]/50">
+                              No hay insumos en esta categoría
+                            </option>
+                          ) : (
+                            insumosFormFiltrados.map((i) => (
+                              <option key={i.id} value={i.id} className="bg-[#0B132B] text-[#F4D6B0]">
+                                {i.nombre} {i.codigo ? `(${i.codigo})` : ""}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Cantidad *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          placeholder="Ej. 15"
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
+                          value={formCompra.cantidad}
+                          onChange={(e) => setFormCompra({ ...formCompra, cantidad: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Costo Total ($) *</label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Ej. 120000"
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono text-emerald-400 font-bold"
+                          value={formCompra.costoTotal}
+                          onChange={(e) => setFormCompra({ ...formCompra, costoTotal: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Campos para MANTENIMIENTO / SERVICIOS / OTROS GASTOS */
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">
+                        Concepto / Descripción del Gasto *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={
+                          formCompra.tipoGasto === "Mantenimiento"
+                            ? "Ej. Mantenimiento preventivo freidora industrial y campana"
+                            : formCompra.tipoGasto === "Servicios"
+                              ? "Ej. Factura servicio de energía eléctrica mes de mayo"
+                              : "Ej. Suministros generales de limpieza y papelería"
+                        }
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                        value={formCompra.concepto}
+                        onChange={(e) => setFormCompra({ ...formCompra, concepto: e.target.value })}
+                      />
+                      <span className="text-[10px] text-[#5BC0DE]/70">
+                        Describe brevemente la labor, reparación o servicio cancelado.
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Valor Total Pagado ($) *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Ej. 250000"
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono text-emerald-400 font-bold"
+                        value={formCompra.costoTotal}
+                        onChange={(e) => setFormCompra({ ...formCompra, costoTotal: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-[#0B132B]/60 border border-[#3A506B]/50 text-[11px] text-[#5BC0DE]/90 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#5BC0DE] shrink-0"></span>
+                      <span>
+                        Este gasto se asentará en el historial financiero y reportes de gastos sin afectar las existencias del inventario culinario.
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* Fecha y Factura Automática */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Categoría de Insumo *</label>
-                    <select
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
-                      value={formCompra.id_categoria}
-                      onChange={(e) => {
-                        const newCatId = e.target.value;
-                        const firstIns = insumos.find(i => i.id_categoria === Number(newCatId));
-                        setFormCompra({ 
-                          ...formCompra, 
-                          id_categoria: newCatId, 
-                          id_insumo: firstIns ? String(firstIns.id) : "" 
-                        });
-                      }}
-                    >
-                      {categorias.map((cat) => (
-                        <option key={cat.id} value={cat.id} className="bg-[#0B132B] text-[#F4D6B0]">
-                          {cat.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Insumo Adquirido *</label>
-                    <select
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
-                      value={formCompra.id_insumo}
-                      onChange={(e) => setFormCompra({ ...formCompra, id_insumo: e.target.value })}
-                    >
-                      {insumosFormFiltrados.length === 0 ? (
-                        <option value="" disabled className="bg-[#0B132B] text-[#F4D6B0]/50">
-                          No hay insumos en esta categoría
-                        </option>
-                      ) : (
-                        insumosFormFiltrados.map((i) => (
-                          <option key={i.id} value={i.id} className="bg-[#0B132B] text-[#F4D6B0]">
-                            {i.nombre} {i.codigo ? `(${i.codigo})` : ""}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Cantidad *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      placeholder="Ej. 15"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
-                      value={formCompra.cantidad}
-                      onChange={(e) => setFormCompra({ ...formCompra, cantidad: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Costo Total ($) *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Ej. 120000"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
-                      value={formCompra.costoTotal}
-                      onChange={(e) => setFormCompra({ ...formCompra, costoTotal: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Fecha de Compra *</label>
+                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Fecha de Compra / Pago *</label>
                     <input
                       type="date"
                       className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
@@ -861,13 +1141,21 @@ export default function ProveedoresCompras() {
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Factura / Recibo *</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Factura / Recibo *</label>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#5BC0DE]/20 text-[#5BC0DE] border border-[#5BC0DE]/40 font-mono font-bold">
+                        {cargandoFactura ? "Generando..." : "Consecutivo Automático"}
+                      </span>
+                    </div>
                     <input
-                      placeholder="Ej. FAC-5542"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
+                      placeholder="Ej. FAC-027"
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono font-semibold"
                       value={formCompra.factura}
                       onChange={(e) => setFormCompra({ ...formCompra, factura: e.target.value })}
                     />
+                    <span className="text-[9px] text-[#5BC0DE]/60">
+                      Puedes conservar este número automático o cambiarlo por el de tu factura física.
+                    </span>
                   </div>
                 </div>
               </div>
@@ -876,7 +1164,11 @@ export default function ProveedoresCompras() {
                 <button
                   type="button"
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#0B132B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs font-medium border border-[#3A506B]"
-                  onClick={() => { setMostrarModalCompra(false); setErrorCompra(""); setFormCompra(FORM_COMPRA_VACIO); }}
+                  onClick={() => {
+                    setMostrarModalCompra(false);
+                    setErrorCompra("");
+                    setFormCompra(FORM_COMPRA_VACIO);
+                  }}
                 >
                   Cancelar
                 </button>
@@ -884,14 +1176,13 @@ export default function ProveedoresCompras() {
                   type="submit"
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-semibold text-xs transition shadow-lg"
                 >
-                  Guardar Compra
+                  {formCompra.tipoGasto === "Insumo" ? "Guardar Compra de Insumo" : "Registrar Gasto Operativo"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }

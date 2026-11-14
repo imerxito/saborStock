@@ -3,19 +3,27 @@ import {
   Users, Clock, Plus, Minus, CheckCircle2, X, Search, ChefHat, 
   LayoutGrid, Filter, ArrowRight, ArrowLeft, Trash2, 
   RotateCw, Settings, Edit, List, Printer, CreditCard, MessageSquare, Lock, DollarSign,
-  ShoppingBag, Sparkles
+  ShoppingBag, Sparkles, Building2, Utensils, Layers
 } from 'lucide-react';
 import { useAuth } from '../../contexto/AuthContexto';
 import { useComandas } from '../../contexto/ComandasContexto';
 import { MesaServicio, type SeccionBackend } from '../../servicios/MesaServicio';
+import { 
+  ConfiguracionServicio, 
+  type ConfiguracionNegocio, 
+  type ConfiguracionFacturacion, 
+  type ImpresoraFrontend 
+} from '../../servicios/ConfiguracionServicio';
 import type { MesaBackend } from '../../tipos/Comanda';
 import ConfiguracionMesas from './ConfiguracionMesas';
+import FormatoTicketTermico from '../../componentes/FormatoTicketTermico';
 
 export type CategoriaProducto = 'Platos Fuertes' | 'Comidas Rápidas' | 'Entradas' | 'Bebidas' | 'Postres';
 
 export interface Producto {
   id: string;
   idProducto?: number;
+  idCategoria?: number;
   nombre: string;
   precio: number;
   categoria: CategoriaProducto;
@@ -44,6 +52,8 @@ export interface VentaMesa {
   id: string;
   mesaId: string;
   numeroMesa: number;
+  idSeccion?: number;
+  seccionNombre?: string;
   cliente: string;
   meseroPrincipal: string;
   horaEstimada: string;
@@ -52,6 +62,16 @@ export interface VentaMesa {
   comandasTicket: ComandaTicket[];
   itemsConsolidados: ItemPedido[];
   totalVentaAcumulado: number;
+}
+
+export interface TicketAImprimir {
+  venta: VentaMesa;
+  comandaTicket?: ComandaTicket;
+  esTicketGlobal?: boolean;
+  tipo: 'precuenta' | 'comanda';
+  impresoraNombre?: string;
+  itemsFiltrados: ItemPedido[];
+  totalTicket: number;
 }
 
 export interface Mesa {
@@ -114,7 +134,12 @@ export default function Mesas() {
   const [notaAbiertaId, setNotaAbiertaId] = useState<string | null>(null);
 
   const [pedidosPagando, setPedidosPagando] = useState<Set<number>>(new Set());
-  const [comandaAImprimir, setComandaAImprimir] = useState<{ venta: VentaMesa; comandaTicket?: ComandaTicket; esTicketGlobal?: boolean } | null>(null);
+  const [ticketAImprimir, setTicketAImprimir] = useState<TicketAImprimir | null>(null);
+  const [negocioConfig, setNegocioConfig] = useState<ConfiguracionNegocio | null>(null);
+  const [facturacionConfig, setFacturacionConfig] = useState<ConfiguracionFacturacion | null>(null);
+  const [impresorasConfig, setImpresorasConfig] = useState<ImpresoraFrontend[]>([]);
+  const [modalImpresorasMesa, setModalImpresorasMesa] = useState<VentaMesa | null>(null);
+  const [rondaSeleccionadaId, setRondaSeleccionadaId] = useState<'ultima' | 'todas' | number>('ultima');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -138,26 +163,32 @@ export default function Mesas() {
   };
 
   useEffect(() => {
-    if (comandaAImprimir) {
+    if (ticketAImprimir) {
       const timer = setTimeout(() => {
         window.print();
-        setComandaAImprimir(null);
+        setTicketAImprimir(null);
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [comandaAImprimir]);
+  }, [ticketAImprimir]);
 
   const cargarDatosBackend = useCallback(async (silencioso = false) => {
     if (!silencioso) setCargando(true);
     try {
-      const [mesasData, prodsData, secsData] = await Promise.all([
+      const [mesasData, prodsData, secsData, negData, factData, impData] = await Promise.all([
         MesaServicio.listarMesas(),
         MesaServicio.obtenerProductos(),
-        MesaServicio.obtenerSecciones()
+        MesaServicio.obtenerSecciones(),
+        ConfiguracionServicio.obtenerNegocio().catch(() => null),
+        ConfiguracionServicio.obtenerFacturacion().catch(() => null),
+        ConfiguracionServicio.listarImpresoras().catch(() => []),
       ]);
 
       setMesasRaw(mesasData);
       setSeccionesRaw(secsData);
+      if (negData) setNegocioConfig(negData);
+      if (factData) setFacturacionConfig(factData);
+      if (impData) setImpresorasConfig(impData);
 
       setProductosMenu(prodsData.map((p) => {
         let cat: CategoriaProducto = 'Platos Fuertes';
@@ -166,7 +197,15 @@ export default function Mesas() {
         else if (nom.includes('arepa') || nom.includes('empanada') || nom.includes('patacón')) cat = 'Entradas';
         else if (nom.includes('jugo') || nom.includes('limonada') || nom.includes('cerveza') || nom.includes('gaseosa')) cat = 'Bebidas';
         else if (nom.includes('leches') || nom.includes('flan') || nom.includes('postre')) cat = 'Postres';
-        return { id: `p-${p.id_producto}`, idProducto: p.id_producto, nombre: p.nombre, precio: p.precio_venta, categoria: cat, descripcion: p.descripcion };
+        return { 
+          id: `p-${p.id_producto}`, 
+          idProducto: p.id_producto, 
+          idCategoria: p.id_categoria,
+          nombre: p.nombre, 
+          precio: p.precio_venta, 
+          categoria: cat, 
+          descripcion: p.descripcion 
+        };
       }));
     } catch (e) {
       console.warn('Error al cargar:', e);
@@ -227,8 +266,14 @@ export default function Mesas() {
         }
 
         const itemsComanda: ItemPedido[] = c.items.map((it) => {
-          const prodCatalogo = productosMenu.find(p => p.idProducto === it.idProducto || p.nombre === it.producto) || {
-            id: `p-${it.idProducto ?? 0}`, idProducto: it.idProducto, nombre: it.producto, precio: it.precio || 0, categoria: 'Platos Fuertes' as CategoriaProducto,
+          const matchCatalogo = productosMenu.find(p => p.idProducto === it.idProducto || p.nombre.toLowerCase() === it.producto.toLowerCase());
+          const prodCatalogo = matchCatalogo || {
+            id: `p-${it.idProducto ?? 0}`,
+            idProducto: it.idProducto,
+            idCategoria: it.idCategoria ?? undefined,
+            nombre: it.producto,
+            precio: it.precio || 0,
+            categoria: 'Platos Fuertes' as CategoriaProducto,
           };
           return { producto: prodCatalogo, cantidad: it.cantidad, notas: it.nota };
         });
@@ -276,6 +321,8 @@ export default function Mesas() {
           id: `VENTA-${m.numero}-${info.minTimestamp}`,
           mesaId: String(m.id),
           numeroMesa: m.numero,
+          idSeccion: m.idSeccion,
+          seccionNombre: m.seccionNombre || 'Salón Principal',
           cliente: info.cliente,
           meseroPrincipal: info.mesero,
           horaEstimada: info.hora,
@@ -417,11 +464,13 @@ export default function Mesas() {
       const notaComanda = notasMesa.trim();
 
       const idUsuarioActual = Number(usuario?.idUsuario ?? usuario?.id_usuario) || null;
-      await crear({
+      const itemsDeEstaTanda = [...carrito];
+
+      const comandaCreada = await crear({
         mesa: mesaSeleccionada.numero,
         idMesa: mesaSeleccionada.idBackend,
         idUsuario: idUsuarioActual,
-        items: carrito.map((item) => ({
+        items: itemsDeEstaTanda.map((item) => ({
           idProducto: item.producto.idProducto,
           producto: item.producto.nombre,
           cantidad: item.cantidad,
@@ -438,6 +487,17 @@ export default function Mesas() {
       await MesaServicio.actualizarMesa(mesaSeleccionada.idBackend, { estado: 'Ocupada' });
       await recargar();
       await cargarDatosBackend(true);
+
+      // Disparar impresión automática ÚNICAMENTE con los ítems ingresados en esta tanda
+      void imprimirComandasAutomaticas({
+        mesaNumero: mesaSeleccionada.numero,
+        seccionId: mesaSeleccionada.seccionId,
+        seccionNombre: mesaSeleccionada.seccion,
+        cliente: clienteObjetivo,
+        mesero: usuario?.nombre?.trim() || 'Sin asignar',
+        comandaId: comandaCreada?.id,
+        items: itemsDeEstaTanda,
+      });
 
       if (ventaEnEdicion) {
         const mesaActualizada = mesas.find(m => m.id === mesaSeleccionada.id);
@@ -514,8 +574,172 @@ export default function Mesas() {
     }
   };
 
+  const imprimirComandasAutomaticas = async (datos: {
+    mesaNumero: number;
+    seccionId?: number;
+    seccionNombre?: string;
+    cliente: string;
+    mesero: string;
+    comandaId?: number;
+    items: ItemPedido[];
+  }) => {
+    let imps = impresorasConfig.filter((i) => i.activa);
+    if (imps.length === 0) {
+      try {
+        const frescas = await ConfiguracionServicio.listarImpresoras();
+        imps = (frescas || []).filter((i) => i.activa);
+      } catch {}
+    }
+
+    const impresionesPendientes: {
+      impresora: ImpresoraFrontend;
+      items: ItemPedido[];
+    }[] = [];
+
+    for (const imp of imps) {
+      if (imp.seccionesIds && imp.seccionesIds.length > 0) {
+        if (datos.seccionId && !imp.seccionesIds.includes(datos.seccionId)) {
+          continue;
+        }
+      }
+
+      const itemsFiltrados = datos.items.filter((it) => {
+        if (!imp.categoriasIds || imp.categoriasIds.length === 0) return true;
+        const catId = it.producto.idCategoria;
+        return catId ? imp.categoriasIds.includes(catId) : true;
+      });
+
+      if (itemsFiltrados.length > 0) {
+        impresionesPendientes.push({ impresora: imp, items: itemsFiltrados });
+      }
+    }
+
+    if (impresionesPendientes.length === 0 && imps.length > 0) {
+      impresionesPendientes.push({ impresora: imps[0], items: datos.items });
+    }
+
+    const paraNavegador: {
+      impresora: ImpresoraFrontend;
+      items: ItemPedido[];
+    }[] = [];
+
+    for (const job of impresionesPendientes) {
+      let impresoSocket = false;
+      try {
+        const res = await ConfiguracionServicio.imprimirComandaDirecta(job.impresora.id, {
+          mesa: datos.mesaNumero,
+          seccion: datos.seccionNombre,
+          cliente: datos.cliente,
+          mesero: datos.mesero,
+          items: job.items.map((it) => ({
+            nombre: it.producto.nombre,
+            cantidad: it.cantidad,
+            nota: it.notas,
+          })),
+        });
+        if (res.success) {
+          impresoSocket = true;
+        }
+      } catch {}
+
+      if (!impresoSocket) {
+        paraNavegador.push(job);
+      }
+    }
+
+    if (paraNavegador.length > 0) {
+      const nombresImp = paraNavegador.map((p) => p.impresora.nombre).join(' + ');
+      const itemsComanda = paraNavegador.flatMap((p) => p.items);
+      const total = itemsComanda.reduce((sum, it) => sum + it.producto.precio * it.cantidad, 0);
+
+      setTicketAImprimir({
+        venta: {
+          id: `CMD-${datos.comandaId || Date.now()}`,
+          idMesa: mesaSeleccionada?.idBackend || 0,
+          numeroMesa: datos.mesaNumero,
+          idSeccion: datos.seccionId,
+          seccionNombre: datos.seccionNombre || 'General',
+          cliente: datos.cliente,
+          meseroPrincipal: datos.mesero,
+          personas: 1,
+          horaApertura: '',
+          comandasTicket: [],
+          itemsConsolidados: [],
+          totalVentaAcumulado: total,
+        },
+        tipo: 'comanda',
+        impresoraNombre: nombresImp || 'Cocina',
+        itemsFiltrados: itemsComanda,
+        totalTicket: total,
+      });
+    }
+  };
+
   const imprimirPrecuenta = (venta: VentaMesa) => {
-    setComandaAImprimir({ venta, esTicketGlobal: true });
+    setTicketAImprimir({
+      venta,
+      esTicketGlobal: true,
+      tipo: 'precuenta',
+      itemsFiltrados: venta.itemsConsolidados,
+      totalTicket: venta.totalVentaAcumulado,
+    });
+  };
+
+  const imprimirComandaParaImpresora = async (venta: VentaMesa, impresora: ImpresoraFrontend, itemsParaImprimir?: ItemPedido[]) => {
+    // 1. Verificar si la sección de la mesa está permitida por esta impresora
+    if (impresora.seccionesIds && impresora.seccionesIds.length > 0) {
+      if (venta.idSeccion && !impresora.seccionesIds.includes(venta.idSeccion)) {
+        alert(`La impresora "${impresora.nombre}" no atiende la sección "${venta.seccionNombre || 'esta sección'}".`);
+        return;
+      }
+    }
+
+    // 2. Filtrar items por las categorías de la impresora (usando la ronda específica si fue provista)
+    let baseItems = itemsParaImprimir && itemsParaImprimir.length > 0 ? itemsParaImprimir : venta.itemsConsolidados;
+    let items = baseItems;
+    if (impresora.categoriasIds && impresora.categoriasIds.length > 0) {
+      items = items.filter(it => {
+        const catId = it.producto.idCategoria;
+        return catId ? impresora.categoriasIds.includes(catId) : true;
+      });
+    }
+
+    if (items.length === 0) {
+      alert(`No hay productos de las categorías asignadas a "${impresora.nombre}" en esta comanda.`);
+      return;
+    }
+
+    // 3. Intentar imprimir directo por socket si es de Red (IP)
+    try {
+      const res = await ConfiguracionServicio.imprimirComandaDirecta(impresora.id, {
+        mesa: venta.numeroMesa,
+        seccion: venta.seccionNombre,
+        cliente: venta.cliente,
+        mesero: venta.meseroPrincipal,
+        items: items.map(it => ({
+          nombre: it.producto.nombre,
+          cantidad: it.cantidad,
+          nota: it.notas
+        }))
+      });
+      if (res.success) {
+        alert(`✓ Comanda enviada exitosamente a "${impresora.nombre}".`);
+        setModalImpresorasMesa(null);
+        return;
+      }
+    } catch {
+      // Continuar con impresión por diálogo del sistema
+    }
+
+    // Fallback con formato térmico estándar de 80mm
+    setTicketAImprimir({
+      venta,
+      tipo: 'comanda',
+      impresoraNombre: impresora.nombre,
+      itemsFiltrados: items,
+      totalTicket: items.reduce((sum, it) => sum + (it.producto.precio * it.cantidad), 0),
+    });
+    setModalImpresorasMesa(null);
   };
 
   const cantidadPorCategoria = useMemo(() => {
@@ -773,12 +997,23 @@ export default function Mesas() {
                               <Plus className="w-4 h-4" /> Agregar Productos 
                             </button>
 
-                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
                               <button 
                                 onClick={() => imprimirPrecuenta(venta)} 
                                 className="flex-1 sm:flex-none text-xs font-bold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] hover:bg-[#3A506B] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                               >
                                 <Printer className="w-4 h-4 text-[#5BC0DE]" /> Imprimir Pre-cuenta
+                              </button>
+
+                              <button 
+                                onClick={() => {
+                                  setRondaSeleccionadaId('ultima');
+                                  setModalImpresorasMesa(venta);
+                                }} 
+                                className="flex-1 sm:flex-none text-xs font-bold text-[#5BC0DE] bg-[#0B132B] border border-[#5BC0DE]/40 hover:bg-[#5BC0DE]/10 px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                                title="Imprimir comanda dirigida a impresoras según categorías y secciones"
+                              >
+                                <Utensils className="w-4 h-4 text-[#5BC0DE]" /> Comandas Cocina/Barra
                               </button>
 
                               {puedeLiberar && (
@@ -1106,47 +1341,215 @@ export default function Mesas() {
         )}
       </div>
 
-      {comandaAImprimir && (
-        <div className="hidden print:block absolute top-0 left-0 w-[80mm] bg-white text-black p-4 font-mono text-sm leading-tight">
-          <div className="text-center border-b border-black border-dashed pb-2 mb-2">
-            <h1 className="font-bold text-lg uppercase">Sabor&Stock</h1>
-            <p className="text-xs">PRE-CUENTA / FACTURA DE VENTA</p>
-          </div>
-          
-          <div className="mb-2 border-b border-black border-dashed pb-2 text-xs">
-            <div className="flex justify-between font-bold">
-              <span>MESA: {comandaAImprimir.venta.numeroMesa}</span>
-              <span>{new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-            </div>
-            <p>Cliente: {comandaAImprimir.venta.cliente}</p>
-            <p>Atiende: {comandaAImprimir.venta.meseroPrincipal}</p>
-          </div>
-
-          <div className="mb-2">
-            <div className="flex font-bold border-b border-black pb-1 mb-1 text-xs">
-              <span className="w-8">Cant</span>
-              <span className="flex-1">Producto</span>
-              <span className="w-16 text-right">Subtotal</span>
-            </div>
-            
-            {comandaAImprimir.venta.itemsConsolidados.map((item, idx) => (
-              <div key={idx} className="flex text-xs mb-1">
-                <span className="w-8">{item.cantidad}x</span>
-                <span className="flex-1 uppercase">{item.producto.nombre}</span>
-                <span className="w-16 text-right">${(item.producto.precio * item.cantidad).toLocaleString('es-CO')}</span>
+      {/* MODAL DE IMPRESIÓN POR IMPRESORAS (COCINA / BARRA / SECCIONES) */}
+      {modalImpresorasMesa && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-[#0B132B] px-4 py-3 border-b border-[#3A506B] flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-[#F4D6B0] text-sm flex items-center gap-2">
+                  <Printer className="w-4 h-4 text-[#5BC0DE]" />
+                  Comandas por Impresora • Mesa #{modalImpresorasMesa.numeroMesa}
+                </h3>
+                <p className="text-[10px] text-[#5BC0DE]">
+                  Sección: <span className="font-bold text-[#F4D6B0]">{modalImpresorasMesa.seccionNombre || 'General'}</span> • Cliente: {modalImpresorasMesa.cliente}
+                </p>
               </div>
-            ))}
-          </div>
+              <button 
+                onClick={() => setModalImpresorasMesa(null)}
+                className="text-[#5BC0DE] hover:text-[#F4D6B0] p-1.5 rounded-lg bg-[#1C2541] border border-[#3A506B]"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
-          <div className="border-t border-black border-dashed pt-2 mb-2 text-right">
-            <p className="font-bold text-sm">TOTAL A PAGAR: ${comandaAImprimir.venta.totalVentaAcumulado.toLocaleString('es-CO')}</p>
-          </div>
+            <div className="p-4 overflow-y-auto space-y-3 flex-1">
+              <p className="text-xs text-[#F4D6B0]/80 leading-relaxed">
+                Cada impresora recibe únicamente los ítems correspondientes a sus <strong>categorías configuradas</strong> y verifica que atienda la sección <strong>{modalImpresorasMesa.seccionNombre}</strong>.
+              </p>
 
-          <div className="text-center text-[10px] mt-4 border-t border-black border-dashed pt-2">
-            <p>Generado: {new Date().toLocaleString()}</p>
-            <p>*** SABOR & STOCK ***</p>
+              {/* Selector de tandas / rondas si la mesa tiene varias comandas */}
+              {modalImpresorasMesa.comandasTicket && modalImpresorasMesa.comandasTicket.length > 1 && (
+                <div className="bg-[#0B132B] p-2.5 rounded-xl border border-[#3A506B]/50 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-[#5BC0DE]">
+                    <span>Tanda a reimprimir:</span>
+                    <span className="text-[10px] text-gray-400 font-normal">
+                      {rondaSeleccionadaId === 'todas'
+                        ? 'Consolidado acumulado'
+                        : rondaSeleccionadaId === 'ultima'
+                        ? `Última adición (Tanda #${modalImpresorasMesa.comandasTicket.length})`
+                        : `Tanda seleccionada`}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setRondaSeleccionadaId('ultima')}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                        rondaSeleccionadaId === 'ultima'
+                          ? 'bg-[#5BC0DE] text-[#0B132B] shadow-sm'
+                          : 'bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B] hover:border-[#5BC0DE]'
+                      }`}
+                    >
+                      ⚡ Última adición (#{modalImpresorasMesa.comandasTicket.length})
+                    </button>
+                    {modalImpresorasMesa.comandasTicket.map((ticket, idx) => (
+                      <button
+                        key={ticket.id || idx}
+                        type="button"
+                        onClick={() => setRondaSeleccionadaId(ticket.comandaId || idx + 1)}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                          rondaSeleccionadaId === (ticket.comandaId || idx + 1)
+                            ? 'bg-[#5BC0DE] text-[#0B132B] shadow-sm'
+                            : 'bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B] hover:border-[#5BC0DE]'
+                        }`}
+                      >
+                        Tanda #{idx + 1} ({ticket.items.length})
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setRondaSeleccionadaId('todas')}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                        rondaSeleccionadaId === 'todas'
+                          ? 'bg-[#5BC0DE] text-[#0B132B] shadow-sm'
+                          : 'bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B] hover:border-[#5BC0DE]'
+                      }`}
+                    >
+                      📋 Consolidado Total ({modalImpresorasMesa.itemsConsolidados?.length || 0})
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {impresorasConfig.filter(i => i.activa).length === 0 ? (
+                <div className="p-6 text-center text-xs text-[#5BC0DE]/70 bg-[#0B132B] rounded-xl border border-[#3A506B]/50 space-y-1">
+                  <Printer className="w-6 h-6 mx-auto text-[#3A506B]" />
+                  <p>No hay impresoras activas configuradas.</p>
+                  <p className="text-[10px]">Ve a Configuración &gt; Impresoras para registrar tus impresoras de cocina y barra.</p>
+                </div>
+              ) : (
+                (() => {
+                  // Calcular los ítems base según la ronda seleccionada
+                  let itemsParaModal: ItemPedido[] = [];
+                  if (!modalImpresorasMesa.comandasTicket || modalImpresorasMesa.comandasTicket.length <= 1) {
+                    itemsParaModal = modalImpresorasMesa.itemsConsolidados || [];
+                  } else if (rondaSeleccionadaId === 'todas') {
+                    itemsParaModal = modalImpresorasMesa.itemsConsolidados || [];
+                  } else if (rondaSeleccionadaId === 'ultima') {
+                    const ultTicket = modalImpresorasMesa.comandasTicket[modalImpresorasMesa.comandasTicket.length - 1];
+                    itemsParaModal = ultTicket ? ultTicket.items : (modalImpresorasMesa.itemsConsolidados || []);
+                  } else {
+                    const ticketEncontrado = modalImpresorasMesa.comandasTicket.find(
+                      (t, idx) => (t.comandaId || idx + 1) === rondaSeleccionadaId
+                    );
+                    itemsParaModal = ticketEncontrado ? ticketEncontrado.items : (modalImpresorasMesa.itemsConsolidados || []);
+                  }
+
+                  return impresorasConfig.filter(i => i.activa).map(imp => {
+                    // Validar sección
+                    const atiendeSeccion = !imp.seccionesIds || imp.seccionesIds.length === 0 || 
+                      (modalImpresorasMesa.idSeccion && imp.seccionesIds.includes(modalImpresorasMesa.idSeccion));
+
+                    // Filtrar items por categoría
+                    const itemsFiltrados = itemsParaModal.filter(it => {
+                      if (!imp.categoriasIds || imp.categoriasIds.length === 0) return true;
+                      return it.producto.idCategoria ? imp.categoriasIds.includes(it.producto.idCategoria) : true;
+                    });
+
+                    return (
+                      <div 
+                        key={imp.id} 
+                        className={`p-3 rounded-xl border transition-all ${
+                          atiendeSeccion 
+                            ? 'bg-[#0B132B] border-[#3A506B] hover:border-[#5BC0DE]' 
+                            : 'bg-[#0B132B]/40 border-[#3A506B]/30 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Printer size={15} className={atiendeSeccion ? 'text-[#5BC0DE]' : 'text-gray-500'} />
+                              <h4 className="text-xs font-bold text-[#F4D6B0]">{imp.nombre}</h4>
+                              <span className="text-[9px] bg-[#3A506B]/40 text-[#5BC0DE] px-1.5 py-0.5 rounded font-mono">
+                                {imp.tipo}
+                              </span>
+                            </div>
+                            {!atiendeSeccion ? (
+                              <p className="text-[10px] text-[#E57373] mt-0.5 font-medium">
+                                No atiende la sección "{modalImpresorasMesa.seccionNombre}"
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-[#4ADE80] mt-0.5 font-medium">
+                                {itemsFiltrados.length} producto(s) asignados a esta impresora
+                              </p>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={!atiendeSeccion || itemsFiltrados.length === 0}
+                            onClick={() => imprimirComandaParaImpresora(modalImpresorasMesa, imp, itemsFiltrados)}
+                            className="px-3 py-1.5 bg-[#5BC0DE] hover:bg-[#4CA8C4] disabled:opacity-30 disabled:hover:bg-[#5BC0DE] text-[#0B132B] text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all"
+                          >
+                            <Printer size={13} /> Imprimir Comanda
+                          </button>
+                        </div>
+
+                        {/* Lista resumida de platos a imprimir */}
+                        {itemsFiltrados.length > 0 && atiendeSeccion && (
+                          <div className="bg-[#1C2541] rounded-lg p-2 border border-[#3A506B]/40 space-y-1">
+                            {itemsFiltrados.map((it, idx) => (
+                              <div key={idx} className="flex justify-between text-[11px] text-[#F4D6B0]">
+                                <span>{it.cantidad}x {it.producto.nombre}</span>
+                                <span className="text-[#5BC0DE] font-semibold">${(it.producto.precio * it.cantidad).toLocaleString('es-CO')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()
+              )}
+            </div>
+
+            <div className="p-3 bg-[#0B132B] border-t border-[#3A506B] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setModalImpresorasMesa(null)}
+                className="px-4 py-1.5 bg-[#3A506B] text-[#F4D6B0] text-xs font-bold rounded-xl hover:bg-[#3A506B]/80 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {/* PLANTILLA DE IMPRESIÓN FÍSICA ESC/POS (80mm) */}
+      {ticketAImprimir && (
+        <FormatoTicketTermico
+          tipo={ticketAImprimir.tipo}
+          negocio={negocioConfig}
+          facturacion={facturacionConfig}
+          titulo={ticketAImprimir.tipo === 'precuenta' ? 'PRE-CUENTA / DETALLE DE CONSUMO' : 'COMANDA DE DESPACHO'}
+          mesa={ticketAImprimir.venta.numeroMesa}
+          seccion={ticketAImprimir.venta.seccionNombre}
+          cliente={ticketAImprimir.venta.cliente}
+          mesero={ticketAImprimir.venta.meseroPrincipal}
+          nombreImpresora={ticketAImprimir.impresoraNombre}
+          items={ticketAImprimir.itemsFiltrados.map(it => ({
+            nombre: it.producto.nombre,
+            cantidad: it.cantidad,
+            precioUnitario: it.producto.precio,
+            subtotal: it.producto.precio * it.cantidad,
+            nota: it.notas,
+          }))}
+          subtotal={ticketAImprimir.totalTicket}
+          total={ticketAImprimir.totalTicket}
+          mensajePie="¡Gracias por su visita!"
+        />
       )}
     </>
   );

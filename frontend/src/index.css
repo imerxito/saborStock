@@ -35,3 +35,70 @@ button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ========================================================
+   ESTILOS DE IMPRESIÓN TÉRMICA ESC/POS (80mm / 58mm)
+   Garantiza que NUNCA se imprima una "captura de pantalla"
+   del sistema, sino únicamente el formato de ticket térmico.
+======================================================== */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0mm !important;
+  }
+
+  html,
+  body {
+    width: 80mm !important;
+    min-width: 80mm !important;
+    max-width: 80mm !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #root {
+    width: 80mm !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    position: static !important;
+    background: #ffffff !important;
+  }
+
+  /* Ocultar toda la interfaz visual de la pantalla */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Mostrar exclusivamente el contenedor del ticket térmico */
+  #ticket-impresion-pos,
+  #ticket-impresion-pos * {
+    visibility: visible !important;
+  }
+
+  #ticket-impresion-pos {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 78mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 6px 8px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', Courier, monospace, monospace !important;
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    z-index: 9999999 !important;
+  }
+}

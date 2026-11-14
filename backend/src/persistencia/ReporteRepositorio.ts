@@ -5,9 +5,7 @@ import {
     CrearReporte,
     ReporteRow,
     ResumenDiario,
-    ResumenDiarioRow,
     StockIngrediente,
-    StockIngredienteRow,
     TipoReporte
 } from "../modelos/Reporte.js";
 
@@ -22,73 +20,99 @@ function mapearReporteRow(row: ReporteRow): Reporte {
     };
 }
 
-function mapearResumenRow(row: ResumenDiarioRow): ResumenDiario {
-    return {
-        dia: row.dia,
-        id_ingrediente: row.id_ingrediente,
-        ingrediente: row.ingrediente,
-        unidad: row.unidad,
-        entradas: Number(row.entradas),
-        salidas: Number(row.salidas),
-        ajustes: Number(row.ajustes),
-        costo_salidas: Number(row.costo_salidas)
-    };
-}
-
-function mapearStockRow(row: StockIngredienteRow): StockIngrediente {
-    return {
-        id_ingrediente: row.id_ingrediente,
-        codigo: row.codigo,
-        nombre: row.nombre,
-        unidad: row.unidad,
-        stock: Number(row.stock),
-        stock_minimo: Number(row.stock_minimo),
-        precio_referencia: Number(row.precio_referencia),
-        bajo_minimo: row.bajo_minimo,
-        faltante: Number(row.faltante)
-    };
-}
-
 export class ReporteRepositorio {
 
-    // Movimientos agrupados por día e ingrediente (vista v_resumen_diario)
+    // Movimientos agrupados por día e ingrediente
     async resumenPorRango(
         fechaInicio: string,
         fechaFin: string
     ): Promise<ResumenDiario[]> {
         const { data, error } = await supabase
-            .from("v_resumen_diario")
-            .select("*")
-            .gte("dia", fechaInicio)
-            .lte("dia", fechaFin)
-            .order("dia", { ascending: true })
-            .order("ingrediente", { ascending: true });
+            .from("movimiento_inventario")
+            .select("*, ingrediente:id_ingrediente(nombre, precio_referencia, id_unidad, unidad_medida:id_unidad(abreviatura))")
+            .gte("fecha", `${fechaInicio}T00:00:00`)
+            .lte("fecha", `${fechaFin}T23:59:59`)
+            .order("fecha", { ascending: true });
 
         if (error) {
-            throw new Error(`Error al obtener el resumen: ${error.message}`);
+            console.warn("Aviso al consultar movimiento_inventario:", error.message);
+            return [];
         }
 
-        return (data as ResumenDiarioRow[]).map(mapearResumenRow);
+        const mapa = new Map<string, ResumenDiario>();
+        for (const m of data || []) {
+            const dia = (m.fecha || "").slice(0, 10) || fechaInicio;
+            const idIng = Number(m.id_ingrediente);
+            const clave = `${dia}_${idIng}`;
+            const nombreIng = m.ingrediente?.nombre || `Insumo #${idIng}`;
+            const unidad = m.ingrediente?.unidad_medida?.abreviatura || "ud";
+            const precioRef = Number(m.ingrediente?.precio_referencia || 0);
+            const cant = Number(m.cantidad || 0);
+            const tipo = String(m.tipo || "").toUpperCase();
+
+            let item = mapa.get(clave);
+            if (!item) {
+                item = {
+                    dia,
+                    id_ingrediente: idIng,
+                    ingrediente: nombreIng,
+                    unidad,
+                    entradas: 0,
+                    salidas: 0,
+                    ajustes: 0,
+                    costo_salidas: 0,
+                };
+                mapa.set(clave, item);
+            }
+
+            if (tipo === "ENTRADA" || tipo === "INGRESO") {
+                item.entradas += cant;
+            } else if (tipo === "SALIDA" || tipo === "EGRESO") {
+                item.salidas += cant;
+                item.costo_salidas += cant * precioRef;
+            } else {
+                item.ajustes += cant;
+            }
+        }
+
+        return [...mapa.values()];
     }
 
-    // Stock actual de los ingredientes activos (vista v_stock_ingrediente)
+    // Stock actual de los ingredientes activos
     async stock(soloBajoMinimo = false): Promise<StockIngrediente[]> {
-        let consulta = supabase
-            .from("v_stock_ingrediente")
-            .select("*")
+        const { data, error } = await supabase
+            .from("ingrediente")
+            .select("*, unidad_medida:id_unidad(abreviatura, nombre)")
+            .eq("activo", true)
             .order("nombre", { ascending: true });
 
-        if (soloBajoMinimo) {
-            consulta = consulta.eq("bajo_minimo", true);
-        }
-
-        const { data, error } = await consulta;
-
         if (error) {
-            throw new Error(`Error al obtener el stock: ${error.message}`);
+            console.warn("Aviso al consultar ingrediente:", error.message);
+            return [];
         }
 
-        return (data as StockIngredienteRow[]).map(mapearStockRow);
+        const lista: StockIngrediente[] = (data || []).map((row: any) => {
+            const stock = Number(row.stock || 0);
+            const stockMin = Number(row.stock_minimo || 0);
+            const bajo = stock <= stockMin;
+            return {
+                id_ingrediente: row.id_ingrediente,
+                codigo: row.codigo || `ING-${row.id_ingrediente}`,
+                nombre: row.nombre,
+                unidad: row.unidad_medida?.abreviatura || "ud",
+                stock,
+                stock_minimo: stockMin,
+                precio_referencia: Number(row.precio_referencia || 0),
+                bajo_minimo: bajo,
+                faltante: bajo ? Math.max(0, stockMin - stock) : 0,
+            };
+        });
+
+        if (soloBajoMinimo) {
+            return lista.filter(i => i.bajo_minimo);
+        }
+
+        return lista;
     }
 
     async crear(datos: CrearReporte): Promise<Reporte> {

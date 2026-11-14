@@ -27,6 +27,8 @@ import VentaRutas from "./rutas/Venta.rutas.js";
 import IaRutas from "./rutas/Ia.rutas.js";
 import CategoriaIngredienteRutas from "./rutas/CategoriaIngrediente.rutas.js";
 import ComponenteComboRutas from "./rutas/ComponenteCombo.rutas.js";
+import configuracionRutas from "./rutas/Configuracion.rutas.js";
+import nominaRutas from "./rutas/Nomina.rutas.js";
 
 const app = express();
 
@@ -75,6 +77,8 @@ app.use("/api/reportes", reporteRutas);
 app.use("/api/proveedores", ProveedorRutas);
 app.use("/api/categorias-ingrediente", CategoriaIngredienteRutas);
 app.use("/api/componentes-combo", ComponenteComboRutas);
+app.use("/api/configuracion", configuracionRutas);
+app.use("/api/nomina", nominaRutas);
 app.use(errorMiddleware);
 
 export default app;

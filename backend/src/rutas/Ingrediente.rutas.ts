@@ -8,6 +8,11 @@ router.get("/", (req, res) =>
     ingredienteControlador.listar(req, res)
 );
 
+// Ruta para obtener el siguiente código disponible (antes de /:id para no colisionar)
+router.get("/siguiente-codigo", (req, res) =>
+    ingredienteControlador.siguienteCodigo(req, res)
+);
+
 router.get("/:id", (req, res) =>
     ingredienteControlador.obtenerPorId(req, res)
 );

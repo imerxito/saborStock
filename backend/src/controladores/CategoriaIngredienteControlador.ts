@@ -80,4 +80,19 @@ export class CategoriaIngredienteControlador {
             res.status(mensaje === "La categoría de insumo no existe" ? 404 : 500).json({ mensaje });
         }
     }
+
+    async eliminar(req: Request<{ id: string }>, res: Response): Promise<void> {
+        try {
+            const id = Number(req.params.id);
+            if (!Number.isInteger(id) || id <= 0) {
+                res.status(400).json({ mensaje: "ID inválido" });
+                return;
+            }
+            await servicio.eliminar(id);
+            res.status(200).json({ mensaje: "Categoría eliminada" });
+        } catch (error: any) {
+            const mensaje = error instanceof Error ? error.message : "Error al eliminar la categoría";
+            res.status(mensaje === "La categoría de insumo no existe" ? 404 : 500).json({ mensaje });
+        }
+    }
 }

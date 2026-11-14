@@ -7,6 +7,7 @@ export type { EstadoComanda };
 export interface ItemComandaDetalle {
   id: number;
   idProducto: number;
+  idCategoria?: number | null;
   nombreProducto: string;
   precio?: number;
   cantidad: number;

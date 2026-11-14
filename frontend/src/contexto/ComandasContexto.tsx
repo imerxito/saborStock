@@ -19,6 +19,7 @@ interface ComandasValor {
     crear: (nueva: NuevaComanda) => Promise<Comanda>;
     cambiarEstado: (id: number, estado: EstadoComanda) => Promise<void>;
     anular: (id: number) => Promise<void>;
+    eliminar: (id: number) => Promise<void>;
 }
 
 const ComandasContexto = createContext<ComandasValor | null>(null);
@@ -88,6 +89,11 @@ export function ComandasProvider({ children }: { children: ReactNode }) {
         setComandas((prev) => prev.filter((c) => c.id !== id));
     }, []);
 
+    const eliminar = useCallback(async (id: number) => {
+        await ComandaServicio.eliminarComanda(id);
+        setComandas((prev) => prev.filter((c) => c.id !== id));
+    }, []);
+
     const valor = useMemo<ComandasValor>(
         () => ({
             comandas,
@@ -97,8 +103,9 @@ export function ComandasProvider({ children }: { children: ReactNode }) {
             crear,
             cambiarEstado,
             anular,
+            eliminar,
         }),
-        [comandas, cargando, conectadoBackend, recargar, crear, cambiarEstado, anular]
+        [comandas, cargando, conectadoBackend, recargar, crear, cambiarEstado, anular, eliminar]
     );
 
     return <ComandasContexto.Provider value={valor}>{children}</ComandasContexto.Provider>;

@@ -41,4 +41,8 @@ export class ComandaServicio {
         await this.comandaRepo.actualizarComanda(id, cambios);
         return this.obtenerPorId(id);
     }
+
+    async eliminar(id: number): Promise<void> {
+        await this.comandaRepo.eliminarComanda(id);
+    }
 }

@@ -62,6 +62,41 @@ export class TurnoCajaRepositorio {
     }
 
     async cerrar(id: number, datos: CerrarTurno): Promise<TurnoCaja> {
+        // Obtenemos los movimientos del turno para calcular totales
+        const { data: movs } = await supabase
+            .from("historial_caja")
+            .select("*")
+            .eq("id_turno_caja", id);
+
+        const { data: turnoPrevio } = await supabase
+            .from("turno_caja")
+            .select("*")
+            .eq("id_turno_caja", id)
+            .maybeSingle();
+
+        let ventasEfectivo = 0;
+        let ventasTarjeta = 0;
+        let ventasTransferencia = 0;
+        let egresosTotales = 0;
+
+        for (const m of (movs || [])) {
+            const monto = Number(m.monto || 0);
+            const tipo = (m.tipo_pago || "").toLowerCase();
+            const metodo = (m.metodo_pago || "").toLowerCase();
+            if (tipo === "egreso") {
+                egresosTotales += monto;
+            } else {
+                if (metodo.includes("tarjeta")) ventasTarjeta += monto;
+                else if (metodo.includes("transf")) ventasTransferencia += monto;
+                else ventasEfectivo += monto;
+            }
+        }
+
+        const totalGenerado = ventasEfectivo + ventasTarjeta + ventasTransferencia;
+        const baseInicial = Number(turnoPrevio?.monto_inicial || 0);
+        const cierreEstimado = baseInicial + totalGenerado - egresosTotales;
+        const diferencia = Number(datos.montoFinal) - cierreEstimado;
+
         const { data, error } = await supabase
             .from("turno_caja")
             .update({
@@ -69,6 +104,12 @@ export class TurnoCajaRepositorio {
                 monto_final: datos.montoFinal,
                 fecha_cierre: new Date().toISOString(),
                 estado: EstadoTurno.Cerrado,
+                ventas_efectivo: ventasEfectivo,
+                ventas_tarjeta: ventasTarjeta,
+                ventas_transferencia: ventasTransferencia,
+                total_generado: totalGenerado,
+                egresos_totales: egresosTotales,
+                diferencia: diferencia,
             })
             .eq("id_turno_caja", id)
             .select()

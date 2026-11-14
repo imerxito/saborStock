@@ -1,5 +1,5 @@
 // persistencia/UsuarioRepositorio.ts
-import { supabase, supabaseAdmin } from "../configuracion/Supabase.js"; // 👈 AÑADIDO supabaseAdmin
+import { supabase, supabaseAdmin } from "../configuracion/Supabase.js";
 import { RolUsuario } from "../modelos/RolUsuario.js";
 import { Usuario, CrearUsuario, ActualizarUsuario, UsuarioRow } from "../modelos/Usuario.js";
 
@@ -20,43 +20,50 @@ function mapaearUsuarioRow(row: UsuarioRow): Usuario {
 
 export class UsuarioRepositorio {
     async listar(): Promise<Usuario[]> {
-        const { data, error } = await supabase.from("usuario").select("*");
+        const { data, error } = await supabase.from("usuario").select("*").order("id_usuario", { ascending: true });
         if (error) throw new Error(`Error al listar usuarios: ${error.message}`);
         return (data as UsuarioRow[]).map(mapaearUsuarioRow);
     }
 
-    async obtenerPorId(authId: string): Promise<Usuario | null> {
-        const { data, error } = await supabase
-            .from("usuario").select("*").eq("auth_id", authId).single();
+    async obtenerPorId(id: string): Promise<Usuario | null> {
+        let query = supabase.from("usuario").select("*");
+        if (id.includes("-")) {
+            query = query.eq("auth_id", id);
+        } else if (!isNaN(Number(id))) {
+            query = query.eq("id_usuario", Number(id));
+        } else {
+            query = query.eq("auth_id", id);
+        }
+
+        const { data, error } = await query.maybeSingle();
         if (error) {
             if (error.code === "PGRST116") return null;
             throw new Error(`Error al obtener usuario: ${error.message}`);
         }
-        return mapaearUsuarioRow(data as UsuarioRow);
+        return data ? mapaearUsuarioRow(data as UsuarioRow) : null;
     }
 
     async obtenerPorCedula(cedula: string): Promise<Usuario | null> {
         const { data, error } = await supabase
-            .from("usuario").select("*").eq("cedula", cedula).single();
+            .from("usuario").select("*").eq("cedula", cedula).maybeSingle();
         if (error) {
             if (error.code === "PGRST116") return null;
             throw new Error(`Error al obtener usuario: ${error.message}`);
         }
-        return mapaearUsuarioRow(data as UsuarioRow);
+        return data ? mapaearUsuarioRow(data as UsuarioRow) : null;
     }
 
     async obtenerPorCorreo(correo: string): Promise<Usuario | null> {
         const { data, error } = await supabase
-            .from("usuario").select("*").eq("correo", correo).single();
+            .from("usuario").select("*").eq("correo", correo).maybeSingle();
         if (error) {
             if (error.code === "PGRST116") return null;
             throw new Error(`Error al obtener usuario: ${error.message}`);
         }
-        return mapaearUsuarioRow(data as UsuarioRow);
+        return data ? mapaearUsuarioRow(data as UsuarioRow) : null;
     }
 
     async crearUsuario(datos: CrearUsuario, authId: string): Promise<Usuario> {
-        // 👇 CAMBIO: supabaseAdmin en lugar de supabase (omite RLS)
         const { data, error } = await supabaseAdmin
             .from("usuario")
             .insert({
@@ -72,22 +79,33 @@ export class UsuarioRepositorio {
 
         if (error) {
             if (error.code === "23505")
-                throw new Error("Ya existe un usuario con ese correo o cedula");
+                throw new Error("Ya existe un usuario con ese correo o cédula");
             throw new Error(`Error al crear usuario: ${error.message}`);
         }
         return mapaearUsuarioRow(data as UsuarioRow);
     }
 
-    async actualizarUsuario(authId: string, cambios: ActualizarUsuario): Promise<void> {
+    async actualizarUsuario(id: string, cambios: ActualizarUsuario): Promise<void> {
         const campos: Record<string, unknown> = {};
         if (cambios.nombre !== undefined) campos.nombre = cambios.nombre;
         if (cambios.rol !== undefined) campos.rol = cambios.rol;
         if (cambios.activo !== undefined) campos.activo = cambios.activo;
+        if (cambios.cedula !== undefined) campos.cedula = cambios.cedula;
+        if (cambios.telefono !== undefined) campos.telefono = cambios.telefono;
+        if (cambios.correo !== undefined) campos.correo = cambios.correo;
 
         if (Object.keys(campos).length === 0) return;
 
-        const { error } = await supabase
-            .from("usuario").update(campos).eq("auth_id", authId);
+        let query = supabaseAdmin.from("usuario").update(campos);
+        if (id.includes("-")) {
+            query = query.eq("auth_id", id);
+        } else if (!isNaN(Number(id))) {
+            query = query.eq("id_usuario", Number(id));
+        } else {
+            query = query.eq("auth_id", id);
+        }
+
+        const { error } = await query;
         if (error) throw new Error(`Error al actualizar usuario: ${error.message}`);
     }
 
@@ -95,7 +113,7 @@ export class UsuarioRepositorio {
         const { count, error } = await supabase
             .from("usuario")
             .select("id_usuario", { count: "exact", head: true })
-            .eq("rol", RolUsuario.Dueno)
+            .in("rol", [RolUsuario.Dueno, "Dueño"])
             .eq("activo", true);
         if (error) throw new Error(`Error en el contador: ${error.message}`);
         return count ?? 0;

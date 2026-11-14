@@ -24,11 +24,17 @@ function mapearIngredienteRow(row: IngredienteRow): Ingrediente {
 
 export class IngredienteRepositorio {
 
-    async listar(): Promise<Ingrediente[]> {
-        const { data, error } = await supabase
+    async listar(soloActivos = true): Promise<Ingrediente[]> {
+        let consulta = supabase
             .from("ingrediente")
             .select("*")
             .order("id_ingrediente", { ascending: true });
+
+        if (soloActivos) {
+            consulta = consulta.eq("activo", true);
+        }
+
+        const { data, error } = await consulta;
 
         if (error) {
             throw new Error(`Error al listar ingredientes: ${error.message}`);
@@ -63,6 +69,9 @@ export class IngredienteRepositorio {
             .single();
 
         if (error) {
+            if (error.code === "23505" || error.message.includes("unique")) {
+                throw new Error(`El código "${datos.codigo}" ya está registrado en otro insumo.`);
+            }
             throw new Error(`Error al crear ingrediente: ${error.message}`);
         }
 
@@ -79,6 +88,9 @@ export class IngredienteRepositorio {
             .eq("id_ingrediente", id);
 
         if (error) {
+            if (error.code === "23505" || error.message.includes("unique")) {
+                throw new Error(`El código ya está registrado en otro insumo.`);
+            }
             throw new Error(`Error al actualizar ingrediente: ${error.message}`);
         }
     }

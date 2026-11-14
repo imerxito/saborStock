@@ -26,6 +26,9 @@ export interface ActualizarUsuario {
     nombre?: string;
     rol?: RolUsuario;
     activo?: boolean;
+    cedula?: string;
+    telefono?: string;
+    correo?: string;
 }
 
 export interface UsuarioRow {

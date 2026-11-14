@@ -64,4 +64,9 @@ export class CategoriaIngredienteServicio {
         await this.obtenerPorId(id);
         await this.repo.cambiarEstado(id, false);
     }
+
+    async eliminar(id: number): Promise<void> {
+        await this.obtenerPorId(id);
+        await this.repo.eliminar(id);
+    }
 }

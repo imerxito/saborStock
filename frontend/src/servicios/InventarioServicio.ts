@@ -33,8 +33,17 @@ export const InventarioServicio = {
         return await fetchJson<InsumoBackend[]>("/api/ingredientes");
     },
 
+    async obtenerSiguienteCodigo(): Promise<string> {
+        try {
+            const res = await fetchJson<{ codigo: string }>("/api/ingredientes/siguiente-codigo");
+            return res.codigo;
+        } catch {
+            return "";
+        }
+    },
+
     async crearInsumo(datos: {
-        codigo: string;
+        codigo?: string;
         nombre: string;
         id_unidad: number;
         id_categoria_ingrediente?: number | null;
@@ -84,6 +93,19 @@ export const InventarioServicio = {
         return await fetchJson<CategoriaIngredienteBackend>("/api/categorias-ingrediente", {
             method: "POST",
             body: JSON.stringify({ nombre }),
+        });
+    },
+
+    async actualizarCategoria(id: number, nombre: string): Promise<CategoriaIngredienteBackend> {
+        return await fetchJson<CategoriaIngredienteBackend>(`/api/categorias-ingrediente/${id}`, {
+            method: "PUT",
+            body: JSON.stringify({ nombre }),
+        });
+    },
+
+    async eliminarCategoria(id: number): Promise<void> {
+        await fetchJson<unknown>(`/api/categorias-ingrediente/${id}`, {
+            method: "DELETE",
         });
     },
 

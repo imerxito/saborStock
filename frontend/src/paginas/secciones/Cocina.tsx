@@ -20,11 +20,14 @@ import {
     Trash2,
     Users,
     RefreshCw,
+    Printer,
 } from "lucide-react";
 import { useComandas } from "../../contexto/ComandasContexto";
 import { useAuth } from "../../contexto/AuthContexto";
 import { CATEGORIAS, type CategoriaPlato, type Comanda } from "../../tipos/Comanda";
 import { formatoHora, minutosDesde } from "../../utilidades/Fechas";
+import FormatoTicketTermico from "../../componentes/FormatoTicketTermico";
+import { ConfiguracionServicio, type ConfiguracionNegocio } from "../../servicios/ConfiguracionServicio";
 
 type Sonido = "rasgar" | "click" | "restaurar";
 type FiltroCategoria = "TODOS" | CategoriaPlato;
@@ -120,7 +123,7 @@ function leerEliminadas(): Set<number> {
 }
 
 function Cocina() {
-    const { comandas, cambiarEstado, conectadoBackend, recargar } = useComandas();
+    const { comandas, cambiarEstado, conectadoBackend, recargar, eliminar } = useComandas();
     const { usuario } = useAuth();
     const ahora = useAhora();
 
@@ -149,8 +152,54 @@ function Cocina() {
     const [sonido, setSonido] = useState(true);
     const [resumenAbierto, setResumenAbierto] = useState(false);
     const [historialAbierto, setHistorialAbierto] = useState(false);
+    const [busquedaHistorial, setBusquedaHistorial] = useState("");
+    const [comandaAImprimir, setComandaAImprimir] = useState<Comanda | null>(null);
+    const [negocioConfig, setNegocioConfig] = useState<ConfiguracionNegocio | null>(null);
     const [categoria, setCategoria] = useState<FiltroCategoria>("TODOS");
     const sonar = useSonido(sonido);
+
+    useEffect(() => {
+        ConfiguracionServicio.obtenerNegocio().then(setNegocioConfig).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        if (comandaAImprimir) {
+            const timer = setTimeout(() => {
+                window.print();
+                setComandaAImprimir(null);
+            }, 150);
+            return () => clearTimeout(timer);
+        }
+    }, [comandaAImprimir]);
+
+    const despacharImpresionFisica = async (c: Comanda) => {
+        try {
+            const imps = await ConfiguracionServicio.listarImpresoras();
+            const activas = (imps || []).filter((i) => i.activa);
+            let enviadaDirecta = false;
+            for (const imp of activas) {
+                const res = await ConfiguracionServicio.imprimirComandaDirecta(imp.id, {
+                    mesa: c.mesa > 0 ? c.mesa : "Venta Directa",
+                    cliente: c.cliente,
+                    mesero: c.mesero,
+                    items: c.items.map((it) => ({
+                        nombre: it.producto,
+                        cantidad: it.cantidad,
+                        nota: it.nota,
+                    })),
+                });
+                if (res.success) {
+                    enviadaDirecta = true;
+                }
+            }
+            if (enviadaDirecta) {
+                alert("✓ Comanda enviada exitosamente a la impresora física conectada.");
+                return;
+            }
+        } catch {}
+
+        setComandaAImprimir(c);
+    };
 
     const cola = useMemo(
         () =>
@@ -174,12 +223,22 @@ function Cocina() {
                 .filter((c) => !eliminadas.has(c.id))
                 .filter(
                     (c) =>
-                        (c.estado === "Lista" || c.estado === "Entregada") &&
+                        (c.estado === "Lista" || c.estado === "Entregada" || c.estado === "Cerrado" || Boolean(c.despachadaEn)) &&
                         (!corteHistorial || (c.despachadaEn ?? c.creada ?? 0) >= corteHistorial)
                 )
                 .sort((a, b) => (b.despachadaEn ?? b.creada ?? 0) - (a.despachadaEn ?? a.creada ?? 0)),
         [comandas, corteHistorial, eliminadas]
     );
+
+    const historialFiltrado = useMemo(() => {
+        const q = busquedaHistorial.trim().toLowerCase();
+        if (!q) return historial;
+        return historial.filter((c) =>
+            (c.mesa > 0 ? `mesa ${c.mesa}` : "caja").includes(q) ||
+            (c.mesero || "").toLowerCase().includes(q) ||
+            c.items.some((it) => it.producto.toLowerCase().includes(q) || (it.nota || "").toLowerCase().includes(q))
+        );
+    }, [historial, busquedaHistorial]);
 
     const bloques = useMemo(() => calcularBloques(cola, intervaloMin), [cola, intervaloMin]);
 
@@ -226,12 +285,19 @@ function Cocina() {
     };
     const empezar = (id: number) => { void ejecutarCambioEstado(id, "En preparación", "click"); };
     const despachar = (id: number) => { void ejecutarCambioEstado(id, "Lista", "rasgar"); };
-    const restaurar = (id: number) => { void ejecutarCambioEstado(id, "Pendiente", "restaurar"); };
+    const restaurar = async (id: number) => {
+        setEliminadas((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        await ejecutarCambioEstado(id, "Pendiente", "restaurar");
+    };
 
-    // 🔹 Elimina una comanda del historial (permanente)
-    const eliminarComandaHistorial = (id: number) => {
+    // 🔹 Elimina una comanda del historial (definitivo en backend y local)
+    const eliminarComandaHistorial = async (id: number) => {
         if (!puedeOperar) return;
-        if (!window.confirm("¿Eliminar esta comanda del historial?\n\nNo volverá a aparecer en la vista."))
+        if (!window.confirm("¿Eliminar esta comanda del historial?\n\nSe eliminará definitivamente."))
             return;
         sonar("click");
         setEliminadas((prev) => {
@@ -239,23 +305,34 @@ function Cocina() {
             next.add(id);
             return next;
         });
+        try {
+            await eliminar(id);
+        } catch (e) {
+            console.warn("No se pudo eliminar en backend:", e);
+        }
     };
 
-    // 🔹 Elimina TODO el historial actual (permanente)
-    const eliminarHistorialCompleto = () => {
+    // 🔹 Elimina TODO el historial actual (definitivo en backend y local)
+    const eliminarHistorialCompleto = async () => {
         if (!puedeOperar || historial.length === 0) return;
         if (
             !window.confirm(
-                `¿Eliminar permanentemente las ${historial.length} comandas del historial?\n\nNo volverán a aparecer en la vista.`
+                `¿Eliminar definitivamente las ${historial.length} comandas del historial?\n\nNo volverán a aparecer.`
             )
         )
             return;
         sonar("restaurar");
+        const ids = historial.map((c) => c.id);
         setEliminadas((prev) => {
             const next = new Set(prev);
-            historial.forEach((c) => next.add(c.id));
+            ids.forEach((id) => next.add(id));
             return next;
         });
+        try {
+            await Promise.all(ids.map((id) => eliminar(id)));
+        } catch (e) {
+            console.warn("Fallo parcial al eliminar historial en backend:", e);
+        }
     };
 
     const resetearVista = () => {
@@ -442,6 +519,7 @@ function Cocina() {
                                                 puedeOperar={puedeOperar}
                                                 onEmpezar={() => empezar(c.id)}
                                                 onDespachar={() => despachar(c.id)}
+                                                onImprimir={() => despacharImpresionFisica(c)}
                                             />
                                         </div>
                                     ))}
@@ -566,7 +644,9 @@ function Cocina() {
                             <div className="flex shrink-0 items-center justify-between border-b border-[#3A506B] pb-3">
                                 <div className="flex items-center gap-2 min-w-0">
                                     <History className="h-5 w-5 shrink-0 text-[#5BC0DE]" />
-                                    <h3 className="text-base font-bold text-[#F4D6B0] truncate">Historial de despachadas</h3>
+                                    <h3 className="text-base font-bold text-[#F4D6B0] truncate">
+                                        Historial de comandas {historial.length > 0 && `(${historial.length})`}
+                                    </h3>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
                                     {puedeOperar && historial.length > 0 && (
@@ -589,13 +669,26 @@ function Cocina() {
                                 </div>
                             </div>
 
+                            {/* Buscador en historial */}
+                            <div className="pt-2">
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por mesa, mesero o plato..."
+                                    value={busquedaHistorial}
+                                    onChange={(e) => setBusquedaHistorial(e.target.value)}
+                                    className="w-full bg-[#0B132B] border border-[#3A506B] rounded-xl px-3 py-1.5 text-xs text-[#F4D6B0] placeholder-[#5BC0DE]/50 focus:outline-none focus:border-[#5BC0DE]"
+                                />
+                            </div>
+
                             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain py-3 pr-1">
-                                {historial.length === 0 ? (
+                                {historialFiltrado.length === 0 ? (
                                     <p className="py-12 text-center text-xs text-[#5BC0DE]">
-                                        Aún no se ha despachado ninguna comanda.
+                                        {historial.length === 0
+                                            ? "Aún no se ha despachado ninguna comanda."
+                                            : "No hay comandas que coincidan con la búsqueda."}
                                     </p>
                                 ) : (
-                                    historial.slice(0, 50).map((c) => (
+                                    historialFiltrado.slice(0, 100).map((c) => (
                                         <div key={c.id} className="space-y-2 rounded-xl border border-[#3A506B] bg-[#0B132B] p-3">
                                             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#3A506B] pb-2">
                                                 <div className="flex flex-wrap items-center gap-2">
@@ -610,14 +703,25 @@ function Cocina() {
                                                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                                             c.estado === "Entregada"
                                                                 ? "bg-[#4ADE80]/15 text-[#4ADE80]"
-                                                                : "bg-[#FBBF24]/15 text-[#FBBF24]"
+                                                                : c.estado === "Cerrado"
+                                                                  ? "bg-[#5BC0DE]/20 text-[#5BC0DE]"
+                                                                  : "bg-[#FBBF24]/15 text-[#FBBF24]"
                                                         }`}
                                                     >
-                                                        {c.estado}
+                                                        {c.estado === "Cerrado" ? "Cerrada / Pagada" : c.estado}
                                                     </span>
                                                 </div>
                                                 {puedeOperar && (
                                                     <div className="flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => despacharImpresionFisica(c)}
+                                                            className="flex items-center gap-1 rounded-lg border border-[#5BC0DE]/40 bg-[#5BC0DE]/10 px-2 py-1 text-[11px] font-bold text-[#5BC0DE] transition hover:bg-[#5BC0DE]/30"
+                                                            title="Reimprimir comanda en la impresora conectada"
+                                                        >
+                                                            <Printer className="h-3 w-3" />
+                                                            <span className="hidden sm:inline">Imprimir</span>
+                                                        </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => restaurar(c.id)}
@@ -779,7 +883,7 @@ function Cocina() {
                                 {/* SECCIÓN 4: NOTA INFORMATIVA */}
                                 <div className="rounded-xl bg-[#0B132B]/50 border border-[#3A506B] p-2.5">
                                     <p className="text-[10px] text-[#5BC0DE]/70 leading-relaxed">
-                                        <strong className="text-[#5BC0DE]">Nota:</strong> Las comandas eliminadas del historial se guardan localmente en este dispositivo y no volverán a aparecer. Para eliminarlas definitivamente de la base de datos compartida, se requiere implementar el endpoint correspondiente en el backend.
+                                        <strong className="text-[#5BC0DE]">Sincronización:</strong> El historial de comandas y sus estados se sincronizan en tiempo real con la base de datos compartida y con Caja.
                                     </p>
                                 </div>
                             </div>
@@ -797,6 +901,24 @@ function Cocina() {
                     </div>
                 )}
             </AnimatePresence>
+
+            {/* FORMATO TÉRMICO ESC/POS (80mm) PARA IMPRESIÓN */}
+            {comandaAImprimir && (
+                <FormatoTicketTermico
+                    tipo="comanda"
+                    negocio={negocioConfig}
+                    titulo="COMANDA DE COCINA"
+                    mesa={comandaAImprimir.mesa > 0 ? comandaAImprimir.mesa : "Venta Directa"}
+                    cliente={comandaAImprimir.cliente}
+                    mesero={comandaAImprimir.mesero}
+                    nombreImpresora="Cocina"
+                    items={comandaAImprimir.items.map((it) => ({
+                        nombre: it.producto,
+                        cantidad: it.cantidad,
+                        nota: it.nota,
+                    }))}
+                />
+            )}
         </div>
     );
 }
@@ -810,12 +932,14 @@ function TicketCocina({
     puedeOperar,
     onEmpezar,
     onDespachar,
+    onImprimir,
 }: {
     comanda: Comanda;
     ahora: number;
     puedeOperar: boolean;
     onEmpezar: () => void;
     onDespachar: () => void;
+    onImprimir?: () => void;
 }) {
     const [rasgando, setRasgando] = useState(false);
     const minutos = minutosDesde(comanda.creada, ahora);
@@ -892,9 +1016,22 @@ function TicketCocina({
                             )}
                         </div>
                     </div>
-                    <p className="text-[9px] font-mono text-[#3A506B]">
-                        CMD #{comanda.id}
-                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                        <p className="text-[9px] font-mono text-[#3A506B]">
+                            CMD #{comanda.id}
+                        </p>
+                        {onImprimir && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onImprimir(); }}
+                                className="flex items-center gap-1 text-[9px] font-bold text-[#0B132B] bg-[#C5BFA9]/30 hover:bg-[#C5BFA9]/60 px-1.5 py-0.5 rounded transition"
+                                title="Imprimir comanda térmica"
+                            >
+                                <Printer className="h-2.5 w-2.5 text-[#0B132B]" />
+                                Imprimir
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {comanda.nota && (

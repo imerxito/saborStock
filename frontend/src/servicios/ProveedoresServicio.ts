@@ -78,6 +78,11 @@ export const ProveedoresServicio = {
         return await fetchJson<DetalleCompraBackend[]>("/api/detalles-compra");
     },
 
+    async obtenerSiguienteFactura(): Promise<string> {
+        const res = await fetchJson<{ factura: string }>("/api/compras/siguiente-factura");
+        return res.factura;
+    },
+
     async eliminarCompra(id: number): Promise<void> {
         await fetchJson<unknown>(`/api/compras/${id}`, {
             method: "DELETE",

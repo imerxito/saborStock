@@ -8,6 +8,7 @@ function mapearComandaCompleta(row: any): Comanda {
     ? row.detalle_comanda.map((d: any) => ({
         id: d.id_detalle_comanda,
         idProducto: d.id_producto,
+        idCategoria: d.producto?.id_categoria ?? null,
         nombreProducto: d.producto?.nombre ?? `Producto #${d.id_producto}`,
         precio: Number(d.producto?.precio_venta ?? 0),
         cantidad: Number(d.cantidad) || 1,
@@ -336,6 +337,15 @@ export class ComandaRepositorio {
           }
         }
       }
+    }
+  }
+
+  async eliminarComanda(id: number): Promise<void> {
+    // Eliminar primero sus detalles asociados
+    await supabase.from("detalle_comanda").delete().eq("id_comanda", id);
+    const { error } = await supabase.from("comanda").delete().eq("id_comanda", id);
+    if (error) {
+      throw new Error(`Error al eliminar comanda #${id}: ${error.message}`);
     }
   }
 }

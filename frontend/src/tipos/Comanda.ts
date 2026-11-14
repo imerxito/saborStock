@@ -23,6 +23,7 @@ export type CategoriaPlato =
 export interface ItemComanda {
     id?: number;
     idProducto?: number;
+    idCategoria?: number | null;
     producto: string;
     cantidad: number;
     categoria?: CategoriaPlato | string;

@@ -1,3 +1,4 @@
+import { supabase } from "../configuracion/Supabase.js";
 import {
     Ingrediente,
     CrearIngrediente,
@@ -31,11 +32,34 @@ export class IngredienteServicio {
         return ingrediente;
     }
 
-    async crear(datos: CrearIngrediente): Promise<Ingrediente> {
-        if (!datos.codigo || datos.codigo.trim() === "") {
-            throw new Error("El código del ingrediente es obligatorio");
+    async generarSiguienteCodigo(): Promise<string> {
+        // Consultar todos los códigos registrados para asegurar que sea único y correlativo
+        const { data, error } = await supabase.from("ingrediente").select("codigo");
+        if (error) {
+            console.warn("Aviso al consultar códigos de ingredientes:", error.message);
         }
 
+        const codigos = new Set((data || []).map((r: any) => String(r.codigo || "").trim().toUpperCase()));
+
+        let maxNum = 0;
+        for (const cod of codigos) {
+            const match = cod.match(/^ING-(\d+)$/i);
+            if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+            }
+        }
+
+        let siguienteNum = maxNum + 1;
+        let candidato = `ING-${String(siguienteNum).padStart(3, "0")}`;
+        while (codigos.has(candidato.toUpperCase())) {
+            siguienteNum++;
+            candidato = `ING-${String(siguienteNum).padStart(3, "0")}`;
+        }
+        return candidato;
+    }
+
+    async crear(datos: CrearIngrediente): Promise<Ingrediente> {
         if (!datos.nombre || datos.nombre.trim() === "") {
             throw new Error("El nombre del ingrediente es obligatorio");
         }
@@ -65,9 +89,14 @@ export class IngredienteServicio {
             throw new Error("El precio de referencia debe ser mayor o igual a cero");
         }
 
+        let codigo = datos.codigo?.trim();
+        if (!codigo) {
+            codigo = await this.generarSiguienteCodigo();
+        }
+
         const datosLimpios: CrearIngrediente = {
             ...datos,
-            codigo: datos.codigo.trim(),
+            codigo,
             nombre: datos.nombre.trim()
         };
 

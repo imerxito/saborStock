@@ -45,10 +45,6 @@ type FormUnidad = {
   descripcion: string;
 };
 
-type FormCategoria = {
-  nombre: string;
-};
-
 const CATEGORIAS_INICIALES: CategoriaIngrediente[] = [
   { id: 1, nombre: "Carnes & Proteínas" },
   { id: 2, nombre: "Lácteos & Quesos" },
@@ -169,16 +165,21 @@ export default function Inventario() {
   const categoriasScroll = useDragScroll();
 
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [insumoEditando, setInsumoEditando] = useState<Insumo | null>(null);
+  const [sembrando, setSembrando] = useState(false);
   const [mostrarModalUnidad, setMostrarModalUnidad] = useState(false);
+
+  // Gestión completa de Categorías (Editar, Crear, Eliminar)
   const [mostrarModalCategoria, setMostrarModalCategoria] = useState(false);
+  const [editingCatId, setEditingCatId] = useState<number | null>(null);
+  const [formCatNombre, setFormCatNombre] = useState("");
+  const [errorCategoria, setErrorCategoria] = useState("");
 
   const [form, setForm] = useState<FormInsumo>(FORM_VACIO);
   const [formUnidad, setFormUnidad] = useState<FormUnidad>({ nombre: "", abreviatura: "", descripcion: "" });
-  const [formCategoria, setFormCategoria] = useState<FormCategoria>({ nombre: "" });
 
   const [error, setError] = useState("");
   const [errorUnidad, setErrorUnidad] = useState("");
-  const [errorCategoria, setErrorCategoria] = useState("");
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -190,32 +191,33 @@ export default function Inventario() {
         InventarioServicio.listarUnidades(),
       ]);
 
+      const catsMapeadas: CategoriaIngrediente[] = (categoriasData || []).map((c: any) => ({
+        id: Number(c.id ?? c.id_categoria_ingrediente),
+        nombre: c.nombre,
+      }));
+      setCategorias(catsMapeadas.length > 0 ? catsMapeadas : CATEGORIAS_INICIALES);
+
+      const undsMapeadas: UnidadMedida[] = (unidadesData || []).map((u: any) => ({
+        id_unidad: Number(u.id ?? u.id_unidad),
+        nombre: u.nombre,
+        abreviatura: u.abreviatura,
+        descripcion: u.descripcion ?? "",
+        activo: u.activo ?? true,
+      }));
+      setUnidades(undsMapeadas.length > 0 ? undsMapeadas : UNIDADES_INICIALES);
+
       setInsumos(
         (insumosData || []).map((i) => ({
           id: i.id_ingrediente,
           codigo: i.codigo,
           nombre: i.nombre,
           id_unidad: Number(i.id_unidad),
-          id_categoria: i.id_categoria_ingrediente ?? 0,
+          id_categoria: i.id_categoria_ingrediente ?? (catsMapeadas[0]?.id || 1),
           stock: Number(i.stock),
           minimo: Number(i.stock_minimo),
           maximo: Number(i.stock_maximo ?? 0),
-          precioReferencia: Number(i.precio_referencia),
+          precioReferencia: Number(i.precio_referencia ?? 0),
           caducidad: i.caducidad ?? undefined,
-        }))
-      );
-
-      setCategorias(
-        (categoriasData || []).map((c) => ({ id: c.id, nombre: c.nombre }))
-      );
-
-      setUnidades(
-        (unidadesData || []).map((u) => ({
-          id_unidad: Number(u.id),
-          nombre: u.nombre,
-          abreviatura: u.abreviatura,
-          descripcion: u.descripcion ?? "",
-          activo: u.activo ?? true,
         }))
       );
     } catch (e: any) {
@@ -228,6 +230,76 @@ export default function Inventario() {
   useEffect(() => {
     void cargarDatos();
   }, []);
+
+  const sembrarInsumosIniciales = async () => {
+    try {
+      setSembrando(true);
+      setError("");
+      for (const item of INICIAL) {
+        await InventarioServicio.crearInsumo({
+          codigo: item.codigo,
+          nombre: item.nombre,
+          id_unidad: item.id_unidad,
+          id_categoria_ingrediente: item.id_categoria,
+          stock: item.stock,
+          stock_minimo: item.minimo,
+          stock_maximo: item.maximo,
+          precio_referencia: item.precioReferencia,
+          caducidad: item.caducidad,
+        });
+      }
+      await cargarDatos();
+    } catch (err: any) {
+      setError(err?.message || "Error al cargar los insumos iniciales.");
+    } finally {
+      setSembrando(false);
+    }
+  };
+
+  const abrirCrearInsumo = async () => {
+    setInsumoEditando(null);
+    let siguienteCod = "";
+    try {
+      siguienteCod = await InventarioServicio.obtenerSiguienteCodigo();
+    } catch {
+      let max = 0;
+      for (const ins of insumos) {
+        const match = ins.codigo?.match(/^ING-(\d+)$/i);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          if (n > max) max = n;
+        }
+      }
+      siguienteCod = `ING-${String(max + 1).padStart(3, "0")}`;
+    }
+
+    setForm({
+      ...FORM_VACIO,
+      codigo: siguienteCod,
+      id_unidad: String(unidades[0]?.id_unidad || 1),
+      id_categoria: String(categorias[0]?.id || 1),
+      precioReferencia: "",
+    });
+    setError("");
+    setMostrarForm(true);
+  };
+
+  const abrirEditarInsumo = (insumo: Insumo) => {
+    setInsumoEditando(insumo);
+    setForm({
+      codigo: insumo.codigo || "",
+      nombre: insumo.nombre,
+      id_unidad: String(insumo.id_unidad),
+      id_categoria: String(insumo.id_categoria),
+      stock: String(insumo.stock),
+      minimo: String(insumo.minimo),
+      maximo: String(insumo.maximo),
+      precioReferencia: String(insumo.precioReferencia || 0),
+      caducidad: insumo.caducidad || "",
+    });
+    setError("");
+    setMostrarForm(true);
+  };
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -244,11 +316,9 @@ export default function Inventario() {
   const cambiarCampoUnidad = (campo: keyof FormUnidad, valor: string) =>
     setFormUnidad((f) => ({ ...f, [campo]: valor }));
 
-  const cambiarCampoCategoria = (campo: keyof FormCategoria, valor: string) =>
-    setFormCategoria((f) => ({ ...f, [campo]: valor }));
-
   const cerrarForm = () => {
     setMostrarForm(false);
+    setInsumoEditando(null);
     setForm(FORM_VACIO);
     setError("");
   };
@@ -275,17 +345,31 @@ export default function Inventario() {
     if (!unidades.some((u) => u.id_unidad === id_unidad)) return setError("Selecciona una unidad válida.");
 
     try {
-      await InventarioServicio.crearInsumo({
-        codigo: form.codigo.trim() || `ING-${Date.now().toString().slice(-6)}`,
-        nombre,
-        id_unidad,
-        id_categoria_ingrediente: id_categoria,
-        stock,
-        stock_minimo: minimo,
-        stock_maximo: maximo,
-        precio_referencia: precioReferencia,
-        caducidad,
-      });
+      if (insumoEditando) {
+        await InventarioServicio.actualizarInsumo(insumoEditando.id, {
+          codigo: form.codigo.trim() || undefined,
+          nombre,
+          id_unidad,
+          id_categoria_ingrediente: id_categoria,
+          stock,
+          stock_minimo: minimo,
+          stock_maximo: maximo,
+          precio_referencia: precioReferencia,
+          caducidad,
+        });
+      } else {
+        await InventarioServicio.crearInsumo({
+          codigo: form.codigo.trim() || undefined,
+          nombre,
+          id_unidad,
+          id_categoria_ingrediente: id_categoria,
+          stock,
+          stock_minimo: minimo,
+          stock_maximo: maximo,
+          precio_referencia: precioReferencia,
+          caducidad,
+        });
+      }
       await cargarDatos();
       cerrarForm();
     } catch (err: any) {
@@ -316,22 +400,53 @@ export default function Inventario() {
     }
   };
 
-  const guardarCategoria = async (e: React.FormEvent) => {
+  // Manejo de Categorías: Guardar (Crear o Editar)
+  const handleSaveCategoria = async (e: React.FormEvent) => {
     e.preventDefault();
-    const nombre = formCategoria.nombre.trim();
-
+    const nombre = formCatNombre.trim();
     if (!nombre) return setErrorCategoria("El nombre de la categoría es obligatorio.");
-    if (categorias.some((c) => c.nombre.toLowerCase() === nombre.toLowerCase()))
-      return setErrorCategoria("Esta categoría ya se encuentra registrada.");
+
+    const existe = categorias.some(
+      (c) => c.nombre.toLowerCase() === nombre.toLowerCase() && c.id !== editingCatId
+    );
+    if (existe) return setErrorCategoria("Ya existe una categoría con ese nombre.");
 
     try {
-      await InventarioServicio.crearCategoria(nombre);
-      await cargarDatos();
-      setFormCategoria({ nombre: "" });
+      if (editingCatId) {
+        await InventarioServicio.actualizarCategoria(editingCatId, nombre);
+      } else {
+        await InventarioServicio.crearCategoria(nombre);
+      }
+      setFormCatNombre("");
+      setEditingCatId(null);
       setErrorCategoria("");
-      setMostrarModalCategoria(false);
+      await cargarDatos();
     } catch (err: any) {
-      setErrorCategoria(err?.message || "No se pudo crear la categoría en el backend.");
+      setErrorCategoria(err?.message || "No se pudo guardar la categoría en el backend.");
+    }
+  };
+
+  // Manejo de Categorías: Eliminar
+  const handleDeleteCategoria = async (id: number) => {
+    const tieneInsumos = insumos.some((i) => i.id_categoria === id);
+    if (tieneInsumos) {
+      setErrorCategoria("No se puede eliminar esta categoría porque tiene insumos asignados.");
+      return;
+    }
+
+    if (window.confirm("¿Deseas eliminar esta categoría?")) {
+      try {
+        await InventarioServicio.eliminarCategoria(id);
+        if (selectedCategoria === id) setSelectedCategoria("todas");
+        if (editingCatId === id) {
+          setEditingCatId(null);
+          setFormCatNombre("");
+        }
+        setErrorCategoria("");
+        await cargarDatos();
+      } catch (err: any) {
+        setErrorCategoria(err?.message || "No se pudo eliminar la categoría.");
+      }
     }
   };
 
@@ -361,7 +476,7 @@ export default function Inventario() {
         await InventarioServicio.desactivarInsumo(id);
         await cargarDatos();
       } catch (err: any) {
-        setError(err?.message || "No se pudo eliminar el insumo en el backend.");
+        alert(err?.message || "No se pudo desactivar el insumo en el backend.");
       }
     }
   };
@@ -385,20 +500,25 @@ export default function Inventario() {
                     Insumos & Stock
                   </span>
                 </div>
-                <p className="hidden sm:block text-[11px] text-[#5BC0DE]/80">Control de existencias, categorías, fechas de caducidad y unidades de medida</p>
+                <p className="hidden sm:block text-[11px] text-[#5BC0DE]/80">Control de existencias, precios de referencia, categorías y unidades de medida</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full md:w-auto">
               <button
                 type="button"
-                onClick={() => setMostrarModalCategoria(true)}
+                onClick={() => {
+                  setEditingCatId(null);
+                  setFormCatNombre("");
+                  setErrorCategoria("");
+                  setMostrarModalCategoria(true);
+                }}
                 className="flex-1 md:flex-none justify-center bg-[#0B132B] hover:bg-[#3A506B]/50 text-[#5BC0DE] hover:text-[#F4D6B0] border border-[#3A506B] px-2.5 py-2 md:py-1.5 rounded-xl text-[10px] sm:text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap"
               >
                 <svg className="w-3.5 h-3.5 text-[#5BC0DE]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                Categoría
+                Categorías
               </button>
               <button
                 type="button"
@@ -412,7 +532,7 @@ export default function Inventario() {
               </button>
               <button
                 type="button"
-                onClick={() => setMostrarForm(true)}
+                onClick={abrirCrearInsumo}
                 className="w-full md:w-auto justify-center bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] px-3 py-2 md:py-1.5 rounded-xl text-xs font-semibold transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -440,11 +560,15 @@ export default function Inventario() {
                 onChange={(e) => setBusqueda(e.target.value)}
               />
             </div>
-            <div className="text-xs text-[#5BC0DE] font-medium shrink-0 self-end sm:self-auto">
-              Registros: <span className="text-[#F4D6B0] font-bold">{filtrados.length}</span>
+            <div className="text-xs text-[#5BC0DE] font-medium shrink-0 self-end sm:self-auto flex items-center gap-2">
+              <span>Insumos:</span>
+              <span className="text-[#F4D6B0] font-bold bg-[#0B132B] px-2 py-0.5 rounded-lg border border-[#3A506B]">
+                {filtrados.length}
+              </span>
             </div>
           </div>
 
+          {/* Filtro horizontal de Categorías */}
           <div className="max-w-7xl mx-auto relative group">
             <div 
               ref={categoriasScroll.ref}
@@ -467,7 +591,7 @@ export default function Inventario() {
               </button>
 
               {categorias.map((cat) => {
-                const count = insumos.filter(i => i.id_categoria === cat.id).length;
+                const count = insumos.filter((i) => i.id_categoria === cat.id).length;
                 const isSelected = selectedCategoria === cat.id;
                 return (
                   <button
@@ -488,12 +612,11 @@ export default function Inventario() {
                 );
               })}
             </div>
-            <div className="absolute right-0 top-0 bottom-2 w-8 bg-gradient-to-l from-[#1C2541] to-transparent pointer-events-none hidden sm:block"></div>
           </div>
         </div>
       </div>
 
-      {/* Contenido Principal (Scroll corregido) */}
+      {/* Contenido Principal */}
       <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] flex flex-col min-h-0">
         <section className="bg-[#1C2541] border border-[#3A506B] rounded-xl sm:rounded-2xl shadow-xl flex-1 flex flex-col min-h-0">
           
@@ -504,6 +627,7 @@ export default function Inventario() {
                 <tr className="text-[#5BC0DE] text-xs font-semibold uppercase tracking-wider">
                   <th className="py-3 px-4 bg-[#1C2541]">Ingrediente / Código</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Categoría</th>
+                  <th className="py-3 px-4 bg-[#1C2541]">Precio Ref.</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Caducidad</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Stock Actual</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Estado</th>
@@ -513,11 +637,34 @@ export default function Inventario() {
               <tbody className="divide-y divide-[#3A506B]/50 text-sm">
                 {filtrados.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-[#5BC0DE]/60">
+                    <td colSpan={7} className="py-12 text-center text-[#5BC0DE]/60">
                       <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V11" />
                       </svg>
-                      {busqueda || selectedCategoria !== 'todas' ? "Ningún insumo coincide con los filtros." : "Aún no hay insumos registrados."}
+                      {busqueda || selectedCategoria !== 'todas' ? (
+                        "Ningún insumo coincide con los filtros."
+                      ) : (
+                        <div className="flex flex-col items-center gap-3">
+                          <p className="text-sm text-[#F4D6B0]">Aún no hay insumos registrados en el inventario.</p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={abrirCrearInsumo}
+                              className="bg-[#5BC0DE] text-[#0B132B] font-bold px-3 py-1.5 rounded-xl text-xs hover:bg-[#5BC0DE]/90 transition"
+                            >
+                              + Crear Primer Insumo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void sembrarInsumosIniciales()}
+                              disabled={sembrando}
+                              className="bg-[#3A506B]/50 hover:bg-[#3A506B] text-[#F4D6B0] font-semibold px-3 py-1.5 rounded-xl text-xs transition border border-[#3A506B]"
+                            >
+                              {sembrando ? "Cargando insumos..." : "Cargar Insumos Sugeridos"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -531,44 +678,55 @@ export default function Inventario() {
                           {i.codigo && <span className="text-xs text-[#5BC0DE] font-mono">{i.codigo}</span>}
                         </td>
                         <td className="py-3 px-4 text-xs text-[#5BC0DE]">{catObj ? catObj.nombre : "General"}</td>
+                        <td className="py-3 px-4 text-xs font-mono font-semibold text-emerald-400">
+                          {i.precioReferencia ? `$${i.precioReferencia.toLocaleString()}` : <span className="text-[#5BC0DE]/40">--</span>}
+                        </td>
                         <td className="py-3 px-4 text-xs font-mono text-[#F4D6B0]">
                           {i.caducidad ? i.caducidad : <span className="text-[#5BC0DE]/50 italic">No especificada</span>}
                         </td>
-                        <td className="py-3 px-4 w-64">
+                        <td className="py-3 px-4 w-60">
                           <div className="flex justify-between text-xs mb-1 font-medium">
                             <span className="text-[#F4D6B0]">{i.stock} <span className="text-[#5BC0DE] lowercase">{abreviatura}</span></span>
                             <span className="text-[#5BC0DE] font-mono">{porcentaje}%</span>
                           </div>
-                          <div className="w-full bg-[#0B132B] rounded-full h-1.5 overflow-hidden border border-[#3A506B]">
+                          <div className="w-full bg-[#0B132B] rounded-full h-2 overflow-hidden border border-[#3A506B]">
                             <div className={`h-full transition-all duration-300 rounded-full ${barraColor}`} style={{ width: `${porcentaje}%` }} />
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <span className={`inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full border ${estadoBadge}`}>{texto}</span>
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${estadoBadge}`}>
+                            {texto}
+                          </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center bg-[#0B132B] border border-[#3A506B] rounded-lg p-0.5 mr-2">
+                              <button
+                                type="button"
+                                className="w-6 h-6 text-[#5BC0DE] hover:bg-[#3A506B] rounded flex items-center justify-center font-bold text-sm disabled:opacity-30"
+                                onClick={() => cambiarStock(i.id, i.stock - 1)}
+                                disabled={i.stock <= 0}
+                              >−</button>
+                              <span className="px-2 font-mono text-xs text-[#F4D6B0] font-semibold">{i.stock}</span>
+                              <button
+                                type="button"
+                                className="w-6 h-6 text-[#5BC0DE] hover:bg-[#3A506B] rounded flex items-center justify-center font-bold text-sm"
+                                onClick={() => cambiarStock(i.id, i.stock + 1)}
+                              >+</button>
+                            </div>
                             <button
                               type="button"
-                              className="bg-[#0B132B] hover:bg-[#3A506B] text-[#5BC0DE] border border-[#3A506B] w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm transition disabled:opacity-30"
-                              onClick={() => cambiarStock(i.id, i.stock - 1)}
-                              disabled={i.stock <= 0}
-                            >−</button>
-                            <input
-                              type="number"
-                              min={0}
-                              className="w-14 bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] text-center rounded-lg py-1 text-xs focus:outline-none focus:border-[#5BC0DE] font-mono"
-                              value={i.stock}
-                              onChange={(e) => cambiarStock(i.id, Number(e.target.value))}
-                            />
+                              className="ml-1 bg-[#5BC0DE]/10 hover:bg-[#5BC0DE]/20 text-[#5BC0DE] p-1.5 rounded-lg transition"
+                              onClick={() => abrirEditarInsumo(i)}
+                              title="Editar insumo"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
                             <button
                               type="button"
-                              className="bg-[#0B132B] hover:bg-[#3A506B] text-[#5BC0DE] border border-[#3A506B] w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm transition"
-                              onClick={() => cambiarStock(i.id, i.stock + 1)}
-                            >+</button>
-                            <button
-                              type="button"
-                              className="ml-1.5 bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] p-1.5 rounded-lg transition"
+                              className="ml-1 bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] p-1.5 rounded-lg transition"
                               onClick={() => eliminar(i.id)}
                               title="Eliminar insumo"
                             >
@@ -593,7 +751,28 @@ export default function Inventario() {
                 <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V11" />
                 </svg>
-                No se encontraron insumos.
+                {busqueda || selectedCategoria !== 'todas' ? (
+                  "Ningún insumo coincide con los filtros."
+                ) : (
+                  <div className="flex flex-col items-center gap-2.5 px-4">
+                    <p className="text-xs text-[#F4D6B0]">Aún no hay insumos registrados.</p>
+                    <button
+                      type="button"
+                      onClick={abrirCrearInsumo}
+                      className="w-full bg-[#5BC0DE] text-[#0B132B] font-bold px-3 py-2 rounded-xl text-xs hover:bg-[#5BC0DE]/90 transition"
+                    >
+                      + Crear Primer Insumo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void sembrarInsumosIniciales()}
+                      disabled={sembrando}
+                      className="w-full bg-[#3A506B]/50 hover:bg-[#3A506B] text-[#F4D6B0] font-semibold px-3 py-2 rounded-xl text-xs transition border border-[#3A506B]"
+                    >
+                      {sembrando ? "Cargando..." : "Cargar Insumos Sugeridos"}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               filtrados.map((i) => {
@@ -606,7 +785,14 @@ export default function Inventario() {
                       <div className="min-w-0">
                         <span className="block font-semibold text-sm text-[#F4D6B0] break-words leading-tight">{i.nombre}</span>
                         <span className="block text-[10px] text-[#5BC0DE] font-mono mt-0.5">{i.codigo || 'Sin código'}</span>
-                        <span className="block text-[10px] text-[#5BC0DE] mt-1">{catObj ? catObj.nombre : "General"}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] text-[#5BC0DE]">{catObj ? catObj.nombre : "General"}</span>
+                          {i.precioReferencia ? (
+                            <span className="text-[10px] font-mono font-bold text-emerald-400">
+                              Ref: ${i.precioReferencia.toLocaleString()}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <span className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-bold ${estadoBadge}`}>
                         {texto}
@@ -647,16 +833,28 @@ export default function Inventario() {
                         >+</button>
                       </div>
                       
-                      <button
-                        type="button"
-                        className="bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] p-2 rounded-lg transition"
-                        onClick={() => eliminar(i.id)}
-                        title="Eliminar"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="bg-[#5BC0DE]/10 hover:bg-[#5BC0DE]/20 text-[#5BC0DE] p-2 rounded-lg transition"
+                          onClick={() => abrirEditarInsumo(i)}
+                          title="Editar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          className="bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] p-2 rounded-lg transition"
+                          onClick={() => eliminar(i.id)}
+                          title="Eliminar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -667,7 +865,7 @@ export default function Inventario() {
         </section>
       </main>
 
-      {/* MODAL: Nuevo Insumo (Centrado y funcional) */}
+      {/* MODAL: Registrar / Editar Insumo (con Precio de Referencia) */}
       {mostrarForm && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 pointer-events-auto">
           <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden">
@@ -675,7 +873,7 @@ export default function Inventario() {
             <div className="bg-[#0B132B] px-4 sm:px-6 py-3 border-b border-[#3A506B] flex justify-between items-center shrink-0">
               <h3 className="font-bold text-[#F4D6B0] flex items-center gap-2 text-sm sm:text-base">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#5BC0DE]"></span>
-                Registrar Nuevo Insumo
+                {insumoEditando ? "Editar Insumo" : "Registrar Nuevo Insumo"}
               </h3>
               <button 
                 type="button"
@@ -694,15 +892,24 @@ export default function Inventario() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="flex flex-col gap-1.5">
-                    <label htmlFor="ins-codigo" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Código</label>
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="ins-codigo" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Código del Insumo</label>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full font-mono font-medium bg-[#5BC0DE]/15 text-[#5BC0DE] border border-[#5BC0DE]/30">
+                        {insumoEditando ? "Identificador" : "Automático"}
+                      </span>
+                    </div>
                     <input
                       id="ins-codigo"
-                      placeholder="Ej. ING-004"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                      placeholder="Ej. ING-015"
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm font-mono focus:outline-none focus:border-[#5BC0DE]"
                       value={form.codigo}
-                      onChange={(e) => cambiarCampo("codigo", e.target.value)}
+                      onChange={(e) => cambiarCampo("codigo", e.target.value.toUpperCase())}
                     />
+                    <span className="text-[10px] text-[#5BC0DE]/70">
+                      Código correlativo automático. Puedes personalizarlo si lo requieres.
+                    </span>
                   </div>
+
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="ins-nombre" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Nombre del Insumo *</label>
                     <input
@@ -713,10 +920,22 @@ export default function Inventario() {
                       onChange={(e) => cambiarCampo("nombre", e.target.value)}
                     />
                   </div>
+
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="ins-categoria" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE] flex justify-between items-center">
                       <span>Categoría de Insumo</span>
-                      <button type="button" onClick={() => setMostrarModalCategoria(true)} className="text-[10px] text-[#5BC0DE] hover:underline">+ Agregar</button>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setEditingCatId(null);
+                          setFormCatNombre("");
+                          setErrorCategoria("");
+                          setMostrarModalCategoria(true);
+                        }} 
+                        className="text-[10px] text-[#5BC0DE] hover:underline"
+                      >
+                        + Gestionar
+                      </button>
                     </label>
                     <select
                       id="ins-categoria"
@@ -729,6 +948,7 @@ export default function Inventario() {
                       ))}
                     </select>
                   </div>
+
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="ins-unidad" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE] flex justify-between items-center">
                       <span>Unidad de Medida</span>
@@ -745,6 +965,26 @@ export default function Inventario() {
                       ))}
                     </select>
                   </div>
+
+                  {/* PRECIO DE REFERENCIA */}
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="ins-precio" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">
+                      Precio / Costo de Referencia ($) *
+                    </label>
+                    <input
+                      id="ins-precio"
+                      type="number"
+                      min={0}
+                      placeholder="Ej. 12000"
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono text-emerald-400 font-semibold"
+                      value={form.precioReferencia}
+                      onChange={(e) => cambiarCampo("precioReferencia", e.target.value)}
+                    />
+                    <span className="text-[10px] text-[#5BC0DE]/70">
+                      Costo estimado por unidad para costeo y recetas.
+                    </span>
+                  </div>
+
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="ins-caducidad" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Fecha de Caducidad</label>
                     <input
@@ -755,6 +995,7 @@ export default function Inventario() {
                       onChange={(e) => cambiarCampo("caducidad", e.target.value)}
                     />
                   </div>
+
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="ins-stock" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Stock Actual *</label>
                     <input
@@ -767,6 +1008,7 @@ export default function Inventario() {
                       onChange={(e) => cambiarCampo("stock", e.target.value)}
                     />
                   </div>
+
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="ins-min" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Stock Mínimo *</label>
                     <input
@@ -779,7 +1021,8 @@ export default function Inventario() {
                       onChange={(e) => cambiarCampo("minimo", e.target.value)}
                     />
                   </div>
-                  <div className="flex flex-col gap-1.5">
+
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
                     <label htmlFor="ins-max" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Stock Máximo *</label>
                     <input
                       id="ins-max"
@@ -803,67 +1046,158 @@ export default function Inventario() {
                 <button
                   type="submit"
                   className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-semibold text-xs shadow-lg transition-colors"
-                >Guardar Insumo</button>
+                >{insumoEditando ? "Guardar Cambios" : "Guardar Insumo"}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: Nueva Categoría (Centrado) */}
+      {/* MODAL: Gestionar Categorías de Insumos (Crear, Editar, Eliminar - Idéntico a Productos) */}
       {mostrarModalCategoria && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 pointer-events-auto">
           <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-md rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85dvh]">
             <div className="bg-[#0B132B] px-4 sm:px-6 py-3 border-b border-[#3A506B] flex justify-between items-center shrink-0">
               <h3 className="font-bold text-[#F4D6B0] flex items-center gap-2 text-sm sm:text-base">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#5BC0DE]"></span>
-                Nueva Categoría
+                Gestionar Categorías de Insumos
               </h3>
               <button 
                 type="button"
-                onClick={() => { setMostrarModalCategoria(false); setErrorCategoria(""); setFormCategoria({ nombre: "" }); }}
+                onClick={() => {
+                  setMostrarModalCategoria(false);
+                  setErrorCategoria("");
+                  setEditingCatId(null);
+                  setFormCatNombre("");
+                }}
                 className="text-[#5BC0DE] hover:text-[#F4D6B0] transition text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center bg-[#0B132B] border border-[#3A506B]"
               >✕</button>
             </div>
 
-            <form onSubmit={guardarCategoria} className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                {errorCategoria && (
-                  <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl mb-4 font-medium">
-                    {errorCategoria}
-                  </div>
-                )}
-                <div className="flex flex-col gap-4 mb-2">
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="cat-nombre" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Nombre de la Categoría *</label>
-                    <input
-                      id="cat-nombre"
-                      placeholder="Ej. Condimentos"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
-                      value={formCategoria.nombre}
-                      onChange={(e) => cambiarCampoCategoria("nombre", e.target.value)}
-                    />
-                  </div>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 [scrollbar-width:thin] [scrollbar-color:#5BC0DE_#0B132B]">
+              {errorCategoria && (
+                <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl font-medium">
+                  {errorCategoria}
+                </div>
+              )}
+
+              {/* Formulario de Crear / Editar Categoría */}
+              <form onSubmit={handleSaveCategoria} className="bg-[#0B132B] p-3 sm:p-4 rounded-xl border border-[#3A506B] space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-[10px] sm:text-xs font-semibold uppercase text-[#5BC0DE]">
+                    {editingCatId ? "Editar Categoría" : "Nueva Categoría"}
+                  </h4>
+                  {editingCatId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCatId(null);
+                        setFormCatNombre("");
+                        setErrorCategoria("");
+                      }}
+                      className="text-[10px] text-[#5BC0DE] hover:underline"
+                    >
+                      Cancelar edición
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nombre de la categoría..."
+                    className="flex-1 min-w-0 bg-[#1C2541] border border-[#3A506B] rounded-lg px-3 py-2.5 text-base sm:text-sm text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE]"
+                    value={formCatNombre}
+                    onChange={(e) => setFormCatNombre(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2.5 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] text-xs font-semibold rounded-lg transition-all shadow shrink-0"
+                  >
+                    {editingCatId ? "Actualizar" : "Guardar"}
+                  </button>
+                </div>
+              </form>
+
+              {/* Lista de Categorías Existentes */}
+              <div className="space-y-2">
+                <h4 className="text-[10px] sm:text-xs font-semibold uppercase text-[#5BC0DE]">
+                  Categorías Registradas ({categorias.length})
+                </h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:#5BC0DE_#0B132B]">
+                  {categorias.map((cat) => {
+                    const cantInsumos = insumos.filter((i) => i.id_categoria === cat.id).length;
+                    const isEditing = editingCatId === cat.id;
+
+                    return (
+                      <div
+                        key={cat.id}
+                        className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-all ${
+                          isEditing
+                            ? "bg-[#3A506B]/30 border-[#5BC0DE]"
+                            : "bg-[#0B132B] border-[#3A506B]"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <span className="text-sm font-bold text-[#F4D6B0] block truncate">
+                            {cat.nombre}
+                          </span>
+                          <span className="text-[10px] text-[#5BC0DE]">
+                            {cantInsumos} insumo{cantInsumos === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCatId(cat.id);
+                              setFormCatNombre(cat.nombre);
+                              setErrorCategoria("");
+                            }}
+                            className="flex items-center justify-center w-8 h-8 bg-[#1C2541] text-[#5BC0DE] hover:text-[#F4D6B0] border border-[#3A506B] rounded-lg transition"
+                            title="Editar nombre"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategoria(cat.id)}
+                            className="flex items-center justify-center w-8 h-8 bg-[#D97706]/10 text-[#D97706] hover:bg-[#D97706]/20 border border-[#D97706]/30 rounded-lg transition"
+                            title="Eliminar categoría"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+            </div>
 
-              <div className="shrink-0 px-4 sm:px-6 py-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-[#1C2541] border-t border-[#3A506B] flex justify-end gap-3">
-                <button
-                  type="button"
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#0B132B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs font-medium border border-[#3A506B]"
-                  onClick={() => { setMostrarModalCategoria(false); setErrorCategoria(""); setFormCategoria({ nombre: "" }); }}
-                >Cancelar</button>
-                <button
-                  type="submit"
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-semibold text-xs transition shadow-lg"
-                >Guardar</button>
-              </div>
-            </form>
+            <div className="shrink-0 px-4 sm:px-6 py-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-[#1C2541] border-t border-[#3A506B] flex justify-end">
+              <button
+                type="button"
+                className="px-4 py-2.5 rounded-xl bg-[#0B132B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs font-medium border border-[#3A506B]"
+                onClick={() => {
+                  setMostrarModalCategoria(false);
+                  setErrorCategoria("");
+                  setEditingCatId(null);
+                  setFormCatNombre("");
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: Nueva Unidad de Medida (Centrado) */}
+      {/* MODAL: Nueva Unidad */}
       {mostrarModalUnidad && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 pointer-events-auto">
           <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-md rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85dvh]">
@@ -880,43 +1214,41 @@ export default function Inventario() {
             </div>
 
             <form onSubmit={guardarUnidad} className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
                 {errorUnidad && (
-                  <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl mb-4 font-medium">
+                  <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl font-medium">
                     {errorUnidad}
                   </div>
                 )}
-                <div className="flex flex-col gap-3 sm:gap-4 mb-2">
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="uni-nombre" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Nombre *</label>
-                    <input
-                      id="uni-nombre"
-                      placeholder="Ej. Kilogramo, Caja"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
-                      value={formUnidad.nombre}
-                      onChange={(e) => cambiarCampoUnidad("nombre", e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="uni-abrev" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Abreviatura *</label>
-                    <input
-                      id="uni-abrev"
-                      placeholder="Ej. kg, cja"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
-                      value={formUnidad.abreviatura}
-                      onChange={(e) => cambiarCampoUnidad("abreviatura", e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="uni-desc" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Descripción (Opcional)</label>
-                    <input
-                      id="uni-desc"
-                      placeholder="Descripción opcional"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
-                      value={formUnidad.descripcion}
-                      onChange={(e) => cambiarCampoUnidad("descripcion", e.target.value)}
-                    />
-                  </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="und-nombre" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Nombre de la Unidad *</label>
+                  <input
+                    id="und-nombre"
+                    placeholder="Ej. Botella"
+                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                    value={formUnidad.nombre}
+                    onChange={(e) => cambiarCampoUnidad("nombre", e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="und-abrev" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Abreviatura *</label>
+                  <input
+                    id="und-abrev"
+                    placeholder="Ej. bot"
+                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono lowercase"
+                    value={formUnidad.abreviatura}
+                    onChange={(e) => cambiarCampoUnidad("abreviatura", e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="und-desc" className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Descripción (Opcional)</label>
+                  <input
+                    id="und-desc"
+                    placeholder="Ej. Envase de vidrio de 750ml"
+                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                    value={formUnidad.descripcion}
+                    onChange={(e) => cambiarCampoUnidad("descripcion", e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -929,13 +1261,12 @@ export default function Inventario() {
                 <button
                   type="submit"
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-semibold text-xs transition shadow-lg"
-                >Guardar</button>
+                >Guardar Unidad</button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }

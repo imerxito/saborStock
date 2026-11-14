@@ -49,4 +49,18 @@ export class ComandaControlador {
             res.status(400).json({ mensaje: error.message });
         }
     }
+
+    async eliminar(req: Request<{ id: string }>, res: Response): Promise<void> {
+        try {
+            const id = Number(req.params.id);
+            if (Number.isNaN(id)) {
+                res.status(400).json({ mensaje: "El id debe ser un numero" });
+                return;
+            }
+            await comandaServicio.eliminar(id);
+            res.status(200).json({ success: true, mensaje: "Comanda eliminada correctamente" });
+        } catch (error: any) {
+            res.status(400).json({ mensaje: error.message });
+        }
+    }
 }

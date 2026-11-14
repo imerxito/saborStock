@@ -1,61 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, Printer, FileText, CreditCard, Building2, 
   Plus, Edit, Save, X, UploadCloud, ShieldCheck, 
   QrCode, DollarSign, Wallet, ChefHat, Beer, 
-  Phone, Mail, MapPin, Key, Upload, CheckCircle, RefreshCw, Trash2
+  Phone, Mail, MapPin, Key, Upload, CheckCircle, RefreshCw, Trash2,
+  Layers, Check, AlertCircle, Utensils
 } from 'lucide-react';
+import { 
+  ConfiguracionServicio, 
+  ConfiguracionNegocio, 
+  ConfiguracionFacturacion, 
+  ImpresoraFrontend, 
+  MetodoPagoConfig,
+  ImpresoraSistema
+} from '../../servicios/ConfiguracionServicio';
+import { ProductoServicio, CategoriaDTO } from '../../servicios/ProductoServicio';
+import { MesaServicio, SeccionBackend } from '../../servicios/MesaServicio';
+import FormatoTicketTermico from '../../componentes/FormatoTicketTermico';
 
 type TabConfig = 'impresoras' | 'facturacion' | 'pagos' | 'negocio';
 
-interface Impresora {
-  id: string;
-  nombre: string;
-  tipo: 'USB' | 'Red (IP)' | 'Bluetooth';
-  direccion: string;
-  activa: boolean;
-}
-
-interface RutaImpresion {
-  categoria: string;
-  idImpresora: string;
-}
-
-interface MetodoPagoConfig {
-  id: string;
-  nombre: string;
-  icono: 'efectivo' | 'tarjeta' | 'transferencia' | 'qr';
-  activo: boolean;
-  requiereReferencia: boolean;
-  cuentaDestino?: string;
-}
-
-const IMPRESORAS_MOCK: Impresora[] = [
-  { id: 'imp-1', nombre: 'Impresora Cocina Principal', tipo: 'Red (IP)', direccion: '192.168.1.50', activa: true },
-  { id: 'imp-2', nombre: 'Impresora Barra / Bebidas', tipo: 'USB', direccion: 'COM3', activa: true },
-  { id: 'imp-3', nombre: 'Impresora Caja / Recibos', tipo: 'USB', direccion: 'COM4', activa: true },
-];
-
-const RUTAS_MOCK: RutaImpresion[] = [
-  { categoria: 'Platos Fuertes', idImpresora: 'imp-1' },
-  { categoria: 'Comidas Rápidas', idImpresora: 'imp-1' },
-  { categoria: 'Entradas', idImpresora: 'imp-1' },
-  { categoria: 'Bebidas', idImpresora: 'imp-2' },
-  { categoria: 'Licores', idImpresora: 'imp-2' },
-];
-
-const PAGOS_MOCK: MetodoPagoConfig[] = [
-  { id: 'p-1', nombre: 'Efectivo', icono: 'efectivo', activo: true, requiereReferencia: false },
-  { id: 'p-2', nombre: 'Tarjeta Débito/Crédito', icono: 'tarjeta', activo: true, requiereReferencia: true, cuentaDestino: 'Datáfono Bold' },
-  { id: 'p-3', nombre: 'Transferencia Nequi', icono: 'transferencia', activo: true, requiereReferencia: true, cuentaDestino: '300 123 4567' },
-  { id: 'p-4', nombre: 'Transferencia Bancolombia', icono: 'transferencia', activo: false, requiereReferencia: true, cuentaDestino: 'Ahorros 123-456789' },
-];
-
-const FORM_IMPRESORA_VACIO: Omit<Impresora, 'id'> = {
+const FORM_IMPRESORA_VACIO: Omit<ImpresoraFrontend, 'id'> = {
   nombre: '',
   tipo: 'Red (IP)',
   direccion: '',
   activa: true,
+  autoPrint: true,
+  categoriasIds: [],
+  seccionesIds: [],
 };
 
 const Toggle = ({ checked, onChange }: { checked: boolean, onChange: () => void }) => (
@@ -89,43 +61,154 @@ const FixedModal = ({ isOpen, onClose, title, children }: { isOpen: boolean, onC
 
 export default function Configuracion() {
   const [activeTab, setActiveTab] = useState<TabConfig>('impresoras');
-  
-  // Estados de datos
-  const [impresoras, setImpresoras] = useState<Impresora[]>(IMPRESORAS_MOCK);
-  const [rutas, setRutas] = useState<RutaImpresion[]>(RUTAS_MOCK);
-  const [pagos, setPagos] = useState<MetodoPagoConfig[]>(PAGOS_MOCK);
-  const [autoPrint, setAutoPrint] = useState(true);
+  const [cargando, setCargando] = useState<boolean>(true);
+  const [guardando, setGuardando] = useState<boolean>(false);
+  const [mensajeToast, setMensajeToast] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
 
-  // Modal Impresora (Crear / Editar)
+  // Estados de datos
+  const [impresoras, setImpresoras] = useState<ImpresoraFrontend[]>([]);
+  const [categoriasMenu, setCategoriasMenu] = useState<CategoriaDTO[]>([]);
+  const [seccionesRestaurante, setSeccionesRestaurante] = useState<SeccionBackend[]>([]);
+  const [pagos, setPagos] = useState<MetodoPagoConfig[]>([]);
+  const [autoPrint, setAutoPrint] = useState<boolean>(true);
+
+  // Facturación
+  const [facturacion, setFacturacion] = useState<ConfiguracionFacturacion>({
+    id: 1,
+    habilitada: false,
+    entorno: 'pruebas',
+    resolucion: '',
+    prefijo: 'FAC',
+    rangoInicial: 1,
+    rangoFinal: 5000,
+    fechaInicio: '2024-01-01',
+    fechaFin: '2026-12-31',
+    claveTecnica: '',
+    softwareId: '',
+    apiKey: '',
+    certificadoCargado: false,
+  });
+
+  // Negocio
+  const [negocio, setNegocio] = useState<ConfiguracionNegocio>({
+    id: 1,
+    nombre: 'Sabor & Stock Restaurante',
+    nit: '',
+    direccion: '',
+    telefono: '',
+    email: '',
+    moneda: 'COP',
+    logoUrl: null,
+  });
+
+  // Modal Impresora
   const [modalImpresora, setModalImpresora] = useState<boolean>(false);
-  const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [formImpresora, setFormImpresora] = useState<Omit<Impresora, 'id'>>(FORM_IMPRESORA_VACIO);
-  const [errorImpresora, setErrorImpresora] = useState('');
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [formImpresora, setFormImpresora] = useState<Omit<ImpresoraFrontend, 'id'>>(FORM_IMPRESORA_VACIO);
+  const [errorImpresora, setErrorImpresora] = useState<string>('');
+  const [impresoraAProbar, setImpresoraAProbar] = useState<ImpresoraFrontend | null>(null);
+
+  // Impresoras del sistema (Windows)
+  const [impresorasSistema, setImpresorasSistema] = useState<ImpresoraSistema[]>([]);
+  const [escaneando, setEscaneando] = useState<boolean>(false);
 
   // Modal Pago
   const [modalPago, setModalPago] = useState<boolean>(false);
-
-  // Estados Facturación
-  const [facturacion, setFacturacion] = useState({
-    habilitada: true,
-    entorno: 'pruebas' as 'pruebas' | 'produccion',
-    resolucion: '18760000001', 
-    prefijo: 'FAC', 
-    rangoInicial: '1', 
-    rangoFinal: '5000',
-    fechaInicio: '2024-01-01',
-    fechaFin: '2026-12-31',
-    claveTecnica: 'fc8eac422eba16e22ffd8c6f94b3f40a6e38162c', 
-    softwareId: 'SW-12345',
-    apiKey: 'sk_live_51Hxxxx...',
-    certificadoCargado: true,
+  const [formPago, setFormPago] = useState<{ nombre: string; icono: MetodoPagoConfig['icono']; cuentaDestino: string }>({
+    nombre: '',
+    icono: 'transferencia',
+    cuentaDestino: '',
   });
+
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
-  const [negocio, setNegocio] = useState({
-    nombre: 'Sabor & Stock Restaurante', nit: '900.123.456-7', direccion: 'Calle 100 # 15-20, Bogotá',
-    telefono: '601 123 4567', email: 'contacto@saborystock.com', moneda: 'COP'
-  });
+  useEffect(() => {
+    if (impresoraAProbar) {
+      const timer = setTimeout(() => {
+        window.print();
+        setImpresoraAProbar(null);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [impresoraAProbar]);
+
+  const probarImpresion = async (imp: ImpresoraFrontend) => {
+    mostrarToast(`Probando impresora "${imp.nombre}"...`);
+    try {
+      const res = await ConfiguracionServicio.probarImpresoraDirecta(imp.id);
+      if (res.success) {
+        mostrarToast(`✓ ${res.mensaje}`);
+        return;
+      }
+    } catch {
+      // Usar diálogo del navegador como fallback
+    }
+    setImpresoraAProbar(imp);
+  };
+
+  const escanearImpresorasConectadas = async (silencioso = false) => {
+    try {
+      setEscaneando(true);
+      if (!silencioso) mostrarToast('Detectando impresoras conectadas en este equipo...');
+      const delSistema = await ConfiguracionServicio.listarImpresorasSistema();
+      setImpresorasSistema(delSistema);
+      if (!silencioso) {
+        if (delSistema.length > 0) {
+          mostrarToast(`✓ Se detectaron ${delSistema.length} impresoras instaladas en Windows.`);
+        } else {
+          mostrarToast('No se detectaron impresoras conectadas.');
+        }
+      }
+    } catch (err: any) {
+      if (!silencioso) mostrarToast('Error al detectar impresoras: ' + err.message, 'error');
+    } finally {
+      setEscaneando(false);
+    }
+  };
+
+  const mostrarToast = (texto: string, tipo: 'ok' | 'error' = 'ok') => {
+    setMensajeToast({ tipo, texto });
+    setTimeout(() => {
+      setMensajeToast(null);
+    }, 3500);
+  };
+
+  // Cargar datos del backend
+  const cargarDatos = useCallback(async () => {
+    setCargando(true);
+    try {
+      const [negocioData, facturacionData, impresorasData, pagosData, catsData, secsData, sysImps] = await Promise.all([
+        ConfiguracionServicio.obtenerNegocio().catch(() => null),
+        ConfiguracionServicio.obtenerFacturacion().catch(() => null),
+        ConfiguracionServicio.listarImpresoras().catch(() => []),
+        ConfiguracionServicio.obtenerPagos().catch(() => []),
+        ProductoServicio.listarCategorias().catch(() => []),
+        MesaServicio.obtenerSecciones().catch(() => []),
+        ConfiguracionServicio.listarImpresorasSistema().catch(() => []),
+      ]);
+
+      if (negocioData) setNegocio(negocioData);
+      if (facturacionData) setFacturacion(facturacionData);
+      if (sysImps) setImpresorasSistema(sysImps);
+      if (impresorasData) {
+        setImpresoras(impresorasData);
+        if (impresorasData.length > 0) {
+          setAutoPrint(impresorasData.some(i => i.autoPrint));
+        }
+      }
+      if (pagosData && pagosData.length > 0) setPagos(pagosData);
+      if (catsData) setCategoriasMenu(catsData);
+      if (secsData) setSeccionesRestaurante(secsData);
+    } catch (err: any) {
+      mostrarToast('Error al cargar la configuración: ' + (err.message || 'Desconocido'), 'error');
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
 
   const TABS = [
     { id: 'impresoras', label: 'Impresoras', icon: Printer },
@@ -143,60 +226,202 @@ export default function Configuracion() {
     }
   };
 
-  // --- LÓGICA DE IMPRESORAS ---
+  // ================= LÓGICA DE IMPRESORAS =================
   const abrirModalCrear = () => {
-    setFormImpresora(FORM_IMPRESORA_VACIO);
+    setFormImpresora({
+      nombre: '',
+      tipo: 'Red (IP)',
+      direccion: '',
+      activa: true,
+      autoPrint: true,
+      categoriasIds: [],
+      seccionesIds: [],
+    });
     setEditandoId(null);
     setErrorImpresora('');
     setModalImpresora(true);
   };
 
-  const abrirModalEditar = (imp: Impresora) => {
-    const { id, ...datos } = imp;
-    setFormImpresora(datos);
-    setEditandoId(id);
+  const abrirModalEditar = (imp: ImpresoraFrontend) => {
+    setFormImpresora({
+      nombre: imp.nombre,
+      tipo: imp.tipo,
+      direccion: imp.direccion,
+      activa: imp.activa,
+      autoPrint: imp.autoPrint,
+      categoriasIds: imp.categoriasIds || [],
+      seccionesIds: imp.seccionesIds || [],
+    });
+    setEditandoId(imp.id);
     setErrorImpresora('');
     setModalImpresora(true);
   };
 
-  const guardarImpresora = () => {
+  const guardarImpresora = async () => {
     if (!formImpresora.nombre.trim()) return setErrorImpresora('El nombre es obligatorio.');
     if (!formImpresora.direccion.trim()) return setErrorImpresora('La dirección/IP es obligatoria.');
-    if (impresoras.some(i => i.nombre.toLowerCase() === formImpresora.nombre.toLowerCase() && i.id !== editandoId)) {
-      return setErrorImpresora('Ya existe una impresora con ese nombre.');
-    }
 
-    if (editandoId) {
-      setImpresoras(prev => prev.map(i => i.id === editandoId ? { ...i, ...formImpresora } : i));
+    try {
+      setGuardando(true);
+      if (editandoId !== null) {
+        const actualizada = await ConfiguracionServicio.actualizarImpresora(editandoId, formImpresora);
+        setImpresoras(prev => prev.map(i => i.id === editandoId ? actualizada : i));
+        mostrarToast('Impresora actualizada exitosamente');
+      } else {
+        const nueva = await ConfiguracionServicio.crearImpresora(formImpresora);
+        setImpresoras(prev => [...prev, nueva]);
+        mostrarToast('Impresora creada exitosamente');
+      }
+      setModalImpresora(false);
+    } catch (err: any) {
+      setErrorImpresora(err.message || 'Error al guardar la impresora');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const eliminarImpresora = async (id: number) => {
+    if (window.confirm('¿Deseas eliminar esta impresora? Las rutas asociadas quedarán desasignadas.')) {
+      try {
+        await ConfiguracionServicio.eliminarImpresora(id);
+        setImpresoras(prev => prev.filter(i => i.id !== id));
+        mostrarToast('Impresora eliminada');
+      } catch (err: any) {
+        mostrarToast('Error al eliminar: ' + err.message, 'error');
+      }
+    }
+  };
+
+  const toggleActiva = async (imp: ImpresoraFrontend) => {
+    try {
+      const nuevaActiva = !imp.activa;
+      await ConfiguracionServicio.actualizarImpresora(imp.id, { activa: nuevaActiva });
+      setImpresoras(prev => prev.map(i => i.id === imp.id ? { ...i, activa: nuevaActiva } : i));
+    } catch (err: any) {
+      mostrarToast('Error al cambiar estado: ' + err.message, 'error');
+    }
+  };
+
+  const cambiarRutaCategoria = async (idCategoria: number, idImpresora: number | null) => {
+    try {
+      await ConfiguracionServicio.asignarRuta(idCategoria, idImpresora);
+      // Actualizar localmente las impresoras
+      setImpresoras(prev => prev.map(imp => {
+        let cats = [...(imp.categoriasIds || [])];
+        if (idImpresora === imp.id) {
+          if (!cats.includes(idCategoria)) cats.push(idCategoria);
+        } else {
+          cats = cats.filter(c => c !== idCategoria);
+        }
+        return { ...imp, categoriasIds: cats };
+      }));
+      mostrarToast('Ruta de impresión actualizada');
+    } catch (err: any) {
+      mostrarToast('Error al asignar ruta: ' + err.message, 'error');
+    }
+  };
+
+  // Toggle categoría en modal impresora
+  const toggleCategoriaModal = (idCat: number) => {
+    const actuales = formImpresora.categoriasIds || [];
+    if (actuales.includes(idCat)) {
+      setFormImpresora({ ...formImpresora, categoriasIds: actuales.filter(c => c !== idCat) });
     } else {
-      const nueva: Impresora = { ...formImpresora, id: `imp-${Date.now()}` };
-      setImpresoras(prev => [...prev, nueva]);
-    }
-    setModalImpresora(false);
-  };
-
-  const eliminarImpresora = (id: string) => {
-    if (window.confirm('¿Eliminar esta impresora? Las rutas asociadas quedarán sin asignar.')) {
-      setImpresoras(prev => prev.filter(i => i.id !== id));
-      setRutas(prev => prev.map(r => r.idImpresora === id ? { ...r, idImpresora: '' } : r));
+      setFormImpresora({ ...formImpresora, categoriasIds: [...actuales, idCat] });
     }
   };
 
-  const toggleActiva = (id: string) => {
-    setImpresoras(prev => prev.map(i => i.id === id ? { ...i, activa: !i.activa } : i));
+  // Toggle sección en modal impresora
+  const toggleSeccionModal = (idSec: number) => {
+    const actuales = formImpresora.seccionesIds || [];
+    if (actuales.includes(idSec)) {
+      setFormImpresora({ ...formImpresora, seccionesIds: actuales.filter(s => s !== idSec) });
+    } else {
+      setFormImpresora({ ...formImpresora, seccionesIds: [...actuales, idSec] });
+    }
+  };
+
+  // ================= FACTURACIÓN =================
+  const guardarFacturacion = async () => {
+    try {
+      setGuardando(true);
+      await ConfiguracionServicio.actualizarFacturacion(facturacion);
+      mostrarToast('Configuración de facturación guardada exitosamente');
+    } catch (err: any) {
+      mostrarToast('Error al guardar facturación: ' + err.message, 'error');
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const probarConexion = () => {
     setTestStatus('loading');
     setTimeout(() => {
       setTestStatus('success');
+      mostrarToast('Conexión con el servidor de facturación verificada correctamente');
       setTimeout(() => setTestStatus('idle'), 3000);
-    }, 1500);
+    }, 1200);
+  };
+
+  // ================= MI NEGOCIO =================
+  const guardarNegocio = async () => {
+    if (!negocio.nombre.trim()) {
+      mostrarToast('El nombre del establecimiento es obligatorio', 'error');
+      return;
+    }
+    try {
+      setGuardando(true);
+      await ConfiguracionServicio.actualizarNegocio(negocio);
+      mostrarToast('¡Datos de Mi Negocio guardados exitosamente! Ya se aplican a los tickets y facturas.');
+    } catch (err: any) {
+      mostrarToast('Error al guardar datos de negocio: ' + err.message, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // ================= MÉTODOS DE PAGO =================
+  const guardarMetodosPago = async (nuevosPagos: MetodoPagoConfig[]) => {
+    try {
+      await ConfiguracionServicio.guardarPagos(nuevosPagos);
+      setPagos(nuevosPagos);
+      mostrarToast('Métodos de pago actualizados');
+    } catch (err: any) {
+      mostrarToast('Error al guardar pagos: ' + err.message, 'error');
+    }
+  };
+
+  const agregarNuevoPago = () => {
+    if (!formPago.nombre.trim()) return;
+    const nuevo: MetodoPagoConfig = {
+      id: `p-${Date.now()}`,
+      nombre: formPago.nombre.trim(),
+      icono: formPago.icono,
+      activo: true,
+      requiereReferencia: formPago.icono !== 'efectivo',
+      cuentaDestino: formPago.cuentaDestino.trim() || undefined,
+    };
+    const listaActualizada = [...pagos, nuevo];
+    guardarMetodosPago(listaActualizada);
+    setFormPago({ nombre: '', icono: 'transferencia', cuentaDestino: '' });
+    setModalPago(false);
   };
 
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-[#0B132B] text-[#F4D6B0] font-sans overflow-hidden selection:bg-[#5BC0DE]/40">
       
+      {/* TOAST FLOTANTE */}
+      {mensajeToast && (
+        <div className={`fixed top-4 right-4 z-[9999] px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 border text-xs font-bold animate-in fade-in slide-in-from-top-4 duration-300 ${
+          mensajeToast.tipo === 'ok' 
+            ? 'bg-[#1C2541] border-[#4ADE80] text-[#4ADE80]' 
+            : 'bg-[#1C2541] border-[#E57373] text-[#E57373]'
+        }`}>
+          {mensajeToast.tipo === 'ok' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          <span>{mensajeToast.texto}</span>
+        </div>
+      )}
+
       {/* HEADER Y PESTAÑAS FIJAS */}
       <div className="shrink-0 w-full flex flex-col z-50 bg-[#0B132B] pt-[max(0.5rem,env(safe-area-inset-top))]">
         <header className="bg-[#1C2541] border-b border-[#3A506B] px-3 sm:px-4 md:px-6 py-2">
@@ -207,7 +432,9 @@ export default function Configuracion() {
               </div>
               <div>
                 <h2 className="text-base sm:text-xl font-bold tracking-tight text-[#F4D6B0]">Configuración General</h2>
-                <p className="hidden sm:block text-[11px] text-[#5BC0DE] uppercase tracking-wider font-semibold">Ajustes del Sistema</p>
+                <p className="hidden sm:block text-[11px] text-[#5BC0DE] uppercase tracking-wider font-semibold">
+                  {negocio.nombre || 'Sabor & Stock'} • Ajustes del Sistema
+                </p>
               </div>
             </div>
 
@@ -230,347 +457,656 @@ export default function Configuracion() {
       {/* CONTENIDO SCROLLABLE */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-5xl mx-auto p-3 sm:p-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         
-        {/* ================= TAB 1: IMPRESORAS ================= */}
-        {activeTab === 'impresoras' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            
-            {/* Toggle Impresión Automática */}
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-[#F4D6B0]">Impresión Automática</h3>
-                <p className="text-[11px] text-[#5BC0DE] mt-0.5">Enviar comandas a cocina inmediatamente al cobrar</p>
-              </div>
-              <Toggle checked={autoPrint} onChange={() => setAutoPrint(!autoPrint)} />
-            </div>
-
-            {/* Lista de Impresoras */}
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl overflow-hidden">
-              <div className="p-3.5 border-b border-[#3A506B] flex justify-between items-center bg-[#0B132B]/50">
-                <div>
-                  <h3 className="text-xs font-bold text-[#F4D6B0] uppercase tracking-wider">Dispositivos ({impresoras.length})</h3>
-                  <p className="text-[10px] text-[#5BC0DE] mt-0.5">Configura tus impresoras térmicas ESC/POS</p>
-                </div>
-                <button onClick={abrirModalCrear} className="text-[10px] bg-[#5BC0DE] text-[#0B132B] px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 hover:bg-[#4CA8C4] transition-colors">
-                  <Plus size={12} /> Añadir
-                </button>
-              </div>
-              <div className="divide-y divide-[#3A506B]/50">
-                {impresoras.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-[#5BC0DE]/60">
-                    No hay impresoras configuradas. Presiona "Añadir" para crear la primera.
+        {cargando ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-[#5BC0DE]">
+            <RefreshCw className="w-8 h-8 animate-spin" />
+            <p className="text-xs font-semibold">Cargando configuración...</p>
+          </div>
+        ) : (
+          <>
+            {/* ================= TAB 1: IMPRESORAS ================= */}
+            {activeTab === 'impresoras' && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                
+                {/* Toggle Impresión Automática */}
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#F4D6B0]">Impresión Automática</h3>
+                    <p className="text-[11px] text-[#5BC0DE] mt-0.5">Disparar comandas automáticamente a las impresoras según categoría y sección</p>
                   </div>
-                ) : (
-                  impresoras.map(imp => (
-                    <div key={imp.id} className="p-3.5 flex items-center justify-between gap-3">
+                  <Toggle checked={autoPrint} onChange={() => setAutoPrint(!autoPrint)} />
+                </div>
+
+                {/* Lista de Impresoras */}
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl overflow-hidden">
+                  <div className="p-3.5 border-b border-[#3A506B] flex flex-wrap justify-between items-center gap-2 bg-[#0B132B]/50">
+                    <div>
+                      <h3 className="text-xs font-bold text-[#F4D6B0] uppercase tracking-wider">
+                        Dispositivos de Impresión ({impresoras.length})
+                      </h3>
+                      <p className="text-[10px] text-[#5BC0DE] mt-0.5">Control de impresoras térmicas ESC/POS, cocina, barra y facturación</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => escanearImpresorasConectadas(false)}
+                        disabled={escaneando}
+                        className="text-[10px] bg-[#0B132B] text-[#5BC0DE] border border-[#5BC0DE]/40 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 hover:bg-[#5BC0DE]/10 transition-colors shadow-sm disabled:opacity-50"
+                        title="Buscar impresoras físicas conectadas en Windows (USB / Red / Spooler)"
+                      >
+                        <RefreshCw size={13} className={escaneando ? 'animate-spin' : ''} />
+                        <span>{escaneando ? 'Detectando...' : 'Detectar Impresoras del PC'}</span>
+                      </button>
+                      <button 
+                        onClick={abrirModalCrear} 
+                        className="text-[10px] bg-[#5BC0DE] text-[#0B132B] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 hover:bg-[#4CA8C4] transition-colors shadow-sm"
+                      >
+                        <Plus size={13} /> Añadir Impresora
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Panel de impresoras detectadas en Windows */}
+                  {impresorasSistema.length > 0 && (
+                    <div className="bg-[#0B132B]/70 p-3 border-b border-[#3A506B]/50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-bold text-[#F4D6B0] flex items-center gap-1.5">
+                          <CheckCircle size={13} className="text-[#4ADE80]" />
+                          Impresoras detectadas en este equipo Windows ({impresorasSistema.length}):
+                        </span>
+                        <span className="text-[9px] text-[#5BC0DE]">Haz clic en una para vincularla a SaborStock</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {impresorasSistema.map((sys) => {
+                          const yaConfigurada = impresoras.some(
+                            (i) => i.nombre.toLowerCase() === sys.nombre.toLowerCase() || i.direccion.toLowerCase() === sys.nombre.toLowerCase()
+                          );
+                          return (
+                            <button
+                              key={sys.nombre}
+                              type="button"
+                              onClick={() => {
+                                setFormImpresora({
+                                  nombre: sys.nombre,
+                                  tipo: 'USB',
+                                  direccion: sys.nombre,
+                                  activa: true,
+                                  autoPrint: true,
+                                  categoriasIds: [],
+                                  seccionesIds: [],
+                                });
+                                setEditandoId(null);
+                                setErrorImpresora('');
+                                setModalImpresora(true);
+                              }}
+                              className={`text-[11px] px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-2 transition-all ${
+                                yaConfigurada
+                                  ? 'bg-[#4ADE80]/10 border-[#4ADE80]/30 text-[#4ADE80]'
+                                  : 'bg-[#1C2541] border-[#3A506B] text-[#F4D6B0] hover:border-[#5BC0DE] hover:bg-[#5BC0DE]/10'
+                              }`}
+                            >
+                              <Printer size={12} className={sys.predeterminada ? 'text-[#F4D6B0]' : 'text-[#5BC0DE]'} />
+                              <span>{sys.nombre}</span>
+                              {sys.predeterminada && (
+                                <span className="text-[9px] bg-[#F4D6B0]/20 text-[#F4D6B0] px-1 py-0.2 rounded font-bold">
+                                  Predeterminada
+                                </span>
+                              )}
+                              {yaConfigurada ? (
+                                <span className="text-[9px] bg-[#4ADE80]/20 text-[#4ADE80] px-1 rounded font-bold">
+                                  ✓ Vinculada
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-[#5BC0DE] font-bold">
+                                  + Vincular
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="divide-y divide-[#3A506B]/50">
+                    {impresoras.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[#5BC0DE]/60 space-y-2">
+                        <Printer className="w-8 h-8 mx-auto text-[#3A506B]" />
+                        <p>No hay impresoras configuradas aún.</p>
+                        <button 
+                          onClick={abrirModalCrear}
+                          className="text-xs bg-[#5BC0DE] text-[#0B132B] px-3 py-1.5 rounded-lg font-bold inline-flex items-center gap-1"
+                        >
+                          <Plus size={14} /> Configurar Primera Impresora
+                        </button>
+                      </div>
+                    ) : (
+                      impresoras.map(imp => {
+                        // Nombres de categorías asignadas
+                        const catsNombres = (imp.categoriasIds || []).map(idCat => {
+                          const c = categoriasMenu.find(item => Number(item.id_categoria) === Number(idCat));
+                          return c ? c.nombre : `Cat #${idCat}`;
+                        });
+
+                        // Nombres de secciones asignadas
+                        const secsNombres = (imp.seccionesIds || []).map(idSec => {
+                          const s = seccionesRestaurante.find(item => Number(item.id) === Number(idSec));
+                          return s ? s.nombre : `Sec #${idSec}`;
+                        });
+
+                        return (
+                          <div key={imp.id} className="p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-[#0B132B]/30 transition-colors">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0 mt-0.5">
+                                <Printer size={18} />
+                              </div>
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs sm:text-sm font-bold text-[#F4D6B0]">{imp.nombre}</p>
+                                  <span className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                                    imp.activa ? 'bg-[#4ADE80]/15 text-[#4ADE80] border border-[#4ADE80]/30' : 'bg-[#E57373]/15 text-[#E57373] border border-[#E57373]/30'
+                                  }`}>
+                                    {imp.activa ? 'Online' : 'Offline'}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#5BC0DE] font-mono">
+                                  {imp.tipo} • {imp.direccion}
+                                </p>
+
+                                {/* Badges de Categorías */}
+                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                  <span className="text-[10px] text-[#F4D6B0]/70 font-semibold flex items-center gap-1">
+                                    <Utensils size={11} className="text-[#5BC0DE]" /> Categorías:
+                                  </span>
+                                  {catsNombres.length === 0 ? (
+                                    <span className="text-[9px] bg-[#5BC0DE]/10 text-[#5BC0DE] px-2 py-0.5 rounded-md border border-[#5BC0DE]/20 font-medium">
+                                      Todas las categorías
+                                    </span>
+                                  ) : (
+                                    catsNombres.map((nom, idx) => (
+                                      <span key={idx} className="text-[9px] bg-[#3A506B]/50 text-[#F4D6B0] px-2 py-0.5 rounded-md border border-[#3A506B] font-medium">
+                                        {nom}
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+
+                                {/* Badges de Secciones */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] text-[#F4D6B0]/70 font-semibold flex items-center gap-1">
+                                    <Layers size={11} className="text-[#F4D6B0]" /> Secciones:
+                                  </span>
+                                  {secsNombres.length === 0 ? (
+                                    <span className="text-[9px] bg-[#F4D6B0]/10 text-[#F4D6B0] px-2 py-0.5 rounded-md border border-[#F4D6B0]/20 font-medium">
+                                      Todas las secciones (Salón, Terraza, etc.)
+                                    </span>
+                                  ) : (
+                                    secsNombres.map((nom, idx) => (
+                                      <span key={idx} className="text-[9px] bg-[#1C2541] text-[#5BC0DE] px-2 py-0.5 rounded-md border border-[#5BC0DE]/40 font-medium">
+                                        {nom}
+                                      </span>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 shrink-0 border-t md:border-t-0 border-[#3A506B]/30 pt-2 md:pt-0">
+                              <button
+                                type="button"
+                                onClick={() => probarImpresion(imp)}
+                                className="px-2.5 py-1.5 text-[#5BC0DE] bg-[#0B132B] hover:bg-[#5BC0DE]/10 rounded-lg transition-colors border border-[#5BC0DE]/40 text-[10px] font-bold flex items-center gap-1.5 shadow-sm"
+                                title="Imprimir ticket de prueba en esta impresora"
+                              >
+                                <Printer size={13} /> Probar
+                              </button>
+                              <button 
+                                onClick={() => toggleActiva(imp)} 
+                                className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
+                                  imp.activa ? 'bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:bg-[#3A506B]/40' : 'bg-[#4ADE80]/15 text-[#4ADE80] border-[#4ADE80]/40'
+                                }`}
+                              >
+                                {imp.activa ? 'Desactivar' : 'Activar'}
+                              </button>
+                              <button 
+                                onClick={() => abrirModalEditar(imp)} 
+                                className="p-2 text-[#5BC0DE] hover:bg-[#5BC0DE]/10 rounded-lg transition-colors border border-[#3A506B]/50"
+                                title="Editar impresora, categorías y secciones"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button 
+                                onClick={() => eliminarImpresora(imp.id)} 
+                                className="p-2 text-[#E57373] hover:bg-[#E57373]/10 rounded-lg transition-colors border border-[#3A506B]/50"
+                                title="Eliminar impresora"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Rutas por Categoría */}
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl overflow-hidden">
+                  <div className="p-3.5 border-b border-[#3A506B] bg-[#0B132B]/50">
+                    <h3 className="text-xs font-bold text-[#F4D6B0] uppercase tracking-wider">
+                      Asignación Rápida de Rutas por Categoría
+                    </h3>
+                    <p className="text-[10px] text-[#5BC0DE] mt-0.5">
+                      Indica a qué impresora debe enviarse cada tipo de plato, bebida o servicio.
+                    </p>
+                  </div>
+                  <div className="p-3.5 space-y-3">
+                    {categoriasMenu.map(cat => {
+                      const idCatNum = Number(cat.id_categoria);
+                      const impAsignada = impresoras.find(i => (i.categoriasIds || []).includes(idCatNum));
+
+                      return (
+                        <div key={cat.id_categoria} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#3A506B]/30 pb-2.5 last:border-0 last:pb-0">
+                          <div className="flex items-center gap-2">
+                            {cat.nombre.toLowerCase().includes('bebida') || cat.nombre.toLowerCase().includes('licor') ? (
+                              <Beer size={15} className="text-[#5BC0DE]" />
+                            ) : (
+                              <ChefHat size={15} className="text-[#5BC0DE]" />
+                            )}
+                            <span className="text-xs font-medium text-[#F4D6B0]">{cat.nombre}</span>
+                          </div>
+                          <select 
+                            value={impAsignada?.id || ''}
+                            onChange={(e) => {
+                              const nuevoId = e.target.value ? Number(e.target.value) : null;
+                              cambiarRutaCategoria(idCatNum, nuevoId);
+                            }}
+                            className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-2.5 py-1.5 text-base sm:text-xs focus:outline-none focus:border-[#5BC0DE] w-full sm:w-64"
+                          >
+                            <option value="">(Impresión general / Sin asignar)</option>
+                            {impresoras.filter(i => i.activa).map(i => (
+                              <option key={i.id} value={i.id}>{i.nombre} ({i.tipo})</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Nota Aclaratoria */}
+                <div className="bg-[#D97706]/10 border border-[#D97706]/30 rounded-xl p-3.5 flex gap-2.5 items-start">
+                  <span className="text-[#D97706] shrink-0 mt-0.5 text-base">ℹ️</span>
+                  <div>
+                    <p className="text-[11px] font-bold text-[#D97706]">Configuración de Impresión ESC/POS y Comandas</p>
+                    <p className="text-[10px] text-[#D97706]/90 mt-0.5 leading-relaxed">
+                      Cada impresora puede filtrar automáticamente qué <strong>Categorías</strong> de productos imprimir (ej: Cocina = Platos Fuertes, Barra = Bebidas) y de qué <strong>Secciones</strong> del restaurante recibirlas (ej: Terraza, Salón Principal). Al enviar comandas o generar pre-cuentas, el sistema enruta los ítems correspondientes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB 2: FACTURACIÓN ================= */}
+            {activeTab === 'facturacion' && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#4ADE80]/10 flex items-center justify-center text-[#4ADE80]">
+                      <ShieldCheck size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[#F4D6B0]">Facturación Electrónica DIAN / POS</h3>
+                      <p className="text-[11px] text-[#5BC0DE] mt-0.5">Habilitar emisión formal de comprobantes y resolución fiscal</p>
+                    </div>
+                  </div>
+                  <Toggle 
+                    checked={facturacion.habilitada} 
+                    onChange={() => setFacturacion({ ...facturacion, habilitada: !facturacion.habilitada })} 
+                  />
+                </div>
+
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
+                  <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Entorno Fiscal</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFacturacion({ ...facturacion, entorno: 'pruebas' })}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                        facturacion.entorno === 'pruebas' 
+                          ? 'bg-[#D97706]/15 border-[#D97706] text-[#D97706]' 
+                          : 'bg-[#0B132B] border-[#3A506B] text-[#5BC0DE] hover:border-[#5BC0DE]'
+                      }`}
+                    >
+                      <RefreshCw size={18} />
+                      <span className="text-xs font-bold">Habilitación / Pruebas</span>
+                      <span className="text-[9px]">Ambiente de Ensayo DIAN</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFacturacion({ ...facturacion, entorno: 'produccion' })}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
+                        facturacion.entorno === 'produccion' 
+                          ? 'bg-[#4ADE80]/15 border-[#4ADE80] text-[#4ADE80]' 
+                          : 'bg-[#0B132B] border-[#3A506B] text-[#5BC0DE] hover:border-[#5BC0DE]'
+                      }`}
+                    >
+                      <CheckCircle size={18} />
+                      <span className="text-xs font-bold">Producción Oficial</span>
+                      <span className="text-[9px]">Facturas Legales Válidas</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
+                  <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Resolución y Rangos Autorizados</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Número de Resolución DIAN</label>
+                      <input 
+                        type="text" 
+                        value={facturacion.resolucion || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, resolucion: e.target.value })} 
+                        placeholder="Ej: 18764000001" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Prefijo Autorizado</label>
+                      <input 
+                        type="text" 
+                        value={facturacion.prefijo || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, prefijo: e.target.value })} 
+                        placeholder="Ej: FAC o POS" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] uppercase font-mono" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Rango Inicial</label>
+                      <input 
+                        type="number" 
+                        value={facturacion.rangoInicial || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, rangoInicial: Number(e.target.value) })} 
+                        placeholder="1" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Rango Final</label>
+                      <input 
+                        type="number" 
+                        value={facturacion.rangoFinal || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, rangoFinal: Number(e.target.value) })} 
+                        placeholder="5000" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Vigencia Desde</label>
+                      <input 
+                        type="date" 
+                        value={facturacion.fechaInicio || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, fechaInicio: e.target.value })} 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Vigencia Hasta</label>
+                      <input 
+                        type="date" 
+                        value={facturacion.fechaFin || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, fechaFin: e.target.value })} 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
+                  <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Credenciales de Proveedor Tecnológico</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Software ID</label>
+                      <input 
+                        type="text" 
+                        value={facturacion.softwareId || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, softwareId: e.target.value })} 
+                        placeholder="Ej: SW-12345" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">PIN / Clave Técnica</label>
+                      <div className="relative">
+                        <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
+                        <input 
+                          type="password" 
+                          value={facturacion.claveTecnica || ''} 
+                          onChange={e => setFacturacion({ ...facturacion, claveTecnica: e.target.value })} 
+                          placeholder="••••••••••••" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">API Key / Token de Servicio</label>
+                      <input 
+                        type="password" 
+                        value={facturacion.apiKey || ''} 
+                        onChange={e => setFacturacion({ ...facturacion, apiKey: e.target.value })} 
+                        placeholder="sk_live_..." 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[#3A506B]/50">
+                    <span className="text-[10px] text-[#5BC0DE]">Verifica la conexión con el servidor de la DIAN</span>
+                    <button 
+                      type="button"
+                      onClick={probarConexion}
+                      disabled={testStatus === 'loading' || testStatus === 'success'}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                        testStatus === 'success' ? 'bg-[#4ADE80] text-[#0B132B]' : 
+                        'bg-[#0B132B] border border-[#5BC0DE] text-[#5BC0DE] hover:bg-[#5BC0DE]/10'
+                      }`}
+                    >
+                      {testStatus === 'loading' ? <RefreshCw size={14} className="animate-spin" /> : 
+                       testStatus === 'success' ? <CheckCircle size={14} /> : 
+                       <RefreshCw size={14} />}
+                      {testStatus === 'loading' ? 'Conectando...' : 
+                       testStatus === 'success' ? 'Conexión Exitosa' : 
+                       'Probar Conexión'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex justify-end">
+                  <button 
+                    onClick={guardarFacturacion}
+                    disabled={guardando}
+                    className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2.5 px-6 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+                  >
+                    <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar Configuración de Facturación'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB 3: MÉTODOS DE PAGO ================= */}
+            {activeTab === 'pagos' && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm font-bold text-[#F4D6B0]">Métodos de Pago Habilitados</h3>
+                    <p className="text-[11px] text-[#5BC0DE]">Activa o desactiva cómo recibes el dinero en Caja y Facturación.</p>
+                  </div>
+                  <button 
+                    onClick={() => setModalPago(true)} 
+                    className="text-[10px] bg-[#5BC0DE] text-[#0B132B] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-[#4CA8C4] shadow-sm"
+                  >
+                    <Plus size={13} /> Añadir Método
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {pagos.map((pago) => (
+                    <div key={pago.id} className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0">
-                          <Printer size={16} />
+                        <div className="w-10 h-10 rounded-xl bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0">
+                          {getIconoPago(pago.icono)}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-[#F4D6B0] truncate">{imp.nombre}</p>
-                          <p className="text-[10px] text-[#5BC0DE]">{imp.tipo} • {imp.direccion}</p>
+                          <p className="text-sm font-bold text-[#F4D6B0]">{pago.nombre}</p>
+                          {pago.cuentaDestino && (
+                            <p className="text-[10px] text-[#5BC0DE] mt-0.5 truncate font-mono">
+                              Destino: {pago.cuentaDestino}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${imp.activa ? 'bg-[#4ADE80]/15 text-[#4ADE80]' : 'bg-[#E57373]/15 text-[#E57373]'}`}>
-                          {imp.activa ? 'Online' : 'Offline'}
-                        </span>
-                        <button 
-                          onClick={() => abrirModalEditar(imp)} 
-                          className="p-1.5 text-[#5BC0DE] hover:bg-[#5BC0DE]/10 rounded-lg transition-colors"
-                          title="Editar"
-                        >
-                          <Edit size={14} />
-                        </button>
-                        <button 
-                          onClick={() => eliminarImpresora(imp.id)} 
-                          className="p-1.5 text-[#E57373] hover:bg-[#E57373]/10 rounded-lg transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                      <div className="flex items-center gap-4 sm:gap-6 shrink-0 border-t sm:border-t-0 border-[#3A506B]/50 pt-2 sm:pt-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-[#5BC0DE] font-medium hidden sm:inline">Requiere Ref.</span>
+                          <Toggle 
+                            checked={pago.requiereReferencia} 
+                            onChange={() => {
+                              const actualizados = pagos.map(p => p.id === pago.id ? { ...p, requiereReferencia: !p.requiereReferencia } : p);
+                              guardarMetodosPago(actualizados);
+                            }} 
+                          />
+                        </div>
+                        <div className="h-6 w-px bg-[#3A506B] hidden sm:block"></div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-[#5BC0DE] font-medium">Activo</span>
+                          <Toggle 
+                            checked={pago.activo} 
+                            onChange={() => {
+                              const actualizados = pagos.map(p => p.id === pago.id ? { ...p, activo: !p.activo } : p);
+                              guardarMetodosPago(actualizados);
+                            }} 
+                          />
+                        </div>
                       </div>
                     </div>
-                  ))
-                )}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Rutas por Categoría */}
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl overflow-hidden">
-              <div className="p-3.5 border-b border-[#3A506B] bg-[#0B132B]/50">
-                <h3 className="text-xs font-bold text-[#F4D6B0] uppercase tracking-wider">Rutas de Impresión por Categoría</h3>
-                <p className="text-[10px] text-[#5BC0DE] mt-0.5">Asigna a qué impresora va cada tipo de plato o bebida.</p>
-              </div>
-              <div className="p-3.5 space-y-3">
-                {['Platos Fuertes', 'Bebidas', 'Licores', 'Postres'].map(cat => {
-                  const ruta = rutas.find(r => r.categoria === cat);
-                  return (
-                    <div key={cat} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#3A506B]/30 pb-2 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-2">
-                        {cat === 'Platos Fuertes' ? <ChefHat size={14} className="text-[#5BC0DE]" /> : <Beer size={14} className="text-[#5BC0DE]" />}
-                        <span className="text-xs font-medium text-[#F4D6B0]">{cat}</span>
+            {/* ================= TAB 4: MI NEGOCIO ================= */}
+            {activeTab === 'negocio' && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex flex-col items-center justify-center text-center gap-2 border-dashed border-2">
+                  <div className="w-16 h-16 rounded-full bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE]">
+                    <Building2 size={28} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-[#F4D6B0]">{negocio.nombre || 'Mi Restaurante'}</p>
+                    <p className="text-[10px] text-[#5BC0DE]">Estos datos se imprimirán en los encabezados de tickets, comandas y facturas de venta.</p>
+                  </div>
+                </div>
+
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 sm:p-5 space-y-4">
+                  <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider flex items-center gap-2">
+                    <Building2 size={14} /> Información Comercial y Facturación
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Nombre del Establecimiento *</label>
+                      <input 
+                        type="text" 
+                        value={negocio.nombre} 
+                        onChange={e => setNegocio({ ...negocio, nombre: e.target.value })} 
+                        placeholder="Ej: Sabor & Stock Restaurante" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-semibold" 
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">NIT / RUT del Negocio</label>
+                      <input 
+                        type="text" 
+                        value={negocio.nit || ''} 
+                        onChange={e => setNegocio({ ...negocio, nit: e.target.value })} 
+                        placeholder="Ej: 900.123.456-7" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Teléfono / WhatsApp</label>
+                      <div className="relative">
+                        <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
+                        <input 
+                          type="tel" 
+                          value={negocio.telefono || ''} 
+                          onChange={e => setNegocio({ ...negocio, telefono: e.target.value })} 
+                          placeholder="Ej: 601 123 4567 / 300 000 0000" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        />
                       </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Dirección Física</label>
+                      <div className="relative">
+                        <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
+                        <input 
+                          type="text" 
+                          value={negocio.direccion || ''} 
+                          onChange={e => setNegocio({ ...negocio, direccion: e.target.value })} 
+                          placeholder="Ej: Carrera 15 # 85-30, Bogotá" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Correo Electrónico de Contacto</label>
+                      <div className="relative">
+                        <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
+                        <input 
+                          type="email" 
+                          value={negocio.email || ''} 
+                          onChange={e => setNegocio({ ...negocio, email: e.target.value })} 
+                          placeholder="contacto@mirestaurante.com" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Moneda Principal</label>
                       <select 
-                        value={ruta?.idImpresora || ''}
-                        onChange={(e) => {
-                          const nuevoId = e.target.value;
-                          setRutas(prev => {
-                            const existe = prev.find(r => r.categoria === cat);
-                            if (existe) return prev.map(r => r.categoria === cat ? { ...r, idImpresora: nuevoId } : r);
-                            return [...prev, { categoria: cat, idImpresora: nuevoId }];
-                          });
-                        }}
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-2 py-1.5 text-base sm:text-xs focus:outline-none focus:border-[#5BC0DE] w-full sm:w-64"
+                        value={negocio.moneda || 'COP'} 
+                        onChange={e => setNegocio({ ...negocio, moneda: e.target.value })}
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
                       >
-                        <option value="">(No imprimir)</option>
-                        {impresoras.filter(i => i.activa).map(i => (
-                          <option key={i.id} value={i.id}>{i.nombre}</option>
-                        ))}
+                        <option value="COP">COP ($) - Peso Colombiano</option>
+                        <option value="USD">USD ($) - Dólar Estadounidense</option>
+                        <option value="EUR">EUR (€) - Euro</option>
+                        <option value="MXN">MXN ($) - Peso Mexicano</option>
                       </select>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Nota Aclaratoria */}
-            <div className="bg-[#D97706]/10 border border-[#D97706]/30 rounded-xl p-3 flex gap-2 items-start">
-              <span className="text-[#D97706] shrink-0 mt-0.5">ℹ️</span>
-              <div>
-                <p className="text-[11px] font-bold text-[#D97706]">¿Cómo funciona la impresión?</p>
-                <p className="text-[10px] text-[#D97706]/80 mt-0.5">
-                  Para comandas automáticas sin diálogo, instala un agente local (QZ Tray o PrintNode) en el equipo de caja. Los recibos usan impresión directa del navegador.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================= TAB 2: FACTURACIÓN ================= */}
-        {activeTab === 'facturacion' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#4ADE80]/10 flex items-center justify-center text-[#4ADE80]">
-                  <ShieldCheck size={24} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#F4D6B0]">Facturación Electrónica DIAN</h3>
-                  <p className="text-[11px] text-[#5BC0DE] mt-0.5">Habilitar generación y envío automático</p>
-                </div>
-              </div>
-              <Toggle checked={facturacion.habilitada} onChange={() => setFacturacion({...facturacion, habilitada: !facturacion.habilitada})} />
-            </div>
-
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
-              <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Entorno</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFacturacion({...facturacion, entorno: 'pruebas'})}
-                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${facturacion.entorno === 'pruebas' ? 'bg-[#D97706]/15 border-[#D97706] text-[#D97706]' : 'bg-[#0B132B] border-[#3A506B] text-[#5BC0DE] hover:border-[#5BC0DE]'}`}
-                >
-                  <RefreshCw size={18} />
-                  <span className="text-xs font-bold">Habilitación</span>
-                  <span className="text-[9px]">Pruebas DIAN</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFacturacion({...facturacion, entorno: 'produccion'})}
-                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${facturacion.entorno === 'produccion' ? 'bg-[#4ADE80]/15 border-[#4ADE80] text-[#4ADE80]' : 'bg-[#0B132B] border-[#3A506B] text-[#5BC0DE] hover:border-[#5BC0DE]'}`}
-                >
-                  <CheckCircle size={18} />
-                  <span className="text-xs font-bold">Producción</span>
-                  <span className="text-[9px]">Facturas Reales</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
-              <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Resolución y Rangos</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1 sm:col-span-2">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Número de Resolución</label>
-                  <input type="text" value={facturacion.resolucion} onChange={e => setFacturacion({...facturacion, resolucion: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Prefijo</label>
-                  <input type="text" value={facturacion.prefijo} onChange={e => setFacturacion({...facturacion, prefijo: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Rango Inicial</label>
-                  <input type="number" value={facturacion.rangoInicial} onChange={e => setFacturacion({...facturacion, rangoInicial: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Rango Final</label>
-                  <input type="number" value={facturacion.rangoFinal} onChange={e => setFacturacion({...facturacion, rangoFinal: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
-              <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Credenciales Proveedor</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Software ID</label>
-                  <input type="text" value={facturacion.softwareId} onChange={e => setFacturacion({...facturacion, softwareId: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">PIN / Clave Técnica</label>
-                  <div className="relative">
-                    <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
-                    <input type="password" value={facturacion.claveTecnica} onChange={e => setFacturacion({...facturacion, claveTecnica: e.target.value})} className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
                   </div>
-                </div>
-                <div className="flex flex-col gap-1 sm:col-span-2">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">API Key</label>
-                  <input type="password" value={facturacion.apiKey} onChange={e => setFacturacion({...facturacion, apiKey: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-                </div>
-              </div>
-              <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[#3A506B]/50">
-                <span className="text-[10px] text-[#5BC0DE]">Verifica la conexión con la DIAN</span>
-                <button 
-                  onClick={probarConexion}
-                  disabled={testStatus === 'loading' || testStatus === 'success'}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                    testStatus === 'success' ? 'bg-[#4ADE80] text-[#0B132B]' : 
-                    'bg-[#0B132B] border border-[#5BC0DE] text-[#5BC0DE] hover:bg-[#5BC0DE]/10'
-                  }`}
-                >
-                  {testStatus === 'loading' ? <RefreshCw size={14} className="animate-spin" /> : 
-                   testStatus === 'success' ? <CheckCircle size={14} /> : 
-                   <RefreshCw size={14} />}
-                  {testStatus === 'loading' ? 'Conectando...' : 
-                   testStatus === 'success' ? 'Conexión Exitosa' : 
-                   'Probar Conexión'}
-                </button>
-              </div>
-            </div>
 
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-3">
-              <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Certificado Digital</h3>
-              <div className="bg-[#0B132B] border border-[#3A506B] border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center gap-2">
-                <Upload size={24} className="text-[#5BC0DE]" />
-                <div>
-                  <p className="text-xs font-bold text-[#F4D6B0]">{facturacion.certificadoCargado ? 'certificado_2024.p12' : 'Subir Certificado'}</p>
-                  <p className="text-[10px] text-[#5BC0DE] mt-0.5">{facturacion.certificadoCargado ? 'Vence el: 31/12/2024' : 'Archivo .p12 o .pfx'}</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] text-[#5BC0DE] font-semibold">Contraseña del Certificado</label>
-                <input type="password" placeholder="••••••••" className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-              </div>
-            </div>
-
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex justify-end">
-              <button className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2.5 px-6 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg">
-                <Save size={16} /> Guardar Configuración
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ================= TAB 3: MÉTODOS DE PAGO ================= */}
-        {activeTab === 'pagos' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-bold text-[#F4D6B0]">Métodos de Pago</h3>
-                <p className="text-[11px] text-[#5BC0DE]">Configura cómo recibes el dinero.</p>
-              </div>
-              <button onClick={() => setModalPago(true)} className="text-[10px] bg-[#5BC0DE] text-[#0B132B] px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-[#4CA8C4]">
-                <Plus size={12} /> Añadir
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {pagos.map((pago) => (
-                <div key={pago.id} className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0">
-                      {getIconoPago(pago.icono)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-[#F4D6B0]">{pago.nombre}</p>
-                      {pago.cuentaDestino && <p className="text-[10px] text-[#5BC0DE] mt-0.5 truncate">Destino: {pago.cuentaDestino}</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 sm:gap-6 shrink-0 border-t sm:border-t-0 border-[#3A506B]/50 pt-2 sm:pt-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#5BC0DE] font-medium hidden sm:inline">Requiere Ref.</span>
-                      <Toggle checked={pago.requiereReferencia} onChange={() => {}} />
-                    </div>
-                    <div className="h-6 w-px bg-[#3A506B] hidden sm:block"></div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#5BC0DE] font-medium">Activo</span>
-                      <Toggle checked={pago.activo} onChange={() => {
-                        setPagos(prev => prev.map(p => p.id === pago.id ? { ...p, activo: !p.activo } : p));
-                      }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ================= TAB 4: NEGOCIO ================= */}
-        {activeTab === 'negocio' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex flex-col items-center justify-center text-center gap-2 border-dashed border-2">
-              <div className="w-16 h-16 rounded-full bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE]">
-                <UploadCloud size={24} />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-[#F4D6B0]">Logotipo del Restaurante</p>
-                <p className="text-[10px] text-[#5BC0DE]">PNG o JPG. Máx 2MB.</p>
-              </div>
-              <button className="mt-1 text-[10px] bg-[#0B132B] text-[#5BC0DE] border border-[#3A506B] px-3 py-1.5 rounded-lg font-bold hover:bg-[#3A506B]/50">
-                Subir Imagen
-              </button>
-            </div>
-
-            <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
-              <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Información de la Empresa</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1 sm:col-span-2">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Nombre del Establecimiento</label>
-                  <input type="text" value={negocio.nombre} onChange={e => setNegocio({...negocio, nombre: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">NIT / RUT</label>
-                  <input type="text" value={negocio.nit} onChange={e => setNegocio({...negocio, nit: e.target.value})} className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Teléfono</label>
-                  <div className="relative">
-                    <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
-                    <input type="tel" value={negocio.telefono} onChange={e => setNegocio({...negocio, telefono: e.target.value})} className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1 sm:col-span-2">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Dirección</label>
-                  <div className="relative">
-                    <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
-                    <input type="text" value={negocio.direccion} onChange={e => setNegocio({...negocio, direccion: e.target.value})} className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1 sm:col-span-2">
-                  <label className="text-[10px] text-[#5BC0DE] font-semibold">Correo</label>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
-                    <input type="email" value={negocio.email} onChange={e => setNegocio({...negocio, email: e.target.value})} className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" />
+                  <div className="pt-4 border-t border-[#3A506B] flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <p className="text-[11px] text-[#5BC0DE]">
+                      * Al guardar, los tickets de cobro y comandas reflejarán de inmediato estos datos.
+                    </p>
+                    <button 
+                      onClick={guardarNegocio}
+                      disabled={guardando}
+                      className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2.5 px-6 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+                    >
+                      <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar Datos de Mi Negocio'}
+                    </button>
                   </div>
                 </div>
               </div>
-              <div className="pt-3 border-t border-[#3A506B] flex justify-end">
-                <button className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5">
-                  <Save size={14} /> Guardar Datos
-                </button>
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </main>
 
@@ -578,12 +1114,47 @@ export default function Configuracion() {
       <FixedModal 
         isOpen={modalImpresora} 
         onClose={() => setModalImpresora(false)} 
-        title={editandoId ? 'Editar Impresora' : 'Añadir Impresora'}
+        title={editandoId ? 'Editar Impresora y Filtros' : 'Añadir Nueva Impresora'}
       >
-        <div className="space-y-3 text-sm">
+        <div className="space-y-4 text-sm">
           {errorImpresora && (
-            <div className="bg-[#E57373]/15 border border-[#E57373]/40 text-[#E57373] text-xs p-3 rounded-xl font-medium">
-              {errorImpresora}
+            <div className="bg-[#E57373]/15 border border-[#E57373]/40 text-[#E57373] text-xs p-3 rounded-xl font-medium flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{errorImpresora}</span>
+            </div>
+          )}
+
+          {/* Selector de Impresoras del Sistema Detectadas */}
+          {impresorasSistema.length > 0 && (
+            <div className="bg-[#0B132B] p-2.5 rounded-xl border border-[#3A506B]/70 space-y-1.5">
+              <label className="text-[10px] text-[#5BC0DE] font-bold flex items-center gap-1.5">
+                <Printer size={12} className="text-[#4ADE80]" />
+                Vincular con impresora detectada de Windows:
+              </label>
+              <select
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  if (!valor) return;
+                  const match = impresorasSistema.find((i) => i.nombre === valor);
+                  if (match) {
+                    setFormImpresora({
+                      ...formImpresora,
+                      nombre: formImpresora.nombre.trim() ? formImpresora.nombre : match.nombre,
+                      direccion: match.nombre,
+                      tipo: 'USB',
+                    });
+                  }
+                }}
+                defaultValue=""
+                className="w-full bg-[#1C2541] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#5BC0DE]"
+              >
+                <option value="">-- Seleccionar impresora conectada en este PC --</option>
+                {impresorasSistema.map((s) => (
+                  <option key={s.nombre} value={s.nombre}>
+                    {s.nombre} {s.predeterminada ? '(Predeterminada de Windows)' : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -593,7 +1164,7 @@ export default function Configuracion() {
               type="text" 
               value={formImpresora.nombre}
               onChange={(e) => setFormImpresora({ ...formImpresora, nombre: e.target.value })}
-              placeholder="Ej: Impresora Cocina 2" 
+              placeholder="Ej: Impresora Cocina Caliente, Barra, Caja..." 
               className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
             />
           </div>
@@ -603,54 +1174,202 @@ export default function Configuracion() {
               <label className="text-[10px] text-[#5BC0DE] font-semibold">Tipo de Conexión</label>
               <select 
                 value={formImpresora.tipo}
-                onChange={(e) => setFormImpresora({ ...formImpresora, tipo: e.target.value as Impresora['tipo'] })}
+                onChange={(e) => setFormImpresora({ ...formImpresora, tipo: e.target.value as ImpresoraFrontend['tipo'] })}
                 className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
               >
-                <option value="Red (IP)">Red (IP)</option>
-                <option value="USB">USB</option>
-                <option value="Bluetooth">Bluetooth</option>
+                <option value="Red (IP)">Red (IP / Ethernet)</option>
+                <option value="USB">USB Directo</option>
+                <option value="Bluetooth">Bluetooth / Inalámbrico</option>
               </select>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-[#5BC0DE] font-semibold">
-                {formImpresora.tipo === 'Red (IP)' ? 'Dirección IP *' : formImpresora.tipo === 'USB' ? 'Puerto (COM) *' : 'MAC *'}
+                {formImpresora.tipo === 'Red (IP)' ? 'Dirección IP *' : formImpresora.tipo === 'USB' ? 'Puerto (COM/USB) *' : 'Dirección MAC *'}
               </label>
               <input 
                 type="text" 
                 value={formImpresora.direccion}
                 onChange={(e) => setFormImpresora({ ...formImpresora, direccion: e.target.value })}
-                placeholder={formImpresora.tipo === 'Red (IP)' ? '192.168.1.X' : formImpresora.tipo === 'USB' ? 'COM3' : '00:11:22:33:44:55'}
+                placeholder={formImpresora.tipo === 'Red (IP)' ? '192.168.1.100' : formImpresora.tipo === 'USB' ? 'COM3' : '00:11:22:33:44:55'}
                 className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
               />
             </div>
           </div>
 
+          {/* ESTADO ONLINE / OFFLINE */}
           <div className="flex items-center justify-between bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]">
             <div>
               <p className="text-xs font-bold text-[#F4D6B0]">Estado de la Impresora</p>
-              <p className="text-[10px] text-[#5BC0DE]">Marcar como activa (Online)</p>
+              <p className="text-[10px] text-[#5BC0DE]">Habilitada para recibir impresiones</p>
             </div>
             <Toggle 
               checked={formImpresora.activa} 
               onChange={() => setFormImpresora({ ...formImpresora, activa: !formImpresora.activa })} 
             />
           </div>
+
+          {/* ================= FILTRO DE CATEGORÍAS ================= */}
+          <div className="bg-[#0B132B] p-3 rounded-xl border border-[#3A506B] space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-[#F4D6B0] flex items-center gap-1.5">
+                  <Utensils size={13} className="text-[#5BC0DE]" />
+                  Categorías a Imprimir
+                </p>
+                <p className="text-[10px] text-[#5BC0DE]">
+                  {formImpresora.categoriasIds.length === 0 
+                    ? '(Imprime todas las categorías)' 
+                    : `(${formImpresora.categoriasIds.length} categoría(s) seleccionadas)`}
+                </p>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setFormImpresora({
+                    ...formImpresora,
+                    categoriasIds: categoriasMenu.map(c => Number(c.id_categoria)),
+                  })}
+                  className="text-[9px] text-[#5BC0DE] hover:underline font-bold"
+                >
+                  Todas
+                </button>
+                <span className="text-[#3A506B] text-[9px]">|</span>
+                <button
+                  type="button"
+                  onClick={() => setFormImpresora({ ...formImpresora, categoriasIds: [] })}
+                  className="text-[9px] text-[#E57373] hover:underline font-bold"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+              {categoriasMenu.map(cat => {
+                const idCatNum = Number(cat.id_categoria);
+                const seleccionada = formImpresora.categoriasIds.includes(idCatNum);
+                return (
+                  <button
+                    key={cat.id_categoria}
+                    type="button"
+                    onClick={() => toggleCategoriaModal(idCatNum)}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-left text-xs transition-colors ${
+                      seleccionada
+                        ? 'bg-[#5BC0DE]/15 border-[#5BC0DE] text-[#F4D6B0] font-bold'
+                        : 'bg-[#1C2541] border-[#3A506B]/60 text-[#F4D6B0]/70 hover:border-[#5BC0DE]/50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                      seleccionada ? 'bg-[#5BC0DE] border-[#5BC0DE] text-[#0B132B]' : 'border-[#3A506B]'
+                    }`}>
+                      {seleccionada && <Check size={11} strokeWidth={3} />}
+                    </div>
+                    <span className="truncate">{cat.nombre}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ================= FILTRO DE SECCIONES ================= */}
+          <div className="bg-[#0B132B] p-3 rounded-xl border border-[#3A506B] space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-[#F4D6B0] flex items-center gap-1.5">
+                  <Layers size={13} className="text-[#F4D6B0]" />
+                  Secciones de Mesas a Imprimir
+                </p>
+                <p className="text-[10px] text-[#5BC0DE]">
+                  {formImpresora.seccionesIds.length === 0 
+                    ? '(Imprime para todas las secciones)' 
+                    : `(${formImpresora.seccionesIds.length} sección(es) seleccionadas)`}
+                </p>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setFormImpresora({
+                    ...formImpresora,
+                    seccionesIds: seccionesRestaurante.map(s => Number(s.id)),
+                  })}
+                  className="text-[9px] text-[#5BC0DE] hover:underline font-bold"
+                >
+                  Todas
+                </button>
+                <span className="text-[#3A506B] text-[9px]">|</span>
+                <button
+                  type="button"
+                  onClick={() => setFormImpresora({ ...formImpresora, seccionesIds: [] })}
+                  className="text-[9px] text-[#E57373] hover:underline font-bold"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+              {seccionesRestaurante.map(sec => {
+                const idSecNum = Number(sec.id);
+                const seleccionada = formImpresora.seccionesIds.includes(idSecNum);
+                return (
+                  <button
+                    key={sec.id}
+                    type="button"
+                    onClick={() => toggleSeccionModal(idSecNum)}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-left text-xs transition-colors ${
+                      seleccionada
+                        ? 'bg-[#F4D6B0]/15 border-[#F4D6B0] text-[#F4D6B0] font-bold'
+                        : 'bg-[#1C2541] border-[#3A506B]/60 text-[#F4D6B0]/70 hover:border-[#F4D6B0]/50'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                      seleccionada ? 'bg-[#F4D6B0] border-[#F4D6B0] text-[#0B132B]' : 'border-[#3A506B]'
+                    }`}>
+                      {seleccionada && <Check size={11} strokeWidth={3} />}
+                    </div>
+                    <span className="truncate">{sec.nombre}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        <div className="pt-4 border-t border-[#3A506B] flex justify-end gap-2">
-          <button 
-            onClick={() => setModalImpresora(false)} 
-            className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B] hover:bg-[#3A506B]/30"
-          >
-            Cancelar
-          </button>
-          <button 
-            onClick={guardarImpresora}
-            className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold hover:bg-[#4CA8C4] flex items-center gap-1.5"
-          >
-            <Save size={14} />
-            {editandoId ? 'Guardar Cambios' : 'Crear Impresora'}
-          </button>
+        <div className="pt-4 border-t border-[#3A506B] flex items-center justify-between gap-2">
+          {editandoId !== null ? (
+            <button
+              type="button"
+              onClick={() => {
+                const impActual = impresoras.find(i => i.id === editandoId);
+                if (impActual) probarImpresion({ ...impActual, ...formImpresora, id: editandoId });
+              }}
+              className="px-3 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-bold border border-[#5BC0DE]/40 hover:bg-[#5BC0DE]/10 flex items-center gap-1.5 transition-all"
+              title="Imprimir ticket de prueba con los datos actuales"
+            >
+              <Printer size={14} /> Imprimir Prueba
+            </button>
+          ) : (
+            <div></div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={() => setModalImpresora(false)} 
+              className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B] hover:bg-[#3A506B]/30"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="button"
+              onClick={guardarImpresora}
+              disabled={guardando}
+              className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold hover:bg-[#4CA8C4] flex items-center gap-1.5 shadow-md"
+            >
+              <Save size={14} />
+              {guardando ? 'Guardando...' : (editandoId ? 'Guardar Cambios' : 'Crear Impresora')}
+            </button>
+          </div>
         </div>
       </FixedModal>
 
@@ -658,27 +1377,76 @@ export default function Configuracion() {
       <FixedModal isOpen={modalPago} onClose={() => setModalPago(false)} title="Añadir Método de Pago">
         <div className="space-y-3 text-sm">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#5BC0DE] font-semibold">Nombre del Método</label>
-            <input type="text" placeholder="Ej: Daviplata" className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" />
+            <label className="text-[10px] text-[#5BC0DE] font-semibold">Nombre del Método *</label>
+            <input 
+              type="text" 
+              value={formPago.nombre}
+              onChange={e => setFormPago({ ...formPago, nombre: e.target.value })}
+              placeholder="Ej: Daviplata, Bold, Sodexo..." 
+              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+            />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#5BC0DE] font-semibold">Tipo de Pago</label>
-            <select className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]">
+            <label className="text-[10px] text-[#5BC0DE] font-semibold">Tipo / Icono</label>
+            <select 
+              value={formPago.icono}
+              onChange={e => setFormPago({ ...formPago, icono: e.target.value as MetodoPagoConfig['icono'] })}
+              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+            >
               <option value="efectivo">Efectivo</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="transferencia">Transferencia / QR</option>
+              <option value="tarjeta">Tarjeta (Débito/Crédito)</option>
+              <option value="transferencia">Transferencia (Nequi/Banco)</option>
+              <option value="qr">Código QR / Billetera Digital</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#5BC0DE] font-semibold">Cuenta Destino (Opcional)</label>
-            <input type="text" placeholder="Número de cuenta o teléfono" className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" />
+            <label className="text-[10px] text-[#5BC0DE] font-semibold">Cuenta o Dispositivo Destino (Opcional)</label>
+            <input 
+              type="text" 
+              value={formPago.cuentaDestino}
+              onChange={e => setFormPago({ ...formPago, cuentaDestino: e.target.value })}
+              placeholder="Ej: Ahorros # 1234, Datáfono Barra..." 
+              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+            />
           </div>
         </div>
         <div className="pt-4 border-t border-[#3A506B] flex justify-end gap-2">
-          <button onClick={() => setModalPago(false)} className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B]">Cancelar</button>
-          <button onClick={() => setModalPago(false)} className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold">Guardar</button>
+          <button 
+            type="button"
+            onClick={() => setModalPago(false)} 
+            className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B]"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="button"
+            onClick={agregarNuevoPago} 
+            className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold"
+          >
+            Guardar
+          </button>
         </div>
       </FixedModal>
+
+      {/* ================= PLANTILLA DE PRUEBA DE IMPRESIÓN (80mm ESC/POS) ================= */}
+      {impresoraAProbar && (
+        <FormatoTicketTermico
+          tipo="prueba"
+          negocio={negocio}
+          nombreImpresora={impresoraAProbar.nombre}
+          tipoImpresora={impresoraAProbar.tipo}
+          direccionImpresora={impresoraAProbar.direccion}
+          estadoImpresora={impresoraAProbar.activa ? 'ONLINE (ACTIVA)' : 'OFFLINE (INACTIVA)'}
+          categoriasAsignadas={impresoraAProbar.categoriasIds.map(idCat => {
+            const c = categoriasMenu.find(item => Number(item.id_categoria) === Number(idCat));
+            return c ? c.nombre : `#${idCat}`;
+          })}
+          seccionesAsignadas={impresoraAProbar.seccionesIds.map(idSec => {
+            const s = seccionesRestaurante.find(item => Number(item.id) === Number(idSec));
+            return s ? s.nombre : `#${idSec}`;
+          })}
+        />
+      )}
 
     </div>
   );

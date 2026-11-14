@@ -95,4 +95,13 @@ export class CategoriaIngredienteRepositorio {
 
         if (error) throw new Error(mensajeError('cambiar estado de categoría', error));
     }
+
+    async eliminar(id: number): Promise<void> {
+        const { error } = await supabase
+            .from(Tabla)
+            .delete()
+            .eq('id_categoria_ingrediente', id);
+
+        if (error) throw new Error(mensajeError('eliminar categoría', error));
+    }
 }

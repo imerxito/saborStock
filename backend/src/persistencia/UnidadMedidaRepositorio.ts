@@ -5,11 +5,11 @@ const Tabla='unidad_medida';
 
 function filaUnidadMedida(fila:any):UnidadMedida{
     return {
-        id:fila.id,
-        nombre:fila.nombre,
-        abreviatura:fila.abreviatura,
-        descripcion:fila.descripcion??null,
-        activo:fila.activo
+        id: String(fila.id_unidad ?? fila.id),
+        nombre: fila.nombre,
+        abreviatura: fila.abreviatura,
+        descripcion: fila.descripcion ?? null,
+        activo: fila.activo ?? true
     };
 }
 
@@ -33,7 +33,7 @@ export class UnidadMedidaRepositorio{
         const {data,error} = await supabase
         .from(Tabla)
         .select('*')
-        .eq('id',id)
+        .eq('id_unidad',id)
         .single();
 
         if (error) throw new Error(mensajeError('obtenerPorId',error));
@@ -90,7 +90,7 @@ export class UnidadMedidaRepositorio{
             abreviatura:params.abreviatura,
             descripcion:params.descripcion??null
         })
-        .eq('id',id)
+        .eq('id_unidad',id)
         .select('*')
         .single();
 
@@ -102,7 +102,7 @@ export class UnidadMedidaRepositorio{
         const {error} = await supabase
         .from(Tabla)
         .update({activo})
-        .eq('id',id);
+        .eq('id_unidad',id);
         if (error) throw new Error(mensajeError('cambiarEstado',error));
     }
 }

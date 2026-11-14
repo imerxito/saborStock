@@ -8,5 +8,6 @@ router.get("/", (req, res) => comandaControlador.listar(req, res));
 router.get("/:id", (req, res) => comandaControlador.obtenerPorId(req, res));
 router.post("/", (req, res) => comandaControlador.crear(req, res));
 router.put("/:id", (req, res) => comandaControlador.actualizar(req, res));
+router.delete("/:id", (req, res) => comandaControlador.eliminar(req, res));
 
 export default router;

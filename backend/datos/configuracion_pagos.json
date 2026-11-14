@@ -1,0 +1,33 @@
+[
+  {
+    "id": "p-1",
+    "nombre": "Efectivo",
+    "icono": "efectivo",
+    "activo": true,
+    "requiereReferencia": false
+  },
+  {
+    "id": "p-2",
+    "nombre": "Tarjeta Débito/Crédito",
+    "icono": "tarjeta",
+    "activo": true,
+    "requiereReferencia": true,
+    "cuentaDestino": "Datáfono"
+  },
+  {
+    "id": "p-3",
+    "nombre": "Transferencia Nequi",
+    "icono": "transferencia",
+    "activo": true,
+    "requiereReferencia": true,
+    "cuentaDestino": "300 123 4567"
+  },
+  {
+    "id": "p-4",
+    "nombre": "Transferencia Bancolombia",
+    "icono": "transferencia",
+    "activo": true,
+    "requiereReferencia": true,
+    "cuentaDestino": "Ahorros 123-456789"
+  }
+]

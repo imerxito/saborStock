@@ -42,7 +42,8 @@ export class UsuarioControlador{
 
     async actualizar(req:Request<{id:string}>,res:Response):Promise<void>{
         try{
-            const usuarioActualizado = await usuarioServicio.actualizar(req.params.id, req.body);
+            const rolSolicitante = req.headers["x-user-role"] as string | undefined;
+            const usuarioActualizado = await usuarioServicio.actualizar(req.params.id, req.body, rolSolicitante);
             res.status(200).json(usuarioActualizado);
         }catch(error:any){
             res.status(400).json({mensaje: error.message});
@@ -52,7 +53,8 @@ export class UsuarioControlador{
 
     async desactivar(req:Request<{id:string}>,res:Response):Promise<void>{
         try{
-            const usuario = await usuarioServicio.desactivar(req.params.id);
+            const rolSolicitante = req.headers["x-user-role"] as string | undefined;
+            const usuario = await usuarioServicio.desactivar(req.params.id, rolSolicitante);
             res.status(200).json(usuario); 
         }catch(error:any){
             res.status(400).json({mensaje: error.message})
@@ -61,7 +63,8 @@ export class UsuarioControlador{
 
     async activar(req:Request<{id:string}>,res:Response):Promise<void>{
         try{
-            const usuario = await usuarioServicio.activar(req.params.id);
+            const rolSolicitante = req.headers["x-user-role"] as string | undefined;
+            const usuario = await usuarioServicio.activar(req.params.id, rolSolicitante);
             res.status(200).json(usuario); 
         }catch(error:any){
             res.status(400).json({mensaje: error.message})

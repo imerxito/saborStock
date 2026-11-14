@@ -3,11 +3,19 @@ export const API_URL =
 
 export function authHeaders(): HeadersInit {
     const token = localStorage.getItem("token");
+    const usuarioRaw = localStorage.getItem("usuario");
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
     };
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
+    }
+    if (usuarioRaw) {
+        try {
+            const u = JSON.parse(usuarioRaw);
+            if (u.rol) headers["X-User-Role"] = u.rol;
+            if (u.id || u.idUsuario) headers["X-User-Id"] = String(u.id || u.idUsuario);
+        } catch {}
     }
     return headers;
 }

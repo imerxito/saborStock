@@ -52,6 +52,7 @@ function mapearComandaBackend(c: any): Comanda {
         ? c.detalles.map((d: any) => ({
               id: d.id,
               idProducto: d.idProducto,
+              idCategoria: d.idCategoria ?? null,
               producto: d.nombreProducto || `Producto #${d.idProducto}`,
               cantidad: Number(d.cantidad) || 1,
               precio: Number(d.precio) || 0,
@@ -83,10 +84,11 @@ function mapearComandaBackend(c: any): Comanda {
             : undefined),
         personas: c.personas ?? undefined,
         total: totalCalculado,
-        despachadaEn:
-            estado === "Lista" || estado === "Entregada"
-                ? c.fechaDespachada
-                    ? new Date(c.fechaDespachada).getTime()
+        despachadaEn: c.fechaDespachada
+            ? new Date(c.fechaDespachada).getTime()
+            : estado === "Lista" || estado === "Entregada" || estado === "Cerrado"
+                ? c.fechaCreacion
+                    ? new Date(c.fechaCreacion).getTime()
                     : Date.now()
                 : undefined,
     };
@@ -173,6 +175,12 @@ export const ComandaServicio = {
         await fetchJson<unknown>(`/api/comandas/${id}`, {
             method: "PUT",
             body: JSON.stringify({ estado: "Cerrado" }),
+        });
+    },
+
+    async eliminarComanda(id: number): Promise<void> {
+        await fetchJson<unknown>(`/api/comandas/${id}`, {
+            method: "DELETE",
         });
     },
 

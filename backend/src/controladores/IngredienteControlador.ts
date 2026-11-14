@@ -14,6 +14,15 @@ export class IngredienteControlador {
         }
     }
 
+    async siguienteCodigo(_req: Request, res: Response): Promise<void> {
+        try {
+            const codigo = await ingredienteServicio.generarSiguienteCodigo();
+            res.status(200).json({ codigo });
+        } catch (error: any) {
+            res.status(500).json({ mensaje: error.message });
+        }
+    }
+
     async obtenerPorId(
         req: Request<{ id: string }>,
         res: Response

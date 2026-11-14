@@ -8,6 +8,10 @@ router.get("/", (req, res) =>
     compraControlador.listar(req, res)
 );
 
+router.get("/siguiente-factura", (req, res) =>
+    compraControlador.obtenerSiguienteFactura(req, res)
+);
+
 router.get("/:id", (req, res) =>
     compraControlador.obtenerPorId(req, res)
 );

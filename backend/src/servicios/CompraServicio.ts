@@ -23,6 +23,23 @@ export class CompraServicio {
         return await this.compraRepositorio.listar();
     }
 
+    async generarSiguienteFactura(): Promise<string> {
+        const compras = await this.compraRepositorio.listar();
+        let maxNum = 0;
+        for (const c of compras) {
+            if (!c.factura) continue;
+            const match = c.factura.match(/FAC[-_ ]*(\d+)/i) || c.factura.match(/(\d+)/);
+            if (match) {
+                const num = parseInt(match[1], 10);
+                if (!isNaN(num) && num > maxNum) {
+                    maxNum = num;
+                }
+            }
+        }
+        const siguiente = maxNum + 1;
+        return `FAC-${String(siguiente).padStart(3, "0")}`;
+    }
+
     async obtenerPorId(id: number): Promise<Compra> {
         if (!Number.isInteger(id) || id <= 0) {
             throw new Error(
@@ -81,6 +98,10 @@ export class CompraServicio {
             throw new Error("El proveedor no existe");
         }
 
+        const facturaFinal = (datosCompra.factura && datosCompra.factura.trim() !== "")
+            ? datosCompra.factura.trim()
+            : await this.generarSiguienteFactura();
+
         const detallesValidos = Array.isArray(detalles) ? detalles : [];
         const itemsStock: Array<{ idIngrediente: number; cantidad: number }> = [];
         const detallesCompra: Array<{
@@ -132,10 +153,17 @@ export class CompraServicio {
         }
         const detallesFinales = Array.from(consolidados.values());
 
+        const totalCalculado = detallesFinales.reduce((acc, d) => acc + (d.cantidad * d.precio_aplicado), 0);
+        const totalFinal = (datosCompra.total !== undefined && datosCompra.total > 0)
+            ? datosCompra.total
+            : totalCalculado;
+
         // El trigger tg_compra_stock mueve el stock al pasar a RECIBIDA,
         // por eso la compra nace como REGISTRADA y luego se actualiza.
         const compra = await this.compraRepositorio.crear({
             ...datosCompra,
+            factura: facturaFinal,
+            total: totalFinal,
             estado: datos.estado === "ANULADA" ? "ANULADA" : "REGISTRADA"
         });
 

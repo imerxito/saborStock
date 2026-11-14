@@ -24,22 +24,53 @@ import {
   Eye,
   Search,
   X,
-  RotateCw
+  RotateCw,
+  Printer
 } from 'lucide-react';
 import { useAuth } from '../../contexto/AuthContexto';
 import { useComandas } from '../../contexto/ComandasContexto';
 import { MesaServicio } from '../../servicios/MesaServicio';
 import { ProductoServicio } from '../../servicios/ProductoServicio';
 import { CajaServicio, type TurnoCajaDTO } from '../../servicios/CajaServicio';
+import { UsuarioServicio } from '../../servicios/UsuarioServicio';
+import { NominaServicio, type PagoNomina } from '../../servicios/NominaServicio';
+import { 
+  ConfiguracionServicio, 
+  type ConfiguracionNegocio, 
+  type ConfiguracionFacturacion,
+  type ImpresoraFrontend
+} from '../../servicios/ConfiguracionServicio';
 import type { MesaBackend } from '../../tipos/Comanda';
+import FormatoTicketTermico from '../../componentes/FormatoTicketTermico';
+
+export interface TicketCaja {
+  titulo: string;
+  cliente: string;
+  mesa?: string;
+  seccion?: string;
+  items: { nombre: string; cantidad: number; precio: number; nota?: string }[];
+  subtotal: number;
+  descuento?: number;
+  propina?: number;
+  total: number;
+  metodoPago: string;
+  fecha: string;
+}
 
 // --- Tipos de Datos ---
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'mixto';
 
-interface Producto { id: string; nombre: string; precio: number; categoria: string; }
+interface Producto { id: string; nombre: string; precio: number; categoria: string; idCategoria?: number; }
 interface ItemPedido { producto: Producto; cantidad: number; }
 interface Movimiento { id: string; tipo: 'ingreso' | 'egreso'; concepto: string; monto: number; hora: string; }
-interface PagoNomina { id: string; empleado: string; cedula: string; telefono: string; cargo: string; montoBase: number; bono: number; montoTotal: number; metodo: string; fecha: string; }
+
+export interface EmpleadoNomina {
+  idUsuario: number;
+  nombre: string;
+  cedula: string;
+  telefono: string;
+  cargo: string;
+}
 
 // NUEVO: SubVentas dentro de una mesa
 interface SubVenta {
@@ -74,14 +105,7 @@ interface MesaActiva {
   ventas: SubVenta[];
 }
 
-// Datos del Sistema
-const EMPLEADOS_MOCK = [
-  { nombre: 'Carlos Gómez', cedula: '1065789123', telefono: '3001234567', cargo: 'Mesero' },
-  { nombre: 'Ana María Pérez', cedula: '1065987456', telefono: '3109876543', cargo: 'Cajera' },
-  { nombre: 'Luis Fernando Díaz', cedula: '1065412789', telefono: '3204567891', cargo: 'Chef Principal' },
-  { nombre: 'Mariana López', cedula: '1098456123', telefono: '3157894561', cargo: 'Auxiliar de Cocina' },
-];
-
+// Componente Principal
 export default function Caja(): React.ReactElement {
   const { usuario } = useAuth();
   const { comandas, crear, recargar } = useComandas();
@@ -94,19 +118,57 @@ export default function Caja(): React.ReactElement {
   const [montoCierre, setMontoCierre] = useState<number>(0);
   const [modalTurno, setModalTurno] = useState<boolean>(false);
   const [cargando, setCargando] = useState<boolean>(false);
+  const [ticketAImprimir, setTicketAImprimir] = useState<TicketCaja | null>(null);
+  const [negocioConfig, setNegocioConfig] = useState<ConfiguracionNegocio | null>(null);
+  const [facturacionConfig, setFacturacionConfig] = useState<ConfiguracionFacturacion | null>(null);
+  const [impresorasConfig, setImpresorasConfig] = useState<ImpresoraFrontend[]>([]);
   
   const [activeTab, setActiveTab] = useState<'ventas' | 'cobrar' | 'historialMesas' | 'movimientos' | 'nomina'>('ventas');
+
+  useEffect(() => {
+    if (ticketAImprimir) {
+      const timer = setTimeout(() => {
+        window.print();
+        setTicketAImprimir(null);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [ticketAImprimir]);
 
   const cargarDatos = useCallback(async () => {
     try {
       setCargando(true);
-      const [mesasData, prodsData, turno, movs, facturas] = await Promise.all([
+      const [mesasData, prodsData, turno, movs, facturas, negData, factData, usuariosData, nominasData, impData] = await Promise.all([
         MesaServicio.listarMesas(),
         ProductoServicio.listar(),
-        CajaServicio.obtenerTurnoActual(),
-        CajaServicio.listarMovimientos(),
-        CajaServicio.listarFacturas(),
+        CajaServicio.obtenerTurnoActual().catch(() => null),
+        CajaServicio.listarMovimientos().catch(() => []),
+        CajaServicio.listarFacturas().catch(() => []),
+        ConfiguracionServicio.obtenerNegocio().catch(() => null),
+        ConfiguracionServicio.obtenerFacturacion().catch(() => null),
+        UsuarioServicio.listar().catch(() => []),
+        NominaServicio.listar().catch(() => []),
+        ConfiguracionServicio.listarImpresoras().catch(() => []),
       ]);
+
+      if (negData) setNegocioConfig(negData);
+      if (factData) setFacturacionConfig(factData);
+      if (nominasData) setNominas(nominasData);
+      if (impData) setImpresorasConfig(impData);
+
+      if (usuariosData && usuariosData.length > 0) {
+        const empList: EmpleadoNomina[] = (usuariosData as any[])
+          .filter((u: any) => u.activo !== false)
+          .map((u: any) => ({
+            idUsuario: Number(u.idUsuario || u.id_usuario || u.id),
+            nombre: u.nombre || 'Empleado',
+            cedula: u.cedula || 'S/N',
+            telefono: u.telefono || '',
+            cargo: u.rol || 'Empleado',
+          }));
+        setEmpleados(empList);
+        setEmpleadoSeleccionado((prev) => prev || (empList.length > 0 ? empList[0] : null));
+      }
 
       if (mesasData && mesasData.length > 0) {
         setMesasRaw(mesasData);
@@ -115,6 +177,7 @@ export default function Caja(): React.ReactElement {
       if (prodsData && prodsData.length > 0) {
         setProductosDisponibles(prodsData.map(p => ({
           id: String(p.id_producto),
+          idCategoria: (p as any).id_categoria ?? undefined,
           nombre: p.nombre,
           precio: p.precio_venta,
           categoria: p.descripcion?.toLowerCase().includes('bebida') || p.nombre.toLowerCase().includes('jugo') || p.nombre.toLowerCase().includes('cerveza')
@@ -265,14 +328,14 @@ export default function Caja(): React.ReactElement {
   const [nuevoMovConcepto, setNuevoMovConcepto] = useState<string>('');
   const [nuevoMovMonto, setNuevoMovMonto] = useState<string>('');
 
-  const [nominas, setNominas] = useState<PagoNomina[]>([
-    { id: '1', empleado: 'Carlos Gómez', cedula: '1065789123', telefono: '3001234567', cargo: 'Mesero', montoBase: 50000, bono: 10000, montoTotal: 60000, metodo: 'Efectivo', fecha: 'Hoy' }
-  ]);
+  const [nominas, setNominas] = useState<PagoNomina[]>([]);
+  const [empleados, setEmpleados] = useState<EmpleadoNomina[]>([]);
   const [busquedaEmpleado, setBusquedaEmpleado] = useState<string>('');
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(EMPLEADOS_MOCK[0]);
+  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<EmpleadoNomina | null>(null);
   const [mostrarSugerencias, setMostrarSugerencias] = useState<boolean>(false);
   const [nomBase, setNomBase] = useState<number>(50000);
   const [nomBono, setNomBono] = useState<number>(0);
+  const [metodoPagoNomina, setMetodoPagoNomina] = useState<string>('Efectivo');
 
   const agregarAlCarrito = (prod: Producto) => {
     setLastAddedId(prod.id);
@@ -362,6 +425,37 @@ export default function Caja(): React.ReactElement {
         }))
       });
 
+      // Despachar automáticamente a impresoras de cocina/barra por socket directo de red
+      try {
+        let imps = impresorasConfig.filter((i) => i.activa);
+        if (imps.length === 0) {
+          try {
+            const frescas = await ConfiguracionServicio.listarImpresoras();
+            imps = (frescas || []).filter((i) => i.activa);
+          } catch {}
+        }
+
+        for (const imp of imps) {
+          const itemsFiltrados = carrito.filter((it) => {
+            if (!imp.categoriasIds || imp.categoriasIds.length === 0) return true;
+            const catId = it.producto.idCategoria;
+            return catId ? imp.categoriasIds.includes(catId) : true;
+          });
+
+          if (itemsFiltrados.length === 0) continue;
+
+          await ConfiguracionServicio.imprimirComandaDirecta(imp.id, {
+            mesa: 'Venta Directa',
+            cliente: clienteStr,
+            mesero: usuario?.nombre?.trim() || 'Cajero',
+            items: itemsFiltrados.map((it) => ({
+              nombre: it.producto.nombre,
+              cantidad: it.cantidad,
+            })),
+          }).catch(() => {});
+        }
+      } catch {}
+
       await CajaServicio.crearFactura({
         idMesa: null,
         idUsuario: idUsuarioActual,
@@ -394,6 +488,7 @@ export default function Caja(): React.ReactElement {
       };
       setMovimientos(prev => [nuevoMov, ...prev]);
       
+      const itemsComprados = carrito.map(it => ({ nombre: it.producto.nombre, cantidad: it.cantidad, precio: it.producto.precio }));
       setCarrito([]);
       setNombreCliente('');
       setMetodoPagoVenta('efectivo');
@@ -401,6 +496,18 @@ export default function Caja(): React.ReactElement {
       setMontoEfectivoVenta(0);
       setMontoDigitalVenta(0);
       setModalCobroVenta(false);
+
+      if (window.confirm('Venta procesada exitosamente. ¿Deseas imprimir la factura / recibo de venta?')) {
+        setTicketAImprimir({
+          titulo: 'Factura / Venta Directa',
+          cliente: clienteStr,
+          items: itemsComprados,
+          subtotal: totalCarrito,
+          total: totalCarrito,
+          metodoPago: metodoPagoVenta.toUpperCase(),
+          fecha: new Date().toLocaleDateString('es-CO'),
+        });
+      }
 
       await recargar();
     } catch (err: any) {
@@ -573,6 +680,20 @@ export default function Caja(): React.ReactElement {
       await recargar();
       await MesaServicio.listarMesas().then(setMesasRaw);
 
+      const datosTicket = {
+        titulo: 'Factura / Comprobante de Pago',
+        cliente: ventaSeleccionada.cliente,
+        mesa: mesaACobrar.nombre,
+        seccion: mesaACobrar.seccion,
+        items: ventaSeleccionada.items.map(it => ({ nombre: it.nombre, cantidad: it.cantidad, precio: it.precio })),
+        subtotal: ventaSeleccionada.total,
+        descuento: descuentoAplicado,
+        propina: Number(propina) || 0,
+        total: totalCobroMesa,
+        metodoPago: metodoPago.toUpperCase(),
+        fecha: fechaActual,
+      };
+
       // Limpiar montos y modal
       setMesaACobrar(null);
       setVentaSeleccionada(null);
@@ -582,6 +703,10 @@ export default function Caja(): React.ReactElement {
       setDescuento(0);
       setMontoRecibidoSimple(0);
       setMetodoPago('efectivo');
+
+      if (window.confirm(`Cobro de ${datosTicket.mesa} realizado con éxito. ¿Deseas imprimir la factura de venta?`)) {
+        setTicketAImprimir(datosTicket);
+      }
     } catch (err: any) {
       alert('Error al cobrar la venta: ' + (err?.message || 'Error desconocido'));
     }
@@ -645,18 +770,50 @@ export default function Caja(): React.ReactElement {
     }
   };
 
+  const totalesTurno = useMemo(() => {
+    let ventasEfectivo = 0;
+    let ventasOtros = 0;
+    let egresos = 0;
+
+    for (const m of movimientos) {
+      const monto = Number(m.monto || 0);
+      if (m.tipo === 'egreso') {
+        egresos += monto;
+      } else {
+        const cLower = (m.concepto || '').toLowerCase();
+        if (cLower.includes('tarjeta') || cLower.includes('transf')) {
+          ventasOtros += monto;
+        } else {
+          ventasEfectivo += monto;
+        }
+      }
+    }
+
+    const efectivoEstimado = baseInicial + ventasEfectivo - egresos;
+    return {
+      baseInicial,
+      ventasEfectivo,
+      ventasOtros,
+      egresos,
+      efectivoEstimado: Math.max(0, efectivoEstimado),
+    };
+  }, [baseInicial, movimientos]);
+
   const cerrarTurnoOperacional = async (montoFinalVal: number) => {
     try {
       const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
       const idTurno = turnoActual?.id;
-      if (idTurno) {
-        await CajaServicio.cerrarTurno(idTurno, montoFinalVal, idUsuarioActual);
+      if (!idTurno) {
+        alert('No hay un turno activo registrado para cerrar.');
+        return;
       }
+      await CajaServicio.cerrarTurno(idTurno, montoFinalVal, idUsuarioActual);
       setTurnoActual(null);
       setTurnoAbierto(false);
       setModalTurno(false);
       setMontoCierre(0);
-      alert('Turno de caja cerrado con éxito.');
+      await cargarDatos();
+      alert('✓ Turno de caja cerrado con éxito. Se ha registrado el arqueo final.');
     } catch (err: any) {
       alert('Error al cerrar turno: ' + (err?.message || 'Error desconocido'));
     }
@@ -664,7 +821,10 @@ export default function Caja(): React.ReactElement {
 
   const registrarNomina = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empleadoSeleccionado) return;
+    if (!empleadoSeleccionado) {
+      alert('Por favor selecciona un empleado para registrar la nómina.');
+      return;
+    }
     const total = Number(nomBase) + Number(nomBono);
     if (!(total > 0)) {
       alert('El monto de la nómina debe ser mayor a 0.');
@@ -672,46 +832,66 @@ export default function Caja(): React.ReactElement {
     }
     try {
       const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
-      if (turnoActual?.id) {
-        await CajaServicio.registrarMovimiento({
-          idTurnoCaja: turnoActual.id,
-          idUsuario: idUsuarioActual,
-          monto: total,
-          metodoPago: 'Efectivo',
-          tipoPago: 'egreso',
-          descripcion: `Pago Nómina a ${empleadoSeleccionado.nombre} (${empleadoSeleccionado.cargo})`,
-        });
-      }
-      const nueva: PagoNomina = {
-        id: Date.now().toString(),
-        empleado: empleadoSeleccionado.nombre,
-        cedula: empleadoSeleccionado.cedula,
-        telefono: empleadoSeleccionado.telefono,
-        cargo: empleadoSeleccionado.cargo,
+      const res = await NominaServicio.crear({
+        idUsuario: Number(empleadoSeleccionado.idUsuario),
+        idTurnoCaja: turnoActual?.id ?? null,
         montoBase: Number(nomBase),
         bono: Number(nomBono),
-        montoTotal: total,
-        metodo: 'Efectivo',
-        fecha: new Date().toLocaleDateString()
-      };
-      setNominas(prev => [nueva, ...prev]);
+        metodoPago: metodoPagoNomina,
+        fecha: new Date().toISOString(),
+        registrarEgresoCaja: true,
+        idUsuarioOperador: idUsuarioActual,
+      });
 
-      const egresoNomina: Movimiento = {
-        id: Date.now().toString(),
-        tipo: 'egreso',
-        concepto: `Pago Nómina a ${empleadoSeleccionado.nombre} (${empleadoSeleccionado.cargo})`,
-        monto: total,
-        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMovimientos(prev => [egresoNomina, ...prev]);
+      setNominas(prev => [res, ...prev.filter(n => n.id !== res.id)]);
+
+      if (turnoActual?.id) {
+        const egresoNomina: Movimiento = {
+          id: Date.now().toString(),
+          tipo: 'egreso',
+          concepto: `Pago Nómina a ${empleadoSeleccionado.nombre} (${empleadoSeleccionado.cargo}) - ${metodoPagoNomina}`,
+          monto: total,
+          hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMovimientos(prev => [egresoNomina, ...prev]);
+      }
+
       setNomBono(0);
       setBusquedaEmpleado('');
+      alert(`✓ Pago de nómina por $${total.toLocaleString()} registrado con éxito para ${empleadoSeleccionado.nombre}.`);
     } catch (err: any) {
       alert('Error al registrar pago de nómina: ' + (err?.message || 'Error desconocido'));
     }
   };
 
-  const empleadosFiltrados = EMPLEADOS_MOCK.filter(emp => 
+  const eliminarPagoNomina = async (id: number | string) => {
+    if (!window.confirm('¿Deseas eliminar este registro de nómina?')) return;
+    try {
+      await NominaServicio.eliminar(id);
+      setNominas(prev => prev.filter(n => String(n.id) !== String(id)));
+    } catch (err: any) {
+      alert('Error al eliminar nómina: ' + (err?.message || 'Error desconocido'));
+    }
+  };
+
+  const imprimirComprobanteNomina = (pago: PagoNomina) => {
+    setTicketAImprimir({
+      titulo: 'COMPROBANTE DE PAGO DE NOMINA',
+      cliente: `${pago.empleado} (${pago.cargo}) - CC: ${pago.cedula}`,
+      seccion: `Metodo: ${pago.metodo}`,
+      items: [
+        { nombre: 'Sueldo Base', cantidad: 1, precio: pago.montoBase },
+        ...(pago.bono > 0 ? [{ nombre: 'Bono / Incentivo', cantidad: 1, precio: pago.bono }] : [])
+      ],
+      subtotal: pago.montoTotal,
+      total: pago.montoTotal,
+      metodoPago: pago.metodo,
+      fechaHora: pago.fecha,
+      mensajePie: 'Comprobante de entrega de nómina y liquidación.',
+    });
+  };
+
+  const empleadosFiltrados = empleados.filter(emp => 
     emp.nombre.toLowerCase().includes(busquedaEmpleado.toLowerCase()) ||
     emp.cedula.includes(busquedaEmpleado) ||
     emp.cargo.toLowerCase().includes(busquedaEmpleado.toLowerCase())
@@ -737,7 +917,12 @@ export default function Caja(): React.ReactElement {
             <span className="text-[11px] font-semibold text-[#F4D6B0]">{turnoAbierto ? 'Turno Abierto' : 'Turno Cerrado'}</span>
           </div>
           <button
-            onClick={() => setModalTurno(true)}
+            onClick={() => {
+              if (turnoAbierto) {
+                setMontoCierre(totalesTurno.efectivoEstimado);
+              }
+              setModalTurno(true);
+            }}
             className={`flex items-center gap-1 px-2 py-0.2 rounded font-bold text-[10px] transition-all ${
               turnoAbierto 
                 ? 'bg-[#D97706]/15 text-[#D97706] border border-[#D97706]/30 hover:bg-[#D97706]/25' 
@@ -1126,7 +1311,7 @@ export default function Caja(): React.ReactElement {
                           <Search className="absolute left-3 top-2 text-[#5BC0DE]" size={14} />
                           <input
                             type="text"
-                            placeholder="Buscar por nombre, C.C..."
+                            placeholder="Buscar por nombre, C.C o cargo..."
                             value={busquedaEmpleado}
                             onChange={(e) => {
                               setBusquedaEmpleado(e.target.value);
@@ -1143,7 +1328,7 @@ export default function Caja(): React.ReactElement {
                             ) : (
                               empleadosFiltrados.map(emp => (
                                 <div
-                                  key={emp.cedula}
+                                  key={emp.idUsuario}
                                   onClick={() => {
                                     setEmpleadoSeleccionado(emp);
                                     setBusquedaEmpleado(emp.nombre);
@@ -1159,13 +1344,21 @@ export default function Caja(): React.ReactElement {
                           </div>
                         )}
                       </div>
-                      <div className="bg-[#0B132B] p-2.5 rounded-xl border border-[#3A506B] space-y-0.5 text-[#F4D6B0]">
-                        <p className="flex items-center gap-1 font-bold text-[#5BC0DE] text-xs">
-                          <UserCheck size={13} /> {empleadoSeleccionado.nombre}
-                        </p>
-                        <p className="text-[11px] text-[#5BC0DE]">Cédula: <span className="text-[#F4D6B0]">{empleadoSeleccionado.cedula}</span></p>
-                        <p className="text-[11px] text-[#5BC0DE]">Cargo: <span className="text-[#F4D6B0]">{empleadoSeleccionado.cargo}</span></p>
-                      </div>
+
+                      {empleadoSeleccionado ? (
+                        <div className="bg-[#0B132B] p-2.5 rounded-xl border border-[#3A506B] space-y-0.5 text-[#F4D6B0]">
+                          <p className="flex items-center gap-1 font-bold text-[#5BC0DE] text-xs">
+                            <UserCheck size={13} /> {empleadoSeleccionado.nombre}
+                          </p>
+                          <p className="text-[11px] text-[#5BC0DE]">Cédula: <span className="text-[#F4D6B0]">{empleadoSeleccionado.cedula}</span></p>
+                          <p className="text-[11px] text-[#5BC0DE]">Cargo: <span className="text-[#F4D6B0]">{empleadoSeleccionado.cargo}</span></p>
+                        </div>
+                      ) : (
+                        <div className="bg-[#0B132B]/60 p-2.5 rounded-xl border border-dashed border-[#3A506B] text-center text-[#5BC0DE]/60 text-[11px]">
+                          Selecciona un empleado de la lista
+                        </div>
+                      )}
+
                       <div>
                         <label className="text-[#5BC0DE] mb-1 block text-[11px]">Sueldo Base ($)</label>
                         <input 
@@ -1176,6 +1369,7 @@ export default function Caja(): React.ReactElement {
                           className="w-full bg-[#0B132B] border border-[#3A506B] px-2.5 py-1.5 rounded-xl text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE]" 
                         />
                       </div>
+
                       <div>
                         <label className="text-[#5BC0DE] mb-1 block text-[11px]">Bono / Incentivo ($)</label>
                         <input 
@@ -1187,35 +1381,97 @@ export default function Caja(): React.ReactElement {
                           className="w-full bg-[#0B132B] border border-[#3A506B] px-2.5 py-1.5 rounded-xl text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE]" 
                         />
                       </div>
+
+                      <div>
+                        <label className="text-[#5BC0DE] mb-1 block text-[11px]">Método de Pago</label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {['Efectivo', 'Transferencia', 'Tarjeta', 'Daviplata'].map((met) => (
+                            <button
+                              key={met}
+                              type="button"
+                              onClick={() => setMetodoPagoNomina(met)}
+                              className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold transition border ${
+                                metodoPagoNomina === met
+                                  ? 'bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] font-bold'
+                                  : 'bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]'
+                              }`}
+                            >
+                              {met}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
+
                     <div className="space-y-2.5 pt-2 shrink-0">
                       <div className="p-2 bg-[#5BC0DE]/15 border border-[#5BC0DE]/30 rounded-xl flex justify-between items-center font-bold text-[#5BC0DE] text-xs">
                         <span>Total Pago:</span>
                         <span>${(Number(nomBase) + Number(nomBono)).toLocaleString()}</span>
                       </div>
-                      <button type="submit" className="w-full bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md">
+                      <button 
+                        type="submit" 
+                        disabled={!empleadoSeleccionado}
+                        className="w-full bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 text-[#0B132B] font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md"
+                      >
                         <Plus size={15} /> Registrar Pago Nómina
                       </button>
                     </div>
                   </form>
                 </div>
+
                 <div className="lg:col-span-2 bg-[#1C2541] p-3.5 rounded-2xl border border-[#3A506B] flex flex-col lg:h-full lg:min-h-0">
-                  <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-2.5 shrink-0">Pagos de Personal Registrados</h3>
+                  <div className="flex justify-between items-center mb-2.5 shrink-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0]">Pagos de Personal Registrados</h3>
+                    <span className="text-[11px] text-[#5BC0DE] font-semibold">{nominas.length} registros</span>
+                  </div>
                   <div className="space-y-2 flex-1 overflow-y-auto pr-1 max-h-[55vh] lg:max-h-none scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
-                    {nominas.map((n) => (
-                      <div key={n.id} className="flex justify-between items-center p-2.5 rounded-xl bg-[#0B132B] border border-[#3A506B] text-xs">
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-1.5 rounded-xl bg-[#5BC0DE]/15 text-[#5BC0DE]">
-                            <Users size={15} />
+                    {nominas.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[#5BC0DE]/70">
+                        No hay pagos de nómina registrados en el sistema.
+                      </div>
+                    ) : (
+                      nominas.map((n) => (
+                        <div key={n.id} className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 p-2.5 rounded-xl bg-[#0B132B] border border-[#3A506B] text-xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-1.5 rounded-xl bg-[#5BC0DE]/15 text-[#5BC0DE] shrink-0">
+                              <Users size={15} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-[#F4D6B0] text-xs truncate">
+                                {n.empleado} <span className="text-[10px] text-[#5BC0DE] font-normal">({n.cedula})</span>
+                              </p>
+                              <p className="text-[10px] text-[#5BC0DE] truncate">
+                                {n.cargo} • Base: ${n.montoBase.toLocaleString()} + Bono: ${n.bono.toLocaleString()}
+                              </p>
+                              <p className="text-[9px] text-[#5BC0DE]/60 mt-0.5">
+                                {n.fecha} • {n.metodo}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-[#F4D6B0] text-xs">{n.empleado} <span className="text-[10px] text-[#5BC0DE] font-normal">({n.cedula})</span></p>
-                            <p className="text-[10px] text-[#5BC0DE]">{n.cargo} • Base: ${n.montoBase.toLocaleString()} + Bono: ${n.bono.toLocaleString()}</p>
+                          <div className="flex items-center gap-2 shrink-0 ml-auto">
+                            <span className="font-bold text-[#5BC0DE] text-xs sm:text-sm">
+                              ${n.montoTotal.toLocaleString()}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => imprimirComprobanteNomina(n)}
+                              className="p-1.5 rounded-lg border border-[#5BC0DE]/40 bg-[#5BC0DE]/10 hover:bg-[#5BC0DE]/20 text-[#5BC0DE] transition"
+                              title="Imprimir comprobante"
+                            >
+                              <Printer size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => eliminarPagoNomina(n.id)}
+                              className="p-1.5 rounded-lg border border-[#E57373]/40 bg-[#E57373]/10 hover:bg-[#E57373]/20 text-[#E57373] transition"
+                              title="Eliminar registro"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         </div>
-                        <span className="font-bold text-[#5BC0DE] text-xs sm:text-sm">${n.montoTotal.toLocaleString()}</span>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -1580,9 +1836,29 @@ export default function Caja(): React.ReactElement {
               <span>Total Consumido:</span>
               <span className="text-[#5BC0DE]">${mesaDetalleModal.monto.toLocaleString()}</span>
             </div>
-            <button onClick={() => setMesaDetalleModal(null)} className="w-full bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] py-1.5 rounded-xl font-bold transition-all text-xs">
-              Cerrar Detalle
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => {
+                  setTicketAImprimir({
+                    titulo: 'Factura / Comprobante de Venta',
+                    cliente: mesaDetalleModal.cliente,
+                    mesa: mesaDetalleModal.mesa,
+                    seccion: mesaDetalleModal.seccion,
+                    items: mesaDetalleModal.items.map(it => ({ nombre: it.nombre, cantidad: it.cantidad, precio: it.precio })),
+                    subtotal: mesaDetalleModal.monto,
+                    total: mesaDetalleModal.monto,
+                    metodoPago: mesaDetalleModal.metodoPago,
+                    fecha: mesaDetalleModal.fechaCierre || new Date().toLocaleDateString('es-CO'),
+                  });
+                }}
+                className="flex-1 bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] py-2 rounded-xl font-bold transition-all text-xs flex items-center justify-center gap-1.5 shadow-md"
+              >
+                <Printer size={14} /> Imprimir Factura
+              </button>
+              <button onClick={() => setMesaDetalleModal(null)} className="px-3 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] py-2 rounded-xl font-bold transition-all text-xs">
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1599,15 +1875,57 @@ export default function Caja(): React.ReactElement {
                 : 'Ingresa el monto de base para aperturar la caja.'}
             </p>
             {turnoAbierto ? (
-              <div className="mb-2.5">
-                <label className="text-[#5BC0DE] block mb-1 text-[11px]">Monto Final en Caja ($)</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  value={montoCierre} 
-                  onChange={(e) => setMontoCierre(Number(e.target.value.replace(/\D/g, '')) || 0)} 
-                  className="w-full bg-[#0B132B] border border-[#3A506B] px-2.5 py-1.5 rounded-xl text-[#F4D6B0] text-xs" 
-                />
+              <div className="space-y-2 mb-3">
+                <div className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-2.5 text-[11px] space-y-1">
+                  <div className="flex justify-between text-[#5BC0DE]">
+                    <span>Base inicial:</span>
+                    <span className="font-semibold text-[#F4D6B0]">${totalesTurno.baseInicial.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[#5BC0DE]">
+                    <span>Ventas en efectivo:</span>
+                    <span className="font-semibold text-[#5BC0DE]">+${totalesTurno.ventasEfectivo.toLocaleString()}</span>
+                  </div>
+                  {totalesTurno.ventasOtros > 0 && (
+                    <div className="flex justify-between text-[#5BC0DE]/70 text-[10px]">
+                      <span>Ventas tarjeta/transf:</span>
+                      <span>${totalesTurno.ventasOtros.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {totalesTurno.egresos > 0 && (
+                    <div className="flex justify-between text-[#D97706]">
+                      <span>Egresos registrados:</span>
+                      <span className="font-semibold">-${totalesTurno.egresos.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-[#3A506B] pt-1 text-xs font-bold text-[#F4D6B0]">
+                    <span>Efectivo esperado:</span>
+                    <span className="text-[#5BC0DE]">${totalesTurno.efectivoEstimado.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[#5BC0DE] text-[11px]">Efectivo contado físico ($)</label>
+                    <span className={`text-[10px] font-bold ${
+                      montoCierre - totalesTurno.efectivoEstimado === 0 
+                        ? 'text-emerald-400' 
+                        : montoCierre - totalesTurno.efectivoEstimado > 0 
+                        ? 'text-amber-400' 
+                        : 'text-rose-400'
+                    }`}>
+                      {montoCierre - totalesTurno.efectivoEstimado === 0 
+                        ? 'Cuadrado exacto' 
+                        : `Dif: ${(montoCierre - totalesTurno.efectivoEstimado > 0 ? '+' : '')}$${(montoCierre - totalesTurno.efectivoEstimado).toLocaleString()}`}
+                    </span>
+                  </div>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={montoCierre} 
+                    onChange={(e) => setMontoCierre(Number(e.target.value.replace(/\D/g, '')) || 0)} 
+                    className="w-full bg-[#0B132B] border border-[#3A506B] px-2.5 py-1.5 rounded-xl text-[#F4D6B0] text-xs font-bold focus:outline-none focus:border-[#5BC0DE]" 
+                  />
+                </div>
               </div>
             ) : (
               <div className="mb-2.5">
@@ -1640,6 +1958,32 @@ export default function Caja(): React.ReactElement {
             </div>
           </div>
         </div>
+      )}
+
+      {/* PLANTILLA DE IMPRESIÓN DE FACTURA / TICKET (80mm ESC/POS) */}
+      {ticketAImprimir && (
+        <FormatoTicketTermico
+          tipo="factura"
+          negocio={negocioConfig}
+          facturacion={facturacionConfig}
+          titulo={ticketAImprimir.titulo || 'FACTURA DE VENTA'}
+          mesa={ticketAImprimir.mesa}
+          seccion={ticketAImprimir.seccion}
+          cliente={ticketAImprimir.cliente}
+          fechaHora={ticketAImprimir.fecha}
+          metodoPago={ticketAImprimir.metodoPago}
+          items={ticketAImprimir.items.map(it => ({
+            nombre: it.nombre,
+            cantidad: it.cantidad,
+            precioUnitario: it.precio,
+            subtotal: it.precio * it.cantidad,
+          }))}
+          subtotal={ticketAImprimir.subtotal}
+          descuento={ticketAImprimir.descuento}
+          propina={ticketAImprimir.propina}
+          total={ticketAImprimir.total}
+          mensajePie="¡GRACIAS POR SU COMPRA!"
+        />
       )}
 
     </div>
