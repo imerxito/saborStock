@@ -1,17 +1,18 @@
 export interface Categoria {
-    id:string;
-    nombre:string;
-    descripcion?:string;
-    activo:boolean;
+    id: number | string;
+    id_categoria?: number;
+    nombre: string;
+    descripcion?: string;
+    activo: boolean;
 }
 
 export interface CrearCategoriaDTO {
-    nombre:string;
-    descripcion?:string;
+    nombre: string;
+    descripcion?: string;
 }
 
 export interface ActualizarCategoriaDTO {
-    nombre?:string;
-    descripcion?:string;
-    activo?:boolean;
+    nombre?: string;
+    descripcion?: string;
+    activo?: boolean;
 }

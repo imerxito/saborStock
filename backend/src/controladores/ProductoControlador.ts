@@ -100,4 +100,25 @@ export class ProductoControlador {
             });
         }
     }
+
+    async eliminar(
+        req: Request<{ id: string }>,
+        res: Response
+    ): Promise<void> {
+        try {
+            const id = Number(req.params.id);
+            await productoServicio.eliminar(id);
+            res.status(200).json({
+                mensaje: "Producto eliminado correctamente"
+            });
+        } catch (error: any) {
+            const mensaje = error instanceof Error
+                ? error.message
+                : "Error al eliminar el producto";
+
+            res.status(400).json({
+                mensaje
+            });
+        }
+    }
 }

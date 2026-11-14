@@ -9,6 +9,9 @@ function mapearProveedorRow(row: ProveedorRow): Proveedor {
         telefono: row.telefono ?? null,
         correo: row.correo ?? null,
         direccion: row.direccion ?? null,
+        contacto: row.contacto ?? null,
+        id_categoria_ingrediente: row.id_categoria_ingrediente ?? null,
+        categoria_suministro: row.categoria_suministro ?? null,
         activo: row.activo
     };
 }
@@ -41,9 +44,10 @@ export class ProveedorRepositorio {
     }
 
     async crear(datos: CrearProveedor): Promise<Proveedor> {
+        const { id_categoria_ingrediente: _ignorada, ...datosInsert } = datos as any;
         const {data, error} = await supabase
             .from("proveedor")
-            .insert(datos)
+            .insert(datosInsert)
             .select("*")
             .single();
         if (error) {
@@ -54,9 +58,10 @@ export class ProveedorRepositorio {
     }
 
     async actualizar(id: number, datos: ActualizarProveedor): Promise<Proveedor> {
+        const { id_categoria_ingrediente: _ignorada, ...datosUpdate } = datos as any;
         const {data, error} = await supabase
             .from("proveedor")
-            .update(datos)
+            .update(datosUpdate)
             .eq("id_proveedor", id)
             .select("*")
             .single();

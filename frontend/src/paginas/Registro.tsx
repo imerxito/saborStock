@@ -48,7 +48,9 @@ export function Registro() {
                 telefono: form.telefono,
             });
             setForm(FORM_INICIAL);
-            navegar("/login");
+            navegar("/login", {
+                state: { mensaje: "¡Registro completado exitosamente! Inicia sesión para continuar." }
+            });
         } catch (err) {
             setError(
                 err instanceof Error

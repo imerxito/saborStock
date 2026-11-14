@@ -27,5 +27,7 @@ export async function fetchJson<T>(endpoint: string, options: RequestInit = {}):
         const errorData = await respuesta.json().catch(() => ({}));
         throw new Error(errorData.mensaje || `Error HTTP ${respuesta.status}: ${respuesta.statusText}`);
     }
-    return respuesta.json();
+    if (respuesta.status === 204) return undefined as T;
+    const texto = await respuesta.text();
+    return texto ? (JSON.parse(texto) as T) : (undefined as T);
 }

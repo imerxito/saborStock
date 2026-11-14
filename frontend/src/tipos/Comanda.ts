@@ -32,6 +32,7 @@ export interface ItemComanda {
 
 export interface Comanda {
     id: number;
+    idVenta?: number;
     mesa: number;
     idMesa?: number;
     items: ItemComanda[];
@@ -49,8 +50,9 @@ export interface Comanda {
 
 /** Lo que el mesero envía al crear una comanda */
 export interface NuevaComanda {
-    mesa: number;
-    idMesa?: number;
+    mesa?: number | null;
+    idMesa?: number | null;
+    idUsuario?: number | null;
     items: ItemComanda[];
     nota: string;
     mesero?: string;

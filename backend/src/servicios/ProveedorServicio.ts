@@ -4,7 +4,7 @@ import {ProveedorRepositorio} from "../persistencia/ProveedorRepositorio.js";
 export class ProveedorServicio {
     private repositorio: ProveedorRepositorio;
 
-    constructor(repositorio: ProveedorRepositorio) {
+    constructor(repositorio: ProveedorRepositorio = new ProveedorRepositorio()) {
         this.repositorio = repositorio;
     }
 

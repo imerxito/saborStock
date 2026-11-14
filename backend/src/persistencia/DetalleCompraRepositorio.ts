@@ -137,4 +137,17 @@ export class DetalleCompraRepositorio {
             );
         }
     }
+
+    async eliminarPorCompra(idCompra: number): Promise<void> {
+        const { error } = await supabase
+            .from("detalle_compra")
+            .delete()
+            .eq("id_compra", idCompra);
+
+        if (error) {
+            throw new Error(
+                `Error al eliminar detalles de compra: ${error.message}`
+            );
+        }
+    }
 }

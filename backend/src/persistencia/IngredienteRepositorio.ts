@@ -12,9 +12,12 @@ function mapearIngredienteRow(row: IngredienteRow): Ingrediente {
         codigo: row.codigo,
         nombre: row.nombre,
         id_unidad: row.id_unidad,
+        id_categoria_ingrediente: row.id_categoria_ingrediente ?? null,
         stock: Number(row.stock),
         stock_minimo: Number(row.stock_minimo),
+        stock_maximo: Number(row.stock_maximo ?? 0),
         precio_referencia: Number(row.precio_referencia),
+        caducidad: row.caducidad ?? null,
         activo: row.activo
     };
 }

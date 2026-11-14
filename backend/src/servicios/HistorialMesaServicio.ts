@@ -17,8 +17,8 @@ export class HistorialMesaServicio {
     async crear(datos: CrearHistorialMesa): Promise<HistorialMesa> {
         if (!(datos.idMesa > 0)) throw new Error("La mesa debe ser mayor a 0");
         if (!(datos.idUsuario > 0)) throw new Error("El usuario debe ser mayor a 0");
-        if (datos.idComanda != null && datos.idComanda <= 0) {
-            throw new Error("La comanda debe ser mayor a 0");
+        if (datos.idVenta != null && datos.idVenta <= 0) {
+            throw new Error("La venta debe ser mayor a 0");
         }
         if (typeof datos.estado !== "string" || datos.estado.trim() === "") {
             throw new Error("El estado es obligatorio");

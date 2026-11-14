@@ -20,6 +20,10 @@ router.get("/resumen-diario", (req, res) =>
     reporteControlador.resumenDiario(req, res)
 );
 
+router.get("/dashboard", (req, res) =>
+    reporteControlador.dashboard(req, res)
+);
+
 router.post("/generar", (req, res) =>
     reporteControlador.generar(req, res)
 );

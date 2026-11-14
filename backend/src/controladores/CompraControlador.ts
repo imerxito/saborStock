@@ -58,6 +58,18 @@ export class CompraControlador {
         }
     }
 
+    async eliminar(req: Request<{ id: string }>, res: Response): Promise<void> {
+        try {
+            const id = Number(req.params.id);
+            await compraServicio.eliminar(id);
+            res.status(200).json({ mensaje: "Compra eliminada correctamente" });
+        } catch (error: any) {
+            const mensaje = error instanceof Error ? error.message : "Error al eliminar la compra";
+            const codigo = mensaje === "La compra no existe" ? 404 : 500;
+            res.status(codigo).json({ mensaje });
+        }
+    }
+
     async actualizar(
         req: Request<{ id: string }>,
         res: Response

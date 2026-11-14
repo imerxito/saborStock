@@ -20,4 +20,8 @@ router.put("/:id", (req, res) =>
     compraControlador.actualizar(req, res)
 );
 
+router.delete("/:id", (req, res) =>
+    compraControlador.eliminar(req, res)
+);
+
 export default router;

@@ -70,7 +70,7 @@ export function ComandasProvider({ children }: { children: ReactNode }) {
     }, [recargar]);
 
     const cambiarEstado = useCallback(async (id: number, nuevoEstado: EstadoComanda) => {
-        // Actualización optimista inmediata
+        await ComandaServicio.cambiarEstado(id, nuevoEstado);
         setComandas((prev) =>
             prev.map((c) => {
                 if (c.id !== id) return c;
@@ -81,14 +81,11 @@ export function ComandasProvider({ children }: { children: ReactNode }) {
                 return { ...c, estado: nuevoEstado, despachadaEn };
             })
         );
-
-        await ComandaServicio.cambiarEstado(id, nuevoEstado);
     }, []);
 
     const anular = useCallback(async (id: number) => {
-        // Actualización optimista inmediata
-        setComandas((prev) => prev.filter((c) => c.id !== id));
         await ComandaServicio.anularComanda(id);
+        setComandas((prev) => prev.filter((c) => c.id !== id));
     }, []);
 
     const valor = useMemo<ComandasValor>(

@@ -35,7 +35,7 @@ function normalizarEstado(estadoBackend: string): EstadoComanda {
         case "Enviado":
             return "En preparación";
         case "Cerrado":
-            return "Entregada";
+            return "Cerrado";
         case "Pendiente":
         case "En preparación":
         case "Lista":
@@ -46,66 +46,65 @@ function normalizarEstado(estadoBackend: string): EstadoComanda {
     }
 }
 
+function mapearComandaBackend(c: any): Comanda {
+    const estado = normalizarEstado(c.estado);
+    const items: ItemComanda[] = Array.isArray(c.detalles)
+        ? c.detalles.map((d: any) => ({
+              id: d.id,
+              idProducto: d.idProducto,
+              producto: d.nombreProducto || `Producto #${d.idProducto}`,
+              cantidad: Number(d.cantidad) || 1,
+              precio: Number(d.precio) || 0,
+              nota: d.nota || undefined,
+              categoria: "Cocina",
+          }))
+        : [];
+
+    const totalCalculado = items.reduce(
+        (sum, it) => sum + (it.precio || 0) * it.cantidad,
+        0
+    );
+
+    const idMesa = c.idMesa != null ? Number(c.idMesa) : null;
+    const mesaNumero = c.mesaNumero != null ? Number(c.mesaNumero) : null;
+
+    return {
+        id: Number(c.id),
+        idVenta: c.idVenta ? Number(c.idVenta) : undefined,
+        mesa: mesaNumero ?? idMesa ?? 0,
+        idMesa: idMesa && idMesa > 0 ? idMesa : undefined,
+        items,
+        nota: c.observacion || "",
+        estado,
+        creada: c.fechaCreacion ? new Date(c.fechaCreacion).getTime() : Date.now(),
+        mesero: c.usuarioNombre || "Mesero",
+        cliente: c.cliente ?? (c.observacion?.startsWith("Cliente: ")
+            ? c.observacion.split(" | ")[0].replace("Cliente: ", "")
+            : undefined),
+        personas: c.personas ?? undefined,
+        total: totalCalculado,
+        despachadaEn:
+            estado === "Lista" || estado === "Entregada"
+                ? c.fechaDespachada
+                    ? new Date(c.fechaDespachada).getTime()
+                    : Date.now()
+                : undefined,
+    };
+}
+
 export const ComandaServicio = {
     async obtenerComandas(): Promise<Comanda[]> {
+        const data = await fetchJson<any[]>("/api/comandas");
+        const comandasMapeadas: Comanda[] = (data || []).map(mapearComandaBackend);
+
+        // Guardar en caché local
         try {
-            const data = await fetchJson<any[]>("/api/comandas");
-
-            const comandasMapeadas: Comanda[] = (data || []).map((c: any) => {
-                const estado = normalizarEstado(c.estado);
-                const items: ItemComanda[] = Array.isArray(c.detalles)
-                    ? c.detalles.map((d: any) => ({
-                          id: d.id,
-                          idProducto: d.idProducto,
-                          producto: d.nombreProducto || `Producto #${d.idProducto}`,
-                          cantidad: Number(d.cantidad) || 1,
-                          precio: Number(d.precio) || 0,
-                          nota: d.nota || undefined,
-                          categoria: "Cocina",
-                      }))
-                    : [];
-
-                const totalCalculado = items.reduce(
-                    (sum, it) => sum + (it.precio || 0) * it.cantidad,
-                    0
-                );
-
-                return {
-                    id: Number(c.id),
-                    mesa: Number(c.mesaNumero ?? c.idMesa ?? 1),
-                    idMesa: c.idMesa ? Number(c.idMesa) : undefined,
-                    items,
-                    nota: c.observacion || "",
-                    estado,
-                    creada: c.fechaCreacion ? new Date(c.fechaCreacion).getTime() : Date.now(),
-                    mesero: c.usuarioNombre || "Mesero",
-                    cliente: c.observacion?.startsWith("Cliente: ")
-                        ? c.observacion.split(" | ")[0].replace("Cliente: ", "")
-                        : undefined,
-                    total: totalCalculado,
-                    despachadaEn:
-                        estado === "Lista" || estado === "Entregada" ? Date.now() : undefined,
-                };
-            });
-
-            // Guardar en caché local
-            try {
-                localStorage.setItem(CLAVE_STORAGE, JSON.stringify(comandasMapeadas));
-            } catch {
-                // Ignore
-            }
-
-            return comandasMapeadas;
-        } catch (error) {
-            console.warn("Fallo al conectar con el backend de comandas, cargando caché:", error);
-            try {
-                const cache = localStorage.getItem(CLAVE_STORAGE);
-                if (cache) return JSON.parse(cache) as Comanda[];
-            } catch {
-                // Ignore
-            }
-            return [];
+            localStorage.setItem(CLAVE_STORAGE, JSON.stringify(comandasMapeadas));
+        } catch {
+            // Ignore
         }
+
+        return comandasMapeadas;
     },
 
     async crearComanda(nueva: NuevaComanda): Promise<Comanda> {
@@ -117,94 +116,64 @@ export const ComandaServicio = {
             .filter(Boolean)
             .join(" | ");
 
-        let idComandaCreada = Date.now();
+        const necesitaCarta = nueva.items.some((item) => !(Number(item.idProducto) > 0));
+        if (necesitaCarta) await ComandaServicio.cargarCarta();
 
-        try {
-            // 1. Crear comanda en backend
-            const resComanda = await fetchJson<{ id: number }>("/api/comandas", {
-                method: "POST",
-                body: JSON.stringify({
-                    idMesa: nueva.idMesa ?? nueva.mesa,
-                    estado: "Pendiente",
-                    observacion: observacionFinal || null,
-                }),
-            });
-            idComandaCreada = resComanda.id;
-
-            // 2. Crear los detalles de comanda en backend
-            for (const item of nueva.items) {
-                // Buscar idProducto si no viene directo
-                let idProd = item.idProducto;
-                if (!idProd) {
-                    const match = cartaMemoria.find((p) => p.nombre === item.producto);
-                    if (match && match.id) idProd = match.id;
-                }
-
-                if (idProd) {
-                    await fetchJson<unknown>("/api/detalles-comanda", {
-                        method: "POST",
-                        body: JSON.stringify({
-                            idComanda: idComandaCreada,
-                            idProducto: idProd,
-                            cantidad: item.cantidad,
-                            nota: item.nota ?? null,
-                        }),
-                    }).catch((err) =>
-                        console.warn("Error creando detalle de comanda en backend:", err)
-                    );
-                }
-            }
-
-            // 3. Si tiene mesa asignada, actualizar mesa a Ocupada
-            const mesaId = nueva.idMesa ?? nueva.mesa;
-            if (mesaId) {
-                await fetchJson<unknown>(`/api/mesas/${mesaId}`, {
-                    method: "PUT",
-                    body: JSON.stringify({ estado: "Ocupada" }),
-                }).catch((err) =>
-                    console.warn("Error actualizando estado de mesa a Ocupada:", err)
+        const itemsParaBackend = nueva.items.map((item) => {
+            let idProd = Number(item.idProducto);
+            if (!(idProd > 0)) {
+                const match = cartaMemoria.find(
+                    (p) => p.id != null && p.nombre.trim().toLowerCase() === item.producto.trim().toLowerCase()
                 );
+                if (match?.id) idProd = match.id;
             }
-        } catch (error) {
-            console.warn("No se pudo persistir en backend inmediatamente, guardando local:", error);
+            return {
+                idProducto: idProd,
+                cantidad: Number(item.cantidad) || 0,
+                nota: item.nota ?? null,
+                producto: item.producto,
+            };
+        });
+
+        const itemsInvalidos = itemsParaBackend.filter(
+            (it) => !(Number(it.idProducto) > 0) || !(Number(it.cantidad) > 0)
+        );
+        if (nueva.items.length > 0 && itemsInvalidos.length > 0) {
+            const nombres = itemsInvalidos.map((it) => it.producto).join(", ");
+            throw new Error(`No se pudieron identificar los productos del pedido: ${nombres}`);
         }
 
-        const comandaObj: Comanda = {
-            id: idComandaCreada,
-            mesa: nueva.mesa,
-            idMesa: nueva.idMesa,
-            items: nueva.items,
-            nota: observacionFinal,
-            estado: "Pendiente",
-            creada: Date.now(),
-            mesero: nueva.mesero || "Mesero",
-            cliente: nueva.cliente,
-            personas: nueva.personas,
-        };
+        const idMesa =
+            typeof nueva.idMesa === "number" && nueva.idMesa > 0 ? nueva.idMesa : null;
 
-        return comandaObj;
+        const resComanda = await fetchJson<any>("/api/comandas", {
+            method: "POST",
+            body: JSON.stringify({
+                idMesa,
+                idUsuario: nueva.idUsuario ?? null,
+                estado: "Pendiente",
+                observacion: observacionFinal || null,
+                cliente: nueva.cliente,
+                personas: nueva.personas,
+                items: itemsParaBackend,
+            }),
+        });
+
+        return mapearComandaBackend(resComanda);
     },
 
     async cambiarEstado(id: number, nuevoEstado: EstadoComanda): Promise<void> {
-        try {
-            await fetchJson<unknown>(`/api/comandas/${id}`, {
-                method: "PUT",
-                body: JSON.stringify({ estado: nuevoEstado }),
-            });
-        } catch (error) {
-            console.warn(`Error al cambiar estado de comanda #${id} en el backend:`, error);
-        }
+        await fetchJson<unknown>(`/api/comandas/${id}`, {
+            method: "PUT",
+            body: JSON.stringify({ estado: nuevoEstado }),
+        });
     },
 
     async anularComanda(id: number): Promise<void> {
-        try {
-            await fetchJson<unknown>(`/api/comandas/${id}`, {
-                method: "PUT",
-                body: JSON.stringify({ estado: "Cerrado" }),
-            });
-        } catch (error) {
-            console.warn(`Error al anular comanda #${id} en el backend:`, error);
-        }
+        await fetchJson<unknown>(`/api/comandas/${id}`, {
+            method: "PUT",
+            body: JSON.stringify({ estado: "Cerrado" }),
+        });
     },
 
     obtenerCarta(): PlatoCarta[] {

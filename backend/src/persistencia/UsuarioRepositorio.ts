@@ -7,6 +7,7 @@ function mapaearUsuarioRow(row: UsuarioRow): Usuario {
     const fechaString = row.fecha_registro ?? row.fecha_inicio ?? new Date().toISOString();
     return {
         id: row.auth_id,
+        idUsuario: row.id_usuario,
         nombre: row.nombre,
         cedula: row.cedula,
         correo: row.correo,

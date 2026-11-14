@@ -1,4 +1,6 @@
-import { useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { ProveedoresServicio } from "../../servicios/ProveedoresServicio";
+import { InventarioServicio } from "../../servicios/InventarioServicio";
 
 type UnidadMedida = {
   id_unidad: number;
@@ -37,7 +39,8 @@ type Proveedor = {
 };
 
 type CompraInsumo = {
-  id: number;
+  id: string | number;
+  id_compra: number;
   id_proveedor: number;
   id_insumo: number;
   cantidad: number;
@@ -118,12 +121,12 @@ const PROVEEDORES_INICIALES: Proveedor[] = [
 ];
 
 const COMPRAS_INICIALES: CompraInsumo[] = [
-  { id: 1, id_proveedor: 1, id_insumo: 4, cantidad: 20, costoTotal: 560000, fecha: "2026-05-01", factura: "FAC-9012" },
-  { id: 2, id_proveedor: 2, id_insumo: 1, cantidad: 50, costoTotal: 125000, fecha: "2026-05-03", factura: "FAC-3456" },
-  { id: 3, id_proveedor: 3, id_insumo: 7, cantidad: 30, costoTotal: 36000, fecha: "2026-05-04", factura: "FAC-7881" },
-  { id: 4, id_proveedor: 4, id_insumo: 8, cantidad: 15, costoTotal: 67500, fecha: "2026-05-05", factura: "FAC-1102" },
-  { id: 5, id_proveedor: 5, id_insumo: 9, cantidad: 100, costoTotal: 380000, fecha: "2026-05-06", factura: "FAC-4432" },
-  { id: 6, id_proveedor: 6, id_insumo: 2, cantidad: 10, costoTotal: 85000, fecha: "2026-05-07", factura: "FAC-8899" }
+  { id: "1", id_compra: 1, id_proveedor: 1, id_insumo: 4, cantidad: 20, costoTotal: 560000, fecha: "2026-05-01", factura: "FAC-9012" },
+  { id: "2", id_compra: 2, id_proveedor: 2, id_insumo: 1, cantidad: 50, costoTotal: 125000, fecha: "2026-05-03", factura: "FAC-3456" },
+  { id: "3", id_compra: 3, id_proveedor: 3, id_insumo: 7, cantidad: 30, costoTotal: 36000, fecha: "2026-05-04", factura: "FAC-7881" },
+  { id: "4", id_compra: 4, id_proveedor: 4, id_insumo: 8, cantidad: 15, costoTotal: 67500, fecha: "2026-05-05", factura: "FAC-1102" },
+  { id: "5", id_compra: 5, id_proveedor: 5, id_insumo: 9, cantidad: 100, costoTotal: 380000, fecha: "2026-05-06", factura: "FAC-4432" },
+  { id: "6", id_compra: 6, id_proveedor: 6, id_insumo: 2, cantidad: 10, costoTotal: 85000, fecha: "2026-05-07", factura: "FAC-8899" }
 ];
 
 const FORM_PROVEEDOR_VACIO: FormProveedor = {
@@ -171,11 +174,11 @@ function useDragScroll() {
 }
 
 export default function ProveedoresCompras() {
-  const [proveedores, setProveedores] = useState<Proveedor[]>(PROVEEDORES_INICIALES);
-  const [compras, setCompras] = useState<CompraInsumo[]>(COMPRAS_INICIALES);
-  const [insumos] = useState<Insumo[]>(INICIAL);
-  const [categorias] = useState<CategoriaIngrediente[]>(CATEGORIAS_INICIALES);
-  const [unidades] = useState<UnidadMedida[]>(UNIDADES_INICIALES);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [compras, setCompras] = useState<CompraInsumo[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaIngrediente[]>([]);
+  const [unidades, setUnidades] = useState<UnidadMedida[]>([]);
 
   const [busqueda, setBusqueda] = useState("");
   const [selectedCategoriaFiltro, setSelectedCategoriaFiltro] = useState<number | 'todas'>('todas');
@@ -189,6 +192,81 @@ export default function ProveedoresCompras() {
 
   const [errorProveedor, setErrorProveedor] = useState("");
   const [errorCompra, setErrorCompra] = useState("");
+
+  const cargarDatos = async () => {
+    try {
+      const [proveedoresData, comprasData, detallesData, insumosData, categoriasData, unidadesData] = await Promise.all([
+        ProveedoresServicio.listar(),
+        ProveedoresServicio.listarCompras(),
+        ProveedoresServicio.listarDetallesCompra(),
+        InventarioServicio.listarInsumos(),
+        InventarioServicio.listarCategorias(),
+        InventarioServicio.listarUnidades(),
+      ]);
+
+      const categoriasMap = new Map((categoriasData || []).map((c) => [c.id, c.nombre]));
+      setProveedores(
+        (proveedoresData || []).map((p) => ({
+          id: p.id_proveedor,
+          nombre: p.nombre,
+          contacto: p.contacto ?? "",
+          telefono: p.telefono ?? "",
+          email: p.correo ?? "",
+          categoriaSuministro: p.categoria_suministro ?? categoriasMap.get(p.id_categoria_ingrediente ?? -1) ?? "",
+          activo: p.activo ?? true,
+        }))
+      );
+
+      const comprasMap = new Map((comprasData || []).map((c) => [c.id_compra, c]));
+      setCompras(
+        (detallesData || []).map((d) => {
+          const compra = comprasMap.get(d.id_compra);
+          return {
+            id: `${d.id_compra}-${d.id_ingrediente}`,
+            id_compra: d.id_compra,
+            id_proveedor: compra?.id_proveedor ?? 0,
+            id_insumo: d.id_ingrediente,
+            cantidad: Number(d.cantidad),
+            costoTotal: Number(d.cantidad) * Number(d.precio_aplicado),
+            fecha: (compra?.fecha ?? "").slice(0, 10),
+            factura: compra?.factura ?? "",
+          };
+        })
+      );
+
+      setInsumos(
+        (insumosData || []).map((i) => ({
+          id: i.id_ingrediente,
+          codigo: i.codigo,
+          nombre: i.nombre,
+          id_unidad: Number(i.id_unidad),
+          id_categoria: i.id_categoria_ingrediente ?? 0,
+          stock: Number(i.stock),
+          minimo: Number(i.stock_minimo),
+          maximo: Number(i.stock_maximo ?? 0),
+          precioReferencia: Number(i.precio_referencia),
+          caducidad: i.caducidad ?? undefined,
+        }))
+      );
+
+      setCategorias((categoriasData || []).map((c) => ({ id: c.id, nombre: c.nombre })));
+      setUnidades(
+        (unidadesData || []).map((u) => ({
+          id_unidad: Number(u.id),
+          nombre: u.nombre,
+          abreviatura: u.abreviatura,
+          descripcion: u.descripcion ?? "",
+          activo: u.activo ?? true,
+        }))
+      );
+    } catch (e) {
+      console.warn("No se pudieron cargar proveedores/compras desde el backend:", e);
+    }
+  };
+
+  useEffect(() => {
+    void cargarDatos();
+  }, []);
 
   const insumosFormFiltrados = useMemo(() => {
     const catId = Number(formCompra.id_categoria);
@@ -212,7 +290,7 @@ export default function ProveedoresCompras() {
     });
   }, [compras, proveedores, insumos, busqueda, selectedCategoriaFiltro]);
 
-  const guardarProveedor = (e: React.FormEvent) => {
+  const guardarProveedor = async (e: React.FormEvent) => {
     e.preventDefault();
     const nombre = formProveedor.nombre.trim();
     const contacto = formProveedor.contacto.trim();
@@ -223,26 +301,28 @@ export default function ProveedoresCompras() {
     if (proveedores.some((p) => p.nombre.toLowerCase() === nombre.toLowerCase()))
       return setErrorProveedor("Ya existe un proveedor registrado con ese nombre.");
 
-    const nuevoId = proveedores.length ? Math.max(...proveedores.map((p) => p.id)) + 1 : 1;
+    const categoria = categorias.find((c) => c.nombre === formProveedor.categoriaSuministro);
 
-    setProveedores((prev) => [
-      ...prev,
-      {
-        id: nuevoId,
+    try {
+      await ProveedoresServicio.crear({
+        documento: `PROV-${Date.now().toString().slice(-8)}`,
         nombre,
-        contacto,
-        telefono,
-        email,
-        categoriaSuministro: formProveedor.categoriaSuministro,
-        activo: true,
-      },
-    ]);
-    setMostrarModalProveedor(false);
-    setFormProveedor(FORM_PROVEEDOR_VACIO);
-    setErrorProveedor("");
+        contacto: contacto || null,
+        telefono: telefono || null,
+        correo: email || null,
+        id_categoria_ingrediente: categoria?.id ?? null,
+        categoria_suministro: categoria?.nombre ?? formProveedor.categoriaSuministro,
+      });
+      await cargarDatos();
+      setMostrarModalProveedor(false);
+      setFormProveedor(FORM_PROVEEDOR_VACIO);
+      setErrorProveedor("");
+    } catch (err: any) {
+      setErrorProveedor(err?.message || "No se pudo guardar el proveedor en el backend.");
+    }
   };
 
-  const guardarCompra = (e: React.FormEvent) => {
+  const guardarCompra = async (e: React.FormEvent) => {
     e.preventDefault();
     const id_proveedor = Number(formCompra.id_proveedor);
     const id_insumo = Number(formCompra.id_insumo);
@@ -255,29 +335,41 @@ export default function ProveedoresCompras() {
     if (Number.isNaN(costoTotal) || costoTotal < 0) return setErrorCompra("Ingresa un costo total válido.");
     if (!factura) return setErrorCompra("El número de factura o recibo es obligatorio.");
     if (!id_insumo) return setErrorCompra("Debes seleccionar un insumo válido.");
+    if (!proveedores.some((p) => p.id === id_proveedor)) return setErrorCompra("Selecciona un proveedor válido.");
+    if (!insumos.some((i) => i.id === id_insumo)) return setErrorCompra("Selecciona un insumo válido.");
 
-    const nuevoId = compras.length ? Math.max(...compras.map((c) => c.id)) + 1 : 1;
-
-    setCompras((prev) => [
-      ...prev,
-      {
-        id: nuevoId,
+    try {
+      await ProveedoresServicio.crearCompra({
         id_proveedor,
-        id_insumo,
-        cantidad,
-        costoTotal,
         fecha,
+        estado: "RECIBIDA",
+        total: costoTotal,
         factura,
-      },
-    ]);
-    setMostrarModalCompra(false);
-    setFormCompra(FORM_COMPRA_VACIO);
-    setErrorCompra("");
+        detalles: [
+          {
+            id_ingrediente: id_insumo,
+            cantidad,
+            precio_aplicado: cantidad > 0 ? costoTotal / cantidad : 0,
+          },
+        ],
+      });
+      await cargarDatos();
+      setMostrarModalCompra(false);
+      setFormCompra(FORM_COMPRA_VACIO);
+      setErrorCompra("");
+    } catch (err: any) {
+      setErrorCompra(err?.message || "No se pudo registrar la compra en el backend.");
+    }
   };
 
-  const eliminarCompra = (id: number) => {
+  const eliminarCompra = async (id: number) => {
     if (window.confirm("¿Estás seguro de eliminar este registro de compra?")) {
-      setCompras((prev) => prev.filter((c) => c.id !== id));
+      try {
+        await ProveedoresServicio.eliminarCompra(id);
+        await cargarDatos();
+      } catch (err: any) {
+        alert(err?.message || "No se pudo eliminar la compra en el backend.");
+      }
     }
   };
 
@@ -469,7 +561,7 @@ export default function ProveedoresCompras() {
                           <button
                             type="button"
                             className="bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] p-2 rounded-xl transition-all active:scale-90"
-                            onClick={() => eliminarCompra(c.id)}
+                            onClick={() => eliminarCompra(c.id_compra)}
                             title="Eliminar registro"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -529,7 +621,7 @@ export default function ProveedoresCompras() {
                       <button
                         type="button"
                         className="bg-[#D97706]/10 text-[#D97706] p-1.5 rounded-lg active:scale-95 transition"
-                        onClick={() => eliminarCompra(c.id)}
+                        onClick={() => eliminarCompra(c.id_compra)}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

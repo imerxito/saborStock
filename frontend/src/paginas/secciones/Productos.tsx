@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   UtensilsCrossed,
   Package,
@@ -21,6 +21,7 @@ import {
   ChevronUp,
   Boxes
 } from 'lucide-react';
+import { ProductoServicio } from '../../servicios/ProductoServicio';
 
 export type TipoProducto = 'cocina' | 'directo' | 'paquete';
 
@@ -186,17 +187,68 @@ function useDragScroll() {
 }
 
 export default function Productos() {
-  const [productos, setProductos] = useState<Producto[]>(INITIAL_PRODUCTOS);
-  const [categoriasProducto, setCategoriasProducto] = useState<Categoria[]>(INITIAL_CATEGORIAS_PRODUCTO);
-  const [recetas, setRecetas] = useState<Receta[]>(INITIAL_RECETAS);
-  const [componentesCombo, setComponentesCombo] = useState<ComponenteCombo[]>(INITIAL_COMBOS);
-  const [insumosBase] = useState<Ingrediente[]>(LISTA_INSUMOS_BASE);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [categoriasProducto, setCategoriasProducto] = useState<Categoria[]>([]);
+  const [recetas, setRecetas] = useState<Receta[]>([]);
+  const [componentesCombo, setComponentesCombo] = useState<ComponenteCombo[]>([]);
+  const [insumosBase, setInsumosBase] = useState<Ingrediente[]>([]);
+  const [categoriasIngrediente, setCategoriasIngrediente] = useState<CategoriaIngrediente[]>([]);
 
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<number | 'todas'>('todas');
   const [filterTipo, setFilterTipo] = useState<'todos' | TipoProducto>('todos');
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const cargarDatos = useCallback(async () => {
+    try {
+      const [prodsData, catsData, insumosData, recetasData, combosData, catsIngData] = await Promise.all([
+        ProductoServicio.listar(),
+        ProductoServicio.listarCategorias(),
+        ProductoServicio.listarInsumos(),
+        ProductoServicio.listarRecetas(),
+        ProductoServicio.listarComponentesCombo().catch(() => []),
+        ProductoServicio.listarCategoriasIngrediente().catch(() => [])
+      ]);
+
+      setProductos(prodsData.map(p => ({
+          id_producto: p.id_producto,
+          codigo: p.codigo,
+          nombre: p.nombre,
+          id_categoria: p.id_categoria,
+          precio_venta: p.precio_venta,
+          descripcion: p.descripcion || '',
+          activo: p.activo ?? true,
+          tipo: (p.tipo as TipoProducto) || 'cocina'
+        })));
+
+      if (catsData) {
+        setCategoriasProducto(catsData.map(c => ({
+          id_categoria: c.id_categoria,
+          nombre: c.nombre
+        })));
+      }
+
+      setInsumosBase((insumosData || []) as Ingrediente[]);
+      setRecetas(recetasData || []);
+      setComponentesCombo(
+        (combosData || []).map((c) => ({
+          id_combo: c.idCombo,
+          id_producto_hijo: c.idProductoHijo,
+          cantidad: c.cantidad
+        }))
+      );
+      setCategoriasIngrediente(
+        (catsIngData || []).map((c) => ({ id_cat_ing: c.id, nombre: c.nombre }))
+      );
+    } catch (e) {
+      console.warn('Error al sincronizar productos con backend:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarDatos();
+  }, [cargarDatos]);
 
   const categoriasScroll = useDragScroll();
   const insumosTabsScroll = useDragScroll();
@@ -259,14 +311,22 @@ export default function Productos() {
     setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleToggleActivo = (id: number, e: React.MouseEvent) => {
+  const handleToggleActivo = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    const prodActual = productos.find(p => p.id_producto === id);
+    if (!prodActual) return;
+    const nuevoActivo = !prodActual.activo;
     setProductos(prev => prev.map(p => {
       if (p.id_producto === id) {
-        return { ...p, activo: !p.activo };
+        return { ...p, activo: nuevoActivo };
       }
       return p;
     }));
+    try {
+      await ProductoServicio.actualizar(id, { activo: nuevoActivo });
+    } catch (err) {
+      console.warn('Error al actualizar estado del producto:', err);
+    }
   };
 
   const openProductoModal = (prod?: Producto) => {
@@ -304,90 +364,114 @@ export default function Productos() {
     setIsProductoModalOpen(true);
   };
 
-  const handleSaveProducto = (e: React.FormEvent) => {
+  const handleSaveProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formProdPrecio === '' || !formProdNombre.trim()) return;
 
-    const prodId = editingProductoId ?? (productos.length ? Math.max(...productos.map(p => p.id_producto)) + 1 : 1);
-    const newProducto: Producto = {
-      id_producto: prodId,
-      codigo: formProdCodigoAuto,
-      nombre: formProdNombre.trim(),
-      id_categoria: Number(formProdCategoria),
-      precio_venta: Number(formProdPrecio),
-      descripcion: formProdDescripcion.trim(),
-      activo: formProdActivo,
-      tipo: formTipo
-    };
+    try {
+      let prodId = editingProductoId;
 
-    if (editingProductoId) {
-      setProductos(prev => prev.map(p => p.id_producto === editingProductoId ? newProducto : p));
-    } else {
-      setProductos(prev => [...prev, newProducto]);
+      if (editingProductoId) {
+        await ProductoServicio.actualizar(editingProductoId, {
+          codigo: formProdCodigoAuto,
+          nombre: formProdNombre.trim(),
+          id_categoria: Number(formProdCategoria),
+          precio_venta: Number(formProdPrecio),
+          descripcion: formProdDescripcion.trim(),
+          activo: formProdActivo,
+          tipo: formTipo
+        });
+      } else {
+        const creado = await ProductoServicio.crear({
+          codigo: formProdCodigoAuto,
+          nombre: formProdNombre.trim(),
+          id_categoria: Number(formProdCategoria),
+          precio_venta: Number(formProdPrecio),
+          descripcion: formProdDescripcion.trim(),
+          activo: formProdActivo,
+          tipo: formTipo
+        });
+        prodId = creado.id_producto;
+      }
+
+      if (prodId) {
+        const recetasValidas = formRecetaItems.filter(i => Number(i.cantidad) > 0);
+        const recetasActuales = recetas.filter(r => r.id_producto === prodId);
+
+        for (const r of recetasActuales) {
+          if (!recetasValidas.some(i => i.id_ingrediente === r.id_ingrediente)) {
+            await ProductoServicio.eliminarReceta(prodId, r.id_ingrediente);
+          }
+        }
+        for (const item of recetasValidas) {
+          await ProductoServicio.guardarReceta(prodId, item.id_ingrediente, Number(item.cantidad));
+        }
+
+        const combosValidos = formTipo === 'paquete'
+          ? formComboItems.filter(i => Number(i.cantidad) > 0 && i.id_producto_hijo !== prodId)
+          : [];
+        await ProductoServicio.eliminarComponentesCombo(prodId);
+        for (const item of combosValidos) {
+          await ProductoServicio.crearComponenteCombo(prodId, item.id_producto_hijo, Number(item.cantidad));
+        }
+      }
+
+      await cargarDatos();
+      setIsProductoModalOpen(false);
+      addToast(editingProductoId ? 'Producto actualizado' : 'Producto creado con éxito');
+    } catch (err: any) {
+      addToast(err?.message || 'Error al guardar producto', 'danger');
     }
-
-    const updatedRecetas = recetas.filter(r => r.id_producto !== prodId);
-    const newRecetaRows: Receta[] = formRecetaItems
-      .filter(item => Number(item.cantidad) > 0)
-      .map(item => ({
-        id_producto: prodId,
-        id_ingrediente: item.id_ingrediente,
-        cantidad: Number(item.cantidad)
-      }));
-    setRecetas([...updatedRecetas, ...newRecetaRows]);
-
-    const updatedCombos = componentesCombo.filter(c => c.id_combo !== prodId);
-    if (formTipo === 'paquete') {
-      const newComboRows: ComponenteCombo[] = formComboItems
-        .filter(item => Number(item.cantidad) > 0)
-        .map(item => ({
-          id_combo: prodId,
-          id_producto_hijo: item.id_producto_hijo,
-          cantidad: Number(item.cantidad)
-        }));
-      setComponentesCombo([...updatedCombos, ...newComboRows]);
-    } else {
-      setComponentesCombo(updatedCombos);
-    }
-
-    setIsProductoModalOpen(false);
-    addToast(editingProductoId ? 'Producto actualizado' : 'Producto creado con éxito');
   };
 
-  const handleDeleteProducto = (id: number) => {
+  const handleDeleteProducto = async (id: number) => {
     if (window.confirm('¿Desea eliminar este producto del sistema?')) {
-      setProductos(prev => prev.filter(p => p.id_producto !== id));
-      setRecetas(prev => prev.filter(r => r.id_producto !== id));
-      setComponentesCombo(prev => prev.filter(c => c.id_combo !== id && c.id_producto_hijo !== id));
-      addToast('Producto eliminado', 'danger');
+      try {
+        await ProductoServicio.eliminar(id);
+        setProductos(prev => prev.filter(p => p.id_producto !== id));
+        setRecetas(prev => prev.filter(r => r.id_producto !== id));
+        setComponentesCombo(prev => prev.filter(c => c.id_combo !== id && c.id_producto_hijo !== id));
+        addToast('Producto eliminado', 'danger');
+      } catch (err: any) {
+        addToast(err?.message || 'Error al eliminar producto', 'danger');
+      }
     }
   };
 
-  const handleSaveCategoria = (e: React.FormEvent) => {
+  const handleSaveCategoria = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formCatNombre.trim()) return;
 
-    if (editingCatId) {
-      setCategoriasProducto(prev => prev.map(c => c.id_categoria === editingCatId ? { ...c, nombre: formCatNombre.trim() } : c));
-      addToast('Categoría actualizada');
-    } else {
-      const newId = categoriasProducto.length ? Math.max(...categoriasProducto.map(c => c.id_categoria)) + 1 : 1;
-      setCategoriasProducto(prev => [...prev, { id_categoria: newId, nombre: formCatNombre.trim() }]);
-      addToast('Categoría agregada');
+    try {
+      if (editingCatId) {
+        await ProductoServicio.actualizarCategoria(editingCatId, formCatNombre.trim());
+        addToast('Categoría actualizada');
+      } else {
+        await ProductoServicio.crearCategoria(formCatNombre.trim());
+        addToast('Categoría agregada');
+      }
+      setFormCatNombre('');
+      setEditingCatId(null);
+      await cargarDatos();
+    } catch (err: any) {
+      addToast(err?.message || 'Error al guardar categoría', 'danger');
     }
-    setFormCatNombre('');
-    setEditingCatId(null);
   };
 
-  const handleDeleteCategoria = (id: number) => {
+  const handleDeleteCategoria = async (id: number) => {
     if (productos.some(p => p.id_categoria === id)) {
       addToast('No se puede eliminar: tiene productos asignados', 'warning');
       return;
     }
     if (window.confirm('¿Eliminar categoría?')) {
-      setCategoriasProducto(prev => prev.filter(c => c.id_categoria !== id));
-      if (selectedCategoria === id) setSelectedCategoria('todas');
-      addToast('Categoría eliminada', 'danger');
+      try {
+        await ProductoServicio.eliminarCategoria(id);
+        setCategoriasProducto(prev => prev.filter(c => c.id_categoria !== id));
+        if (selectedCategoria === id) setSelectedCategoria('todas');
+        addToast('Categoría eliminada', 'danger');
+      } catch (err: any) {
+        addToast(err?.message || 'Error al eliminar categoría', 'danger');
+      }
     }
   };
 
@@ -544,7 +628,7 @@ export default function Productos() {
             {recItems.map(r => {
               const ing = insumosBase.find(i => i.id_ingrediente === r.id_ingrediente);
               if (!ing) return null;
-              const catIng = CATEGORIAS_INGREDIENTES.find(ci => ci.id_cat_ing === ing.id_categoria_ingrediente);
+              const catIng = categoriasIngrediente.find(ci => ci.id_cat_ing === ing.id_categoria_ingrediente);
               const subtotal = r.cantidad * ing.precio_referencia;
               return (
                 <div key={`ing-${r.id_ingrediente}`} className="bg-[#0B132B] p-2 rounded-lg border border-[#3A506B] text-[11px] sm:text-xs flex justify-between items-center gap-2">

@@ -1,3 +1,5 @@
+export type TipoProducto = "cocina" | "directo" | "paquete";
+
 export interface Producto {
     id_producto: number;
     codigo: string;
@@ -6,6 +8,8 @@ export interface Producto {
     precio_venta: number;
     descripcion: string;
     activo: boolean;
+    tipo: TipoProducto;
+    categoriaNombre?: string;
 }
 
 export interface CrearProducto {
@@ -15,6 +19,7 @@ export interface CrearProducto {
     precio_venta: number;
     descripcion?: string;
     activo?: boolean;
+    tipo?: TipoProducto;
 }
 
 export interface ActualizarProducto {
@@ -24,6 +29,7 @@ export interface ActualizarProducto {
     precio_venta?: number;
     descripcion?: string;
     activo?: boolean;
+    tipo?: TipoProducto;
 }
 
 export interface ProductoRow {
@@ -34,4 +40,5 @@ export interface ProductoRow {
     precio_venta: number;
     descripcion: string;
     activo: boolean;
+    tipo?: TipoProducto | string;
 }

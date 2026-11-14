@@ -16,23 +16,25 @@ export class ComandaServicio {
     }
 
     async crear(datos: CrearComanda): Promise<Comanda> {
-        if (datos.idMesa != null && datos.idMesa <= 0) throw new Error("La mesa debe ser mayor a 0");
+        const idMesa = datos.idMesa ?? null;
+        if (idMesa != null && idMesa <= 0) throw new Error("La mesa debe ser mayor a 0");
+        if (datos.idVenta != null && datos.idVenta <= 0) throw new Error("La venta debe ser mayor a 0");
         if (datos.idUsuario != null && datos.idUsuario <= 0) throw new Error("El usuario debe ser mayor a 0");
-        if (datos.estado !== undefined && !Object.values(EstadoComanda).includes(datos.estado)) {
+        if (datos.estado !== undefined && !Object.values(EstadoComanda).includes(datos.estado as any)) {
             throw new Error("Estado de comanda no valido");
         }
-        return this.comandaRepo.crearComanda(datos);
+        return this.comandaRepo.crearComanda({ ...datos, idMesa });
     }
 
     async actualizar(id: number, cambios: ActualizarComanda): Promise<Comanda> {
         if (cambios.idMesa != null && cambios.idMesa <= 0) throw new Error("La mesa debe ser mayor a 0");
         if (cambios.idUsuario != null && cambios.idUsuario <= 0) throw new Error("El usuario debe ser mayor a 0");
-        if (cambios.estado !== undefined && !Object.values(EstadoComanda).includes(cambios.estado)) {
+        if (cambios.estado !== undefined && !Object.values(EstadoComanda).includes(cambios.estado as any)) {
             throw new Error("Estado de comanda no valido");
         }
 
         const actual = await this.obtenerPorId(id);
-        if (actual.estado === EstadoComanda.Cerrado) {
+        if (actual.estado === EstadoComanda.Cerrado && cambios.estado === undefined) {
             throw new Error("No se puede modificar una comanda cerrada");
         }
 

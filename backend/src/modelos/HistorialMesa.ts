@@ -1,7 +1,7 @@
 export interface HistorialMesa {
     id: number;
     idMesa: number;
-    idComanda: number | null;
+    idVenta: number | null;
     idUsuario: number;
     estado: string;
     monto: number | null;
@@ -11,7 +11,7 @@ export interface HistorialMesa {
 
 export interface CrearHistorialMesa {
     idMesa: number;
-    idComanda?: number | null;
+    idVenta?: number | null;
     idUsuario: number;
     estado: string;
     monto?: number | null;
@@ -21,7 +21,7 @@ export interface CrearHistorialMesa {
 export interface HistorialMesaRow {
     id_historial_mesa: number;
     id_mesa: number;
-    id_comanda: number | null;
+    id_venta: number | null;
     id_usuario: number;
     estado: string;
     monto: number | null;
@@ -31,5 +31,5 @@ export interface HistorialMesaRow {
 
 export interface FiltrosHistorialMesa {
     idMesa?: number;
-    idComanda?: number;
+    idVenta?: number;
 }

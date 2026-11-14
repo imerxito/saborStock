@@ -14,7 +14,10 @@ import {
     AlertCircle,
     Plus,
     Download,
+    Trash2,
 } from "lucide-react";
+import { IaServicio, type ConversacionIA, type FilaExcelPreview } from "../../servicios/IaServicio";
+import { useAuth } from "../../contexto/AuthContexto";
 
 /* ============================================================
    TIPOS
@@ -43,16 +46,6 @@ interface CategoriaMenu {
     id: string;
     nombre: string;
     productos: ProductoMenu[];
-}
-
-interface FilaExcelPreview {
-    fila: number;
-    nombre: string;
-    tipo: "producto" | "insumo";
-    categoria: string;
-    precio: number;
-    stock: number;
-    estado: "valido" | "advertencia" | "error";
 }
 
 /* ============================================================
@@ -153,22 +146,87 @@ function TabBoton({
    SECCIÓN 1: CHAT
    ============================================================ */
 function SeccionChat() {
-    const [mensajes, setMensajes] = useState<MensajeIA[]>([
-        {
-            id: "welcome",
-            rol: "assistant",
-            contenido:
-                "Hola 👋 Soy tu asistente de negocio. Puedo analizar ventas, revisar stock bajo y darte recomendaciones. ¿Qué quieres consultar hoy?",
-            fecha: new Date(),
-        },
-    ]);
+    const { usuario } = useAuth();
+    const idUsuarioActual = (() => {
+        const id = Number((usuario as any)?.idUsuario ?? (usuario as any)?.id_usuario);
+        return Number.isFinite(id) && id > 0 ? id : null;
+    })();
+
+    const mensajeBienvenida = (): MensajeIA => ({
+        id: "welcome",
+        rol: "assistant",
+        contenido:
+            "Hola 👋 Soy tu asistente de negocio. Puedo analizar ventas, revisar stock bajo y darte recomendaciones. ¿Qué quieres consultar hoy?",
+        fecha: new Date(),
+    });
+
+    const [conversaciones, setConversaciones] = useState<ConversacionIA[]>([]);
+    const [conversacionId, setConversacionId] = useState<number | null>(null);
+    const [cargandoConversaciones, setCargandoConversaciones] = useState(false);
+    const [cargandoMensajes, setCargandoMensajes] = useState(false);
+    const [mensajes, setMensajes] = useState<MensajeIA[]>([mensajeBienvenida()]);
     const [texto, setTexto] = useState("");
     const [enviando, setEnviando] = useState(false);
     const finRef = useRef<HTMLDivElement>(null);
 
+    const cargarConversaciones = async () => {
+        setCargandoConversaciones(true);
+        try {
+            const data = await IaServicio.listarConversaciones(idUsuarioActual);
+            setConversaciones(data || []);
+        } catch (error) {
+            console.warn("No se pudieron cargar las conversaciones IA:", error);
+            setConversaciones([]);
+        } finally {
+            setCargandoConversaciones(false);
+        }
+    };
+
+    useEffect(() => {
+        void cargarConversaciones();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idUsuarioActual]);
+
     useEffect(() => {
         finRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [mensajes, enviando]);
+
+    const seleccionarConversacion = async (id: number | null) => {
+        setConversacionId(id);
+        if (id == null) {
+            setMensajes([mensajeBienvenida()]);
+            return;
+        }
+        setCargandoMensajes(true);
+        try {
+            const data = await IaServicio.obtenerConversacion(id);
+            const historial = (data.mensajes || []).map((m) => ({
+                id: String(m.id),
+                rol: m.rol,
+                contenido: m.contenido,
+                fecha: new Date(m.fecha),
+            }));
+            setMensajes(historial.length > 0 ? historial : [mensajeBienvenida()]);
+        } catch (error: any) {
+            alert(`No se pudo cargar la conversación: ${error?.message || "error desconocido"}`);
+            setConversacionId(null);
+            setMensajes([mensajeBienvenida()]);
+        } finally {
+            setCargandoMensajes(false);
+        }
+    };
+
+    const eliminarConversacion = async () => {
+        if (conversacionId == null) return;
+        if (!window.confirm("¿Eliminar esta conversación del asistente? Esta acción no se puede deshacer.")) return;
+        try {
+            await IaServicio.eliminarConversacion(conversacionId);
+            await seleccionarConversacion(null);
+            await cargarConversaciones();
+        } catch (error: any) {
+            alert(`No se pudo eliminar la conversación: ${error?.message || "error desconocido"}`);
+        }
+    };
 
     const enviar = async () => {
         const limpio = texto.trim();
@@ -184,25 +242,79 @@ function SeccionChat() {
         setTexto("");
         setEnviando(true);
 
-        // TODO: reemplazar por llamada real a tu backend
-        // POST /api/ia/chat  { mensaje: limpio, conversacionId }
-        setTimeout(() => {
+        try {
+            const resultado = await IaServicio.chat(limpio, {
+                conversacionId,
+                idUsuario: idUsuarioActual,
+            });
+            setConversacionId(resultado.conversacionId);
             setMensajes((prev) => [
                 ...prev,
                 {
                     id: generarId(),
                     rol: "assistant",
-                    contenido:
-                        "Esta es una respuesta de ejemplo. En producción, el backend consultará las vistas v_ia_* y te responderá con datos reales de tu negocio.",
+                    contenido: resultado.respuesta,
                     fecha: new Date(),
                 },
             ]);
+            void cargarConversaciones();
+        } catch (error: any) {
+            setMensajes((prev) => [
+                ...prev,
+                {
+                    id: generarId(),
+                    rol: "assistant",
+                    contenido: `No pude consultar el asistente: ${error?.message || "error desconocido"}. Verifica que el backend esté activo.`,
+                    fecha: new Date(),
+                },
+            ]);
+        } finally {
             setEnviando(false);
-        }, 900);
+        }
     };
 
     return (
         <div className="flex flex-col min-h-full">
+            {/* Conversaciones guardadas */}
+            <div className="px-3 pt-3 flex items-center gap-2">
+                <select
+                    value={conversacionId ?? ""}
+                    onChange={(e) => void seleccionarConversacion(e.target.value ? Number(e.target.value) : null)}
+                    disabled={cargandoConversaciones || cargandoMensajes}
+                    className="flex-1 min-w-0 bg-[#1C2541] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#5BC0DE] disabled:opacity-60"
+                >
+                    <option value="">Nueva conversación</option>
+                    {conversaciones.map((c) => (
+                        <option key={c.id} value={c.id}>
+                            {c.titulo}
+                        </option>
+                    ))}
+                </select>
+                <button
+                    type="button"
+                    onClick={() => void seleccionarConversacion(null)}
+                    className="grid place-items-center w-10 h-10 shrink-0 bg-[#1C2541] border border-[#3A506B] rounded-xl text-[#5BC0DE] active:scale-95 transition-transform"
+                    title="Nueva conversación"
+                >
+                    <Plus size={18} />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => void eliminarConversacion()}
+                    disabled={conversacionId == null}
+                    className="grid place-items-center w-10 h-10 shrink-0 bg-[#1C2541] border border-[#3A506B] rounded-xl text-[#E57373] active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100"
+                    title="Eliminar conversación"
+                >
+                    <Trash2 size={18} />
+                </button>
+            </div>
+            {(cargandoConversaciones || cargandoMensajes) && (
+                <div className="px-3 pt-2 flex items-center gap-2 text-[#5BC0DE] text-xs">
+                    <Loader2 size={14} className="animate-spin" />
+                    {cargandoMensajes ? "Cargando mensajes..." : "Cargando conversaciones..."}
+                </div>
+            )}
+
             {/* Lista de mensajes */}
             <div className="flex-1 px-3 pt-3 space-y-3">
                 {mensajes.map((m) => (
@@ -296,18 +408,17 @@ function SeccionExcel() {
         if (!archivo || procesando) return;
         setProcesando(true);
 
-        // TODO: enviar FormData al backend → Gemini 3.5 Flash-Lite con responseSchema
-        // POST /api/ia/excel  (multipart/form-data)
-        setTimeout(() => {
-            setPreview([
-                { fila: 1, nombre: "Queso mozzarella", tipo: "insumo", categoria: "Lácteos", precio: 12000, stock: 5, estado: "valido" },
-                { fila: 2, nombre: "Pizza Margarita", tipo: "producto", categoria: "Pizzas", precio: 32000, stock: 0, estado: "valido" },
-                { fila: 3, nombre: "Tomate chonto", tipo: "insumo", categoria: "Verduras", precio: 4500, stock: 2, estado: "advertencia" },
-                { fila: 4, nombre: "Limonada natural", tipo: "producto", categoria: "Bebidas", precio: 8000, stock: 0, estado: "valido" },
-                { fila: 5, nombre: "Sin nombre", tipo: "insumo", categoria: "—", precio: 0, stock: 0, estado: "error" },
-            ]);
+        try {
+            const resultado = await IaServicio.procesarExcel(archivo);
+            setPreview(resultado.preview);
+            if (resultado.resumen) {
+                console.info(resultado.resumen, resultado.usandoIA ? "(Gemini)" : "(validación local)");
+            }
+        } catch (error: any) {
+            alert(`No se pudo procesar el archivo: ${error?.message || "error desconocido"}`);
+        } finally {
             setProcesando(false);
-        }, 1400);
+        }
     };
 
     const reiniciar = () => {
@@ -317,8 +428,21 @@ function SeccionExcel() {
     };
 
     const confirmar = async () => {
-        // TODO: POST /api/ia/excel/confirmar { filas: preview.filter(f => f.estado !== 'error') }
-        alert("Simulación: se insertarían los registros válidos en Supabase.");
+        if (!preview || validos === 0) return;
+        setProcesando(true);
+
+        try {
+            const resultado = await IaServicio.confirmarExcel(preview);
+            const fallos = resultado.errores.length > 0
+                ? `\n\nNo se guardaron ${resultado.errores.length}: ${resultado.errores[0].error}`
+                : "";
+            alert(`Guardado completo: ${resultado.insertados} nuevos y ${resultado.actualizados} actualizados.${fallos}`);
+            reiniciar();
+        } catch (error: any) {
+            alert(`No se pudo confirmar la carga: ${error?.message || "error desconocido"}`);
+        } finally {
+            setProcesando(false);
+        }
     };
 
     const validos = preview?.filter((f) => f.estado !== "error").length ?? 0;

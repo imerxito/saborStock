@@ -4,6 +4,8 @@ export type RolUsuario = 'Dueno' | 'Administrador' | 'Cocinero' | 'Caja' | 'Mese
 
 export interface Usuario {
     id: string;
+    idUsuario?: number;
+    id_usuario?: number;
     nombre: string;
     correo: string;
     cedula: string;

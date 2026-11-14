@@ -4,18 +4,28 @@ export interface Compra {
     fecha: string;
     estado: string;
     total: number;
+    factura: string | null;
 }
 
 export interface CrearCompra {
     id_proveedor: number;
     fecha?: string;
     estado?: string;
+    total?: number;
+    factura?: string | null;
+    detalles?: Array<{
+        id_ingrediente: number;
+        cantidad: number;
+        precio_aplicado: number;
+    }>;
 }
 
 export interface ActualizarCompra {
     id_proveedor?: number;
     fecha?: string;
     estado?: string;
+    total?: number;
+    factura?: string | null;
 }
 
 export interface CompraRow {
@@ -24,4 +34,5 @@ export interface CompraRow {
     fecha: string;
     estado: string;
     total: number;
+    factura?: string | null;
 }

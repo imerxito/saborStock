@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Lock, 
@@ -23,8 +23,15 @@ import {
   UserCheck,
   Eye,
   Search,
-  X
+  X,
+  RotateCw
 } from 'lucide-react';
+import { useAuth } from '../../contexto/AuthContexto';
+import { useComandas } from '../../contexto/ComandasContexto';
+import { MesaServicio } from '../../servicios/MesaServicio';
+import { ProductoServicio } from '../../servicios/ProductoServicio';
+import { CajaServicio, type TurnoCajaDTO } from '../../servicios/CajaServicio';
+import type { MesaBackend } from '../../tipos/Comanda';
 
 // --- Tipos de Datos ---
 type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'mixto';
@@ -37,9 +44,11 @@ interface PagoNomina { id: string; empleado: string; cedula: string; telefono: s
 // NUEVO: SubVentas dentro de una mesa
 interface SubVenta {
   id: string;
+  comandaId?: number;
+  idVenta?: number;
   cliente: string;
   total: number;
-  items: { nombre: string; cantidad: number; precio: number }[];
+  items: { idProducto?: number; nombre: string; cantidad: number; precio: number }[];
 }
 
 interface HistorialMesaItem { 
@@ -58,27 +67,14 @@ interface HistorialMesaItem {
 
 interface MesaActiva { 
   id: string; 
+  idBackend?: number;
   nombre: string; 
   seccion: string; 
   mesero: string; 
-  ventas: SubVenta[]; // Reemplaza a los items y total únicos
+  ventas: SubVenta[];
 }
 
-// Datos Mock del Sistema
-const CATEGORIAS: string[] = ['Todas', 'Comidas', 'Bebidas', 'Licores', 'Adicionales'];
-
-const PRODUCTOS_MOCK: Producto[] = [
-  { id: '1', nombre: 'Hamburguesa Especial', precio: 22000, categoria: 'Comidas' },
-  { id: '2', nombre: 'Pizza Personal Peperoni', precio: 18000, categoria: 'Comidas' },
-  { id: '3', nombre: 'Papas a la Francesa', precio: 8000, categoria: 'Comidas' },
-  { id: '4', nombre: 'Cerveza Club Colombia', precio: 7000, categoria: 'Bebidas' },
-  { id: '5', nombre: 'Limonada Cerezada', precio: 9000, categoria: 'Bebidas' },
-  { id: '6', nombre: 'Aguardiente Antioqueño (Botella)', precio: 65000, categoria: 'Licores' },
-  { id: '7', nombre: 'Ron Medellín 8 Años (Botella)', precio: 85000, categoria: 'Licores' },
-  { id: '8', nombre: 'Salsa Extra BBQ', precio: 3000, categoria: 'Adicionales' },
-  { id: '9', nombre: 'Tocineta Adicional', precio: 4500, categoria: 'Adicionales' },
-];
-
+// Datos del Sistema
 const EMPLEADOS_MOCK = [
   { nombre: 'Carlos Gómez', cedula: '1065789123', telefono: '3001234567', cargo: 'Mesero' },
   { nombre: 'Ana María Pérez', cedula: '1065987456', telefono: '3109876543', cargo: 'Cajera' },
@@ -86,40 +82,100 @@ const EMPLEADOS_MOCK = [
   { nombre: 'Mariana López', cedula: '1098456123', telefono: '3157894561', cargo: 'Auxiliar de Cocina' },
 ];
 
-// Actualizamos las mesas para que tengan múltiples ventas
-const MESAS_INICIALES: MesaActiva[] = [
-  { 
-    id: 'm3', nombre: 'Mesa 3', seccion: 'Piscina', mesero: 'Carlos Gómez', 
-    ventas: [
-      { id: 'v1', cliente: 'Juan Pérez', total: 45000, items: [{ nombre: 'Cerveza Club Colombia', cantidad: 1, precio: 7000 }, { nombre: 'Pizza Personal Peperoni', cantidad: 1, precio: 18000 }, { nombre: 'Hamburguesa Especial', cantidad: 1, precio: 20000 }] }
-    ] 
-  },
-  { 
-    id: 'm5', nombre: 'Mesa 5', seccion: 'Terraza', mesero: 'Carlos Gómez', 
-    ventas: [
-      { id: 'v2', cliente: 'Cliente General', total: 44000, items: [{ nombre: 'Hamburguesa Especial', cantidad: 2, precio: 22000 }] },
-      { id: 'v3', cliente: 'Ana (Amiga)', total: 38000, items: [{ nombre: 'Limonada Cerezada', cantidad: 2, precio: 9000 }, { nombre: 'Papas a la Francesa', cantidad: 2, precio: 10000 }] }
-    ] 
-  },
-  { 
-    id: 'm8', nombre: 'Mesa 8', seccion: 'VIP', mesero: 'Ana María Pérez', 
-    ventas: [
-      { id: 'v4', cliente: 'Empresa XYZ', total: 150000, items: [{ nombre: 'Ron Medellín 8 Años (Botella)', cantidad: 1, precio: 85000 }, { nombre: 'Aguardiente Antioqueño (Botella)', cantidad: 1, precio: 65000 }] }
-    ] 
-  },
-];
-
-const HISTORIAL_MESAS_MOCK: HistorialMesaItem[] = [
-  { id: 'HM-101', mesa: 'Mesa 1', seccion: 'Piscina', cliente: 'Fam. Rodríguez', monto: 45000, mesero: 'Carlos Gómez', metodoPago: 'Efectivo', estado: 'Pagada', fechaApertura: '02/11/2026 - 01:30 PM', fechaCierre: '02/11/2026 - 02:40 PM', items: [{ nombre: 'Hamburguesa Especial', cantidad: 1, precio: 22000 }, { nombre: 'Limonada Cerezada', cantidad: 1, precio: 9000 }, { nombre: 'Papas a la Francesa', cantidad: 1, precio: 8000 }] },
-  { id: 'HM-102', mesa: 'Mesa 4', seccion: 'Terraza', cliente: 'Carlos Ruiz', monto: 72000, mesero: 'Ana María Pérez', metodoPago: 'Transferencia', estado: 'Pagada', fechaApertura: '02/11/2026 - 02:15 PM', fechaCierre: '02/11/2026 - 03:10 PM', items: [{ nombre: 'Aguardiente Antioqueño (Botella)', cantidad: 1, precio: 65000 }, { nombre: 'Cerveza Club Colombia', cantidad: 1, precio: 7000 }] },
-];
-
 export default function Caja(): React.ReactElement {
-  const [turnoAbierto, setTurnoAbierto] = useState<boolean>(true);
+  const { usuario } = useAuth();
+  const { comandas, crear, recargar } = useComandas();
+
+  const [mesasRaw, setMesasRaw] = useState<MesaBackend[]>([]);
+  const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>([]);
+  const [turnoActual, setTurnoActual] = useState<TurnoCajaDTO | null>(null);
+  const [turnoAbierto, setTurnoAbierto] = useState<boolean>(false);
   const [baseInicial, setBaseInicial] = useState<number>(150000);
+  const [montoCierre, setMontoCierre] = useState<number>(0);
   const [modalTurno, setModalTurno] = useState<boolean>(false);
+  const [cargando, setCargando] = useState<boolean>(false);
   
   const [activeTab, setActiveTab] = useState<'ventas' | 'cobrar' | 'historialMesas' | 'movimientos' | 'nomina'>('ventas');
+
+  const cargarDatos = useCallback(async () => {
+    try {
+      setCargando(true);
+      const [mesasData, prodsData, turno, movs, facturas] = await Promise.all([
+        MesaServicio.listarMesas(),
+        ProductoServicio.listar(),
+        CajaServicio.obtenerTurnoActual(),
+        CajaServicio.listarMovimientos(),
+        CajaServicio.listarFacturas(),
+      ]);
+
+      if (mesasData && mesasData.length > 0) {
+        setMesasRaw(mesasData);
+      }
+
+      if (prodsData && prodsData.length > 0) {
+        setProductosDisponibles(prodsData.map(p => ({
+          id: String(p.id_producto),
+          nombre: p.nombre,
+          precio: p.precio_venta,
+          categoria: p.descripcion?.toLowerCase().includes('bebida') || p.nombre.toLowerCase().includes('jugo') || p.nombre.toLowerCase().includes('cerveza')
+            ? 'Bebidas'
+            : p.descripcion?.toLowerCase().includes('postre')
+            ? 'Adicionales'
+            : 'Comidas'
+        })));
+      }
+
+      if (turno && turno.estado === 'Abierto') {
+        setTurnoActual(turno);
+        setTurnoAbierto(true);
+        setBaseInicial(turno.montoInicial);
+      } else {
+        setTurnoActual(null);
+        setTurnoAbierto(false);
+      }
+
+      setMovimientos((movs || []).map(m => ({
+        id: String(m.id),
+        tipo: m.tipoPago.toLowerCase().includes('egreso') ? 'egreso' : 'ingreso',
+        concepto: m.descripcion || `Movimiento #${m.id} (${m.metodoPago})`,
+        monto: m.monto,
+        hora: new Date(m.fechaMovimiento).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      })));
+
+      const mesaPorId = new Map((mesasData || []).map(m => [m.id, m.numero]));
+      setHistorialMesas((facturas || []).map(f => {
+        const numeroMesa = f.idMesa != null ? mesaPorId.get(f.idMesa) : undefined;
+        const fecha = f.fechaEmision ? new Date(f.fechaEmision) : new Date();
+        return {
+          id: `F-${f.id}`,
+          mesa: numeroMesa != null ? `Mesa ${numeroMesa}` : 'Venta directa',
+          seccion: '',
+          cliente: f.cliente || 'Cliente General',
+          monto: f.totalPagar,
+          mesero: 'Caja',
+          metodoPago: String(f.metodoPago || 'Efectivo'),
+          estado: 'Pagada' as const,
+          fechaApertura: fecha.toLocaleString(),
+          fechaCierre: fecha.toLocaleString(),
+          items: [],
+        };
+      }));
+    } catch (e: any) {
+      console.warn('Error al cargar datos en Caja:', e);
+      alert('Error al cargar datos de caja: ' + (e?.message || 'Error desconocido'));
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargarDatos();
+  }, [cargarDatos]);
+
+  const categoriasDisponibles = useMemo(() => {
+    const cats = Array.from(new Set(productosDisponibles.map(p => p.categoria)));
+    return ['Todas', ...cats];
+  }, [productosDisponibles]);
 
   // Estados Venta Directa
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('Todas');
@@ -135,7 +191,58 @@ export default function Caja(): React.ReactElement {
   const [montoDigitalVenta, setMontoDigitalVenta] = useState<number>(0);
 
   // Estados Cobrar Mesas
-  const [mesasActivas, setMesasActivas] = useState<MesaActiva[]>(MESAS_INICIALES);
+  const mesasActivas = useMemo<MesaActiva[]>(() => {
+    if (mesasRaw.length === 0) return [];
+
+    const activas: MesaActiva[] = [];
+
+    mesasRaw.forEach(m => {
+      const coms = comandas.filter(
+        c => (c.idMesa === m.id || c.mesa === m.numero) && c.estado !== 'Cerrado'
+      );
+
+      if (coms.length > 0) {
+        const mapaVentas = new Map<string, { id: string; comandaId?: number; idVenta?: number; cliente: string; total: number; items: { idProducto?: number; nombre: string; cantidad: number; precio: number }[] }>();
+
+        coms.forEach(c => {
+          const clienteKey = (c.cliente || 'Cliente General').trim();
+          const itemsMapeados = c.items.map(it => ({
+            idProducto: it.idProducto,
+            nombre: it.producto,
+            cantidad: it.cantidad,
+            precio: it.precio || 0
+          }));
+          const totalC = c.total || itemsMapeados.reduce((sum, it) => sum + it.precio * it.cantidad, 0);
+
+          if (!mapaVentas.has(clienteKey)) {
+            mapaVentas.set(clienteKey, {
+              id: String(c.id),
+              comandaId: c.id,
+              idVenta: c.idVenta,
+              cliente: clienteKey,
+              total: totalC,
+              items: [...itemsMapeados]
+            });
+          } else {
+            const vExistente = mapaVentas.get(clienteKey)!;
+            vExistente.total += totalC;
+            vExistente.items.push(...itemsMapeados);
+          }
+        });
+
+        activas.push({
+          id: String(m.id),
+          idBackend: m.id,
+          nombre: `Mesa ${m.numero}`,
+          seccion: m.seccionNombre || 'Salón Principal',
+          mesero: coms[0]?.mesero || 'Mesero',
+          ventas: Array.from(mapaVentas.values())
+        });
+      }
+    });
+
+    return activas.length > 0 ? activas : [];
+  }, [mesasRaw, comandas]);
   const [busquedaMesa, setBusquedaMesa] = useState<string>('');
   const [filtroSeccion, setFiltroSeccion] = useState<string>('Todas');
   
@@ -150,13 +257,10 @@ export default function Caja(): React.ReactElement {
   const [descuento, setDescuento] = useState<number>(0); // NUEVO
   const [montoRecibidoSimple, setMontoRecibidoSimple] = useState<number>(0);
 
-  const [historialMesas, setHistorialMesas] = useState<HistorialMesaItem[]>(HISTORIAL_MESAS_MOCK);
+  const [historialMesas, setHistorialMesas] = useState<HistorialMesaItem[]>([]);
   const [mesaDetalleModal, setMesaDetalleModal] = useState<HistorialMesaItem | null>(null);
 
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([
-    { id: '1', tipo: 'ingreso', concepto: 'Base inicial de caja', monto: 150000, hora: '08:00 AM' },
-    { id: '2', tipo: 'egreso', concepto: 'Compra de hielo de emergencia', monto: 12000, hora: '10:30 AM' },
-  ]);
+  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [nuevoMovTipo, setNuevoMovTipo] = useState<'ingreso' | 'egreso'>('ingreso');
   const [nuevoMovConcepto, setNuevoMovConcepto] = useState<string>('');
   const [nuevoMovMonto, setNuevoMovMonto] = useState<string>('');
@@ -218,41 +322,90 @@ export default function Caja(): React.ReactElement {
     return false;
   }, [metodoPagoVenta, montoRecibidoVenta, montoEfectivoVenta, montoDigitalVenta, totalCarrito]);
 
-  const cobrarComandaRapida = () => {
+  const cobrarComandaRapida = async () => {
     if (carrito.length === 0) return;
     if (isPagoIncompletoVenta) {
       alert('El monto ingresado es menor al total a pagar. Por favor verifica.');
       return;
     }
 
-    const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const clienteStr = nombreCliente.trim() ? ` (${nombreCliente.trim()})` : ' (Sin Mesa)';
-    
-    let detalleExtra = '';
-    if (metodoPagoVenta === 'mixto') {
-      const totalMixto = montoEfectivoVenta + montoDigitalVenta;
-      const vueltoMixto = Math.max(0, totalMixto - totalCarrito);
-      detalleExtra = ` (Ef: $${montoEfectivoVenta} / Dig: $${montoDigitalVenta})${vueltoMixto > 0 ? ` [Cambio: $${vueltoMixto}]` : ''}`;
-    } else if ((metodoPagoVenta === 'efectivo' || metodoPagoVenta === 'transferencia') && montoRecibidoVenta > 0) {
-      detalleExtra = ` (Recibido: $${montoRecibidoVenta} / Cambio: $${cambioVenta})`;
-    }
+    try {
+      const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const clienteStr = nombreCliente.trim() || 'Venta Rápida (Sin Mesa)';
+      
+      let detalleExtra = '';
+      if (metodoPagoVenta === 'mixto') {
+        const totalMixto = montoEfectivoVenta + montoDigitalVenta;
+        const vueltoMixto = Math.max(0, totalMixto - totalCarrito);
+        detalleExtra = ` (Ef: $${montoEfectivoVenta} / Dig: $${montoDigitalVenta})${vueltoMixto > 0 ? ` [Cambio: $${vueltoMixto}]` : ''}`;
+      } else if ((metodoPagoVenta === 'efectivo' || metodoPagoVenta === 'transferencia') && montoRecibidoVenta > 0) {
+        detalleExtra = ` (Recibido: $${montoRecibidoVenta} / Cambio: $${cambioVenta})`;
+      }
 
-    const nuevoMov: Movimiento = {
-      id: Date.now().toString(),
-      tipo: 'ingreso',
-      concepto: `Venta comanda rápida${clienteStr} - ${metodoPagoVenta.toUpperCase()}${detalleExtra}`,
-      monto: totalCarrito,
-      hora: horaActual
-    };
-    setMovimientos(prev => [nuevoMov, ...prev]);
-    
-    setCarrito([]);
-    setNombreCliente('');
-    setMetodoPagoVenta('efectivo');
-    setMontoRecibidoVenta(0);
-    setMontoEfectivoVenta(0);
-    setMontoDigitalVenta(0);
-    setModalCobroVenta(false);
+      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
+
+      // 1. Enviar el pedido y cobrarlo como factura en Backend
+      const comandaCreada = await crear({
+        mesa: null,
+        idMesa: null,
+        idUsuario: Number.isFinite(idUsuarioActual) ? idUsuarioActual : null,
+        cliente: clienteStr,
+        personas: 1,
+        nota: `Venta Directa Caja (${metodoPagoVenta.toUpperCase()})`,
+        mesero: usuario?.nombre?.trim() || 'Cajero',
+        items: carrito.map(it => ({
+          idProducto: Number(it.producto.id.replace(/\D/g, '')) || undefined,
+          producto: it.producto.nombre,
+          cantidad: it.cantidad,
+          precio: it.producto.precio,
+          categoria: it.producto.categoria
+        }))
+      });
+
+      await CajaServicio.crearFactura({
+        idMesa: null,
+        idUsuario: idUsuarioActual,
+        subtotal: totalCarrito,
+        propina: 0,
+        cliente: clienteStr,
+        metodoPago: metodoPagoVenta,
+        montoEfectivo: metodoPagoVenta === 'mixto' ? montoEfectivoVenta : undefined,
+        montoTarjeta: metodoPagoVenta === 'mixto' ? montoDigitalVenta : undefined,
+        idTurnoCaja: turnoActual?.id,
+        idVenta: comandaCreada.idVenta ?? null,
+        idsComandas: [comandaCreada.id],
+        cerrarComandas: false,
+        cerrarVenta: true,
+        detalles: carrito
+          .map((it) => ({
+            idProducto: Number(it.producto.id.replace(/\D/g, '')),
+            cantidad: it.cantidad,
+            precioUnitario: it.producto.precio,
+          }))
+          .filter((it) => it.idProducto > 0),
+      });
+
+      const nuevoMov: Movimiento = {
+        id: Date.now().toString(),
+        tipo: 'ingreso',
+        concepto: `Venta comanda rápida (${clienteStr}) - ${metodoPagoVenta.toUpperCase()}${detalleExtra}`,
+        monto: totalCarrito,
+        hora: horaActual
+      };
+      setMovimientos(prev => [nuevoMov, ...prev]);
+      
+      setCarrito([]);
+      setNombreCliente('');
+      setMetodoPagoVenta('efectivo');
+      setMontoRecibidoVenta(0);
+      setMontoEfectivoVenta(0);
+      setMontoDigitalVenta(0);
+      setModalCobroVenta(false);
+
+      await recargar();
+    } catch (err: any) {
+      alert('Error al procesar comanda rápida: ' + (err?.message || 'Error desconocido'));
+    }
   };
 
   // Cálculos Cobrar Mesas
@@ -312,133 +465,250 @@ export default function Caja(): React.ReactElement {
     return false; 
   }, [metodoPago, montoRecibidoSimple, totalCobroMesa, montoEfectivo, montoDigital]);
 
-  const cobrarVentaMesa = () => {
+  const cobrarVentaMesa = async () => {
     if (!mesaACobrar || !ventaSeleccionada) return;
     if (isPagoIncompletoMesa) {
       alert('El monto ingresado es menor al total a pagar. Por favor verifica.');
       return;
     }
 
-    const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const fechaActual = new Date().toLocaleDateString() + ' - ' + horaActual;
+    try {
+      const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const fechaActual = new Date().toLocaleDateString() + ' - ' + horaActual;
 
-    let detalleExtra = '';
-    if (metodoPago === 'mixto') {
-      const totalMixto = montoEfectivo + montoDigital;
-      const vueltoMixto = Math.max(0, totalMixto - totalCobroMesa);
-      detalleExtra = ` (Ef: $${montoEfectivo} / Dig: $${montoDigital})${vueltoMixto > 0 ? ` [Cambio: $${vueltoMixto}]` : ''}${propina > 0 ? ` {Propina: $${propina}}` : ''}`;
-    } else if (metodoPago === 'tarjeta') {
-      detalleExtra = propina > 0 ? ` {Propina: $${propina}}` : '';
-    } else if ((metodoPago === 'efectivo' || metodoPago === 'transferencia') && montoRecibidoSimple > 0) {
-      detalleExtra = ` (Recibido: $${montoRecibidoSimple} / Cambio: $${cambioCalculado})${propina > 0 ? ` {Propina: $${propina}}` : ''}`;
-    }
-    // NUEVO: reflejar descuento en el detalle del concepto
-    if (descuentoAplicado > 0) {
-      detalleExtra += ` [Desc: -$${descuentoAplicado}]`;
-    }
-
-    const nuevoMov: Movimiento = {
-      id: Date.now().toString(),
-      tipo: 'ingreso',
-      concepto: `Cobro ${mesaACobrar.nombre} - ${ventaSeleccionada.cliente} - ${metodoPago.toUpperCase()}${detalleExtra}`,
-      monto: totalCobroMesa,
-      hora: horaActual
-    };
-    setMovimientos(prev => [nuevoMov, ...prev]);
-
-    const nuevoHistorial: HistorialMesaItem = {
-      id: `HM-${Date.now().toString().slice(-3)}`,
-      mesa: mesaACobrar.nombre,
-      seccion: mesaACobrar.seccion,
-      cliente: ventaSeleccionada.cliente,
-      monto: totalCobroMesa,
-      mesero: mesaACobrar.mesero,
-      metodoPago: (
-        metodoPago === 'mixto' 
-          ? `Mixto (Ef: $${montoEfectivo} / Dig: $${montoDigital})${propina > 0 ? ` + Prop: $${propina}` : ''}` 
-          : metodoPago === 'tarjeta' 
-            ? `Tarjeta${propina > 0 ? ` (Prop: $${propina})` : ''}` 
-            : `${metodoPago.toUpperCase()}${montoRecibidoSimple > 0 ? ` (Recibido: $${montoRecibidoSimple})` : ''}${propina > 0 ? ` (Prop: $${propina})` : ''}`
-      ) + (descuentoAplicado > 0 ? ` (Desc: -$${descuentoAplicado})` : ''),
-      estado: 'Pagada',
-      fechaApertura: fechaActual,
-      fechaCierre: fechaActual,
-      items: ventaSeleccionada.items
-    };
-    setHistorialMesas(prev => [nuevoHistorial, ...prev]);
-
-    // Actualizar mesas: quitar la venta pagada. Si no quedan ventas, quitar la mesa.
-    setMesasActivas(prev => {
-      const actualizadas = prev.map(m => {
-        if (m.id === mesaACobrar.id) {
-          const ventasRestantes = m.ventas.filter(v => v.id !== ventaSeleccionada.id);
-          return { ...m, ventas: ventasRestantes };
-        }
-        return m;
-      }).filter(m => m.ventas.length > 0);
-
-      // Si la mesa aún tiene ventas, seleccionar la siguiente
-      const mesaActualizada = actualizadas.find(m => m.id === mesaACobrar.id);
-      if (mesaActualizada && mesaActualizada.ventas.length > 0) {
-        setVentaSeleccionada(mesaActualizada.ventas[0]);
-      } else {
-        setMesaACobrar(null);
+      let detalleExtra = '';
+      if (metodoPago === 'mixto') {
+        const totalMixto = montoEfectivo + montoDigital;
+        const vueltoMixto = Math.max(0, totalMixto - totalCobroMesa);
+        detalleExtra = ` (Ef: $${montoEfectivo} / Dig: $${montoDigital})${vueltoMixto > 0 ? ` [Cambio: $${vueltoMixto}]` : ''}${propina > 0 ? ` {Propina: $${propina}}` : ''}`;
+      } else if (metodoPago === 'tarjeta') {
+        detalleExtra = propina > 0 ? ` {Propina: $${propina}}` : '';
+      } else if ((metodoPago === 'efectivo' || metodoPago === 'transferencia') && montoRecibidoSimple > 0) {
+        detalleExtra = ` (Recibido: $${montoRecibidoSimple} / Cambio: $${cambioCalculado})${propina > 0 ? ` {Propina: $${propina}}` : ''}`;
       }
-      return actualizadas;
-    });
+      if (descuentoAplicado > 0) {
+        detalleExtra += ` [Desc: -$${descuentoAplicado}]`;
+      }
 
-    // Limpiar montos
-    setMontoEfectivo(0);
-    setMontoDigital(0);
-    setPropina(0);
-    setDescuento(0); // NUEVO
-    setMontoRecibidoSimple(0);
-    setMetodoPago('efectivo');
+      // 1. Crear la factura: cierra comandas/venta y registra el pago en caja
+      const comsACerrar = comandas.filter(
+        c => (c.idMesa === mesaACobrar.idBackend || c.mesa === Number(mesaACobrar.nombre.replace(/\D/g, ''))) &&
+             (c.cliente || 'Cliente General').trim().toLowerCase() === ventaSeleccionada.cliente.trim().toLowerCase() &&
+             c.estado !== 'Cerrado'
+      );
+
+      const idsComandas = Array.from(new Set([
+        ...comsACerrar.map((com) => com.id),
+        ...(ventaSeleccionada.comandaId ? [ventaSeleccionada.comandaId] : []),
+      ]));
+      const idVenta = ventaSeleccionada.idVenta ?? comsACerrar.find((com) => com.idVenta)?.idVenta ?? null;
+
+      const detallesFactura = Array.from(
+        ventaSeleccionada.items.reduce((mapa, item) => {
+          if (!item.idProducto || item.cantidad <= 0) return mapa;
+          const clave = `${item.idProducto}-${item.precio}`;
+          const actual = mapa.get(clave) || { idProducto: item.idProducto, cantidad: 0, precioUnitario: item.precio };
+          actual.cantidad += item.cantidad;
+          mapa.set(clave, actual);
+          return mapa;
+        }, new Map<string, { idProducto: number; cantidad: number; precioUnitario: number }>()).values()
+      );
+
+      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
+      await CajaServicio.crearFactura({
+        idMesa: mesaACobrar.idBackend ?? null,
+        idUsuario: idUsuarioActual,
+        subtotal: ventaSeleccionada.total,
+        descuento: descuentoAplicado,
+        propina: Number(propina) || 0,
+        cliente: ventaSeleccionada.cliente,
+        metodoPago,
+        montoEfectivo: metodoPago === 'mixto' ? montoEfectivo : undefined,
+        montoTarjeta: metodoPago === 'mixto' ? montoDigital : undefined,
+        idTurnoCaja: turnoActual?.id,
+        idVenta,
+        idsComandas,
+        detalles: detallesFactura,
+      });
+
+      for (const idCmd of idsComandas) {
+        await cambiarEstado(idCmd, 'Cerrado').catch(() => {});
+      }
+      if (mesaACobrar.idBackend) {
+        await MesaServicio.actualizarMesa(mesaACobrar.idBackend, { estado: 'Libre' }).catch(() => {});
+      }
+
+      // 4. Agregar a historial local de mesas
+      const nuevoHistorial: HistorialMesaItem = {
+        id: `HM-${Date.now().toString().slice(-3)}`,
+        mesa: mesaACobrar.nombre,
+        seccion: mesaACobrar.seccion,
+        cliente: ventaSeleccionada.cliente,
+        monto: totalCobroMesa,
+        mesero: mesaACobrar.mesero,
+        metodoPago: (
+          metodoPago === 'mixto' 
+            ? `Mixto (Ef: $${montoEfectivo} / Dig: $${montoDigital})${propina > 0 ? ` + Prop: $${propina}` : ''}` 
+            : metodoPago === 'tarjeta' 
+              ? `Tarjeta${propina > 0 ? ` (Prop: $${propina})` : ''}` 
+              : `${metodoPago.toUpperCase()}${montoRecibidoSimple > 0 ? ` (Recibido: $${montoRecibidoSimple})` : ''}${propina > 0 ? ` (Prop: $${propina})` : ''}`
+        ) + (descuentoAplicado > 0 ? ` (Desc: -$${descuentoAplicado})` : ''),
+        estado: 'Pagada',
+        fechaApertura: fechaActual,
+        fechaCierre: fechaActual,
+        items: ventaSeleccionada.items
+      };
+      setHistorialMesas(prev => [nuevoHistorial, ...prev]);
+
+      const nuevoMov: Movimiento = {
+        id: Date.now().toString(),
+        tipo: 'ingreso',
+        concepto: `Cobro ${mesaACobrar.nombre} - ${ventaSeleccionada.cliente} - ${metodoPago.toUpperCase()}${detalleExtra}`,
+        monto: totalCobroMesa,
+        hora: horaActual
+      };
+      setMovimientos(prev => [nuevoMov, ...prev]);
+
+      // Refrescar mesas y comandas
+      await recargar();
+      await MesaServicio.listarMesas().then(setMesasRaw);
+
+      // Limpiar montos y modal
+      setMesaACobrar(null);
+      setVentaSeleccionada(null);
+      setMontoEfectivo(0);
+      setMontoDigital(0);
+      setPropina(0);
+      setDescuento(0);
+      setMontoRecibidoSimple(0);
+      setMetodoPago('efectivo');
+    } catch (err: any) {
+      alert('Error al cobrar la venta: ' + (err?.message || 'Error desconocido'));
+    }
   };
 
-  const registrarMovimiento = (e: React.FormEvent) => {
+  const registrarMovimiento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nuevoMovConcepto.trim() || !nuevoMovMonto || parseFloat(nuevoMovMonto) <= 0) return;
-    const nuevo: Movimiento = {
-      id: Date.now().toString(),
-      tipo: nuevoMovTipo,
-      concepto: nuevoMovConcepto.trim(),
-      monto: parseFloat(nuevoMovMonto),
-      hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    setMovimientos(prev => [nuevo, ...prev]);
-    setNuevoMovConcepto('');
-    setNuevoMovMonto('');
+    const montoNum = parseFloat(nuevoMovMonto);
+    const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    try {
+      const idUsuarioActual = (usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1;
+      const idTurno = turnoActual?.id;
+      if (!idTurno) {
+        alert('No hay un turno de caja abierto. Abre el turno para registrar movimientos.');
+        return;
+      }
+      await CajaServicio.registrarMovimiento({
+        idTurnoCaja: idTurno,
+        idUsuario: idUsuarioActual,
+        monto: montoNum,
+        metodoPago: 'Efectivo',
+        tipoPago: nuevoMovTipo === 'egreso' ? 'Egreso' : 'Ingreso',
+        descripcion: nuevoMovConcepto.trim()
+      });
+
+      const nuevo: Movimiento = {
+        id: Date.now().toString(),
+        tipo: nuevoMovTipo,
+        concepto: nuevoMovConcepto.trim(),
+        monto: montoNum,
+        hora: horaActual
+      };
+      setMovimientos(prev => [nuevo, ...prev]);
+      setNuevoMovConcepto('');
+      setNuevoMovMonto('');
+    } catch (err: any) {
+      alert('Error al registrar movimiento: ' + (err?.message || 'Error desconocido'));
+    }
   };
 
-  const registrarNomina = (e: React.FormEvent) => {
+  const abrirTurnoOperacional = async (monto: number) => {
+    try {
+      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
+      const nuevoTurno = await CajaServicio.abrirTurno(monto, 1, idUsuarioActual);
+      setTurnoActual(nuevoTurno);
+      setTurnoAbierto(true);
+      setBaseInicial(monto);
+      setModalTurno(false);
+      const nuevoMov: Movimiento = {
+        id: Date.now().toString(),
+        tipo: 'ingreso',
+        concepto: 'Base inicial de caja',
+        monto: monto,
+        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMovimientos(prev => [nuevoMov, ...prev]);
+    } catch (err: any) {
+      alert('Error al abrir turno: ' + (err?.message || 'Error desconocido'));
+    }
+  };
+
+  const cerrarTurnoOperacional = async (montoFinalVal: number) => {
+    try {
+      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
+      const idTurno = turnoActual?.id;
+      if (idTurno) {
+        await CajaServicio.cerrarTurno(idTurno, montoFinalVal, idUsuarioActual);
+      }
+      setTurnoActual(null);
+      setTurnoAbierto(false);
+      setModalTurno(false);
+      setMontoCierre(0);
+      alert('Turno de caja cerrado con éxito.');
+    } catch (err: any) {
+      alert('Error al cerrar turno: ' + (err?.message || 'Error desconocido'));
+    }
+  };
+
+  const registrarNomina = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!empleadoSeleccionado) return;
     const total = Number(nomBase) + Number(nomBono);
-    const nueva: PagoNomina = {
-      id: Date.now().toString(),
-      empleado: empleadoSeleccionado.nombre,
-      cedula: empleadoSeleccionado.cedula,
-      telefono: empleadoSeleccionado.telefono,
-      cargo: empleadoSeleccionado.cargo,
-      montoBase: Number(nomBase),
-      bono: Number(nomBono),
-      montoTotal: total,
-      metodo: 'Efectivo',
-      fecha: new Date().toLocaleDateString()
-    };
-    setNominas(prev => [nueva, ...prev]);
+    if (!(total > 0)) {
+      alert('El monto de la nómina debe ser mayor a 0.');
+      return;
+    }
+    try {
+      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
+      if (turnoActual?.id) {
+        await CajaServicio.registrarMovimiento({
+          idTurnoCaja: turnoActual.id,
+          idUsuario: idUsuarioActual,
+          monto: total,
+          metodoPago: 'Efectivo',
+          tipoPago: 'egreso',
+          descripcion: `Pago Nómina a ${empleadoSeleccionado.nombre} (${empleadoSeleccionado.cargo})`,
+        });
+      }
+      const nueva: PagoNomina = {
+        id: Date.now().toString(),
+        empleado: empleadoSeleccionado.nombre,
+        cedula: empleadoSeleccionado.cedula,
+        telefono: empleadoSeleccionado.telefono,
+        cargo: empleadoSeleccionado.cargo,
+        montoBase: Number(nomBase),
+        bono: Number(nomBono),
+        montoTotal: total,
+        metodo: 'Efectivo',
+        fecha: new Date().toLocaleDateString()
+      };
+      setNominas(prev => [nueva, ...prev]);
 
-    const egresoNomina: Movimiento = {
-      id: Date.now().toString(),
-      tipo: 'egreso',
-      concepto: `Pago Nómina a ${empleadoSeleccionado.nombre} (${empleadoSeleccionado.cargo})`,
-      monto: total,
-      hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    setMovimientos(prev => [egresoNomina, ...prev]);
-    setNomBono(0);
-    setBusquedaEmpleado('');
+      const egresoNomina: Movimiento = {
+        id: Date.now().toString(),
+        tipo: 'egreso',
+        concepto: `Pago Nómina a ${empleadoSeleccionado.nombre} (${empleadoSeleccionado.cargo})`,
+        monto: total,
+        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMovimientos(prev => [egresoNomina, ...prev]);
+      setNomBono(0);
+      setBusquedaEmpleado('');
+    } catch (err: any) {
+      alert('Error al registrar pago de nómina: ' + (err?.message || 'Error desconocido'));
+    }
   };
 
   const empleadosFiltrados = EMPLEADOS_MOCK.filter(emp => 
@@ -498,7 +768,7 @@ export default function Caja(): React.ReactElement {
                 />
               </div>
               <button 
-                onClick={() => setTurnoAbierto(true)}
+                onClick={() => void abrirTurnoOperacional(baseInicial)}
                 className="w-full bg-[#5BC0DE] text-[#0B132B] font-bold py-2.5 rounded-xl text-xs hover:bg-[#5BC0DE]/90 transition-all shadow-md mt-1"
               >
                 Abrir Turno Ahora
@@ -541,7 +811,7 @@ export default function Caja(): React.ReactElement {
                     <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0]">Menú Rápido por Categorías</h3>
                   </div>
                   <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2.5 border-b border-[#3A506B] shrink-0 scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
-                    {CATEGORIAS.map((cat) => (
+                    {categoriasDisponibles.map((cat) => (
                       <button
                         key={cat}
                         onClick={() => setCategoriaSeleccionada(cat)}
@@ -556,7 +826,7 @@ export default function Caja(): React.ReactElement {
                     ))}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 flex-1 overflow-y-auto pr-1 max-h-[50vh] lg:max-h-none">
-                    {PRODUCTOS_MOCK.filter(p => categoriaSeleccionada === 'Todas' || p.categoria === categoriaSeleccionada).map((prod) => (
+                    {productosDisponibles.filter(p => categoriaSeleccionada === 'Todas' || p.categoria === categoriaSeleccionada).map((prod) => (
                       <motion.button
                         key={prod.id}
                         onClick={() => agregarAlCarrito(prod)}
@@ -1325,10 +1595,21 @@ export default function Caja(): React.ReactElement {
             </h3>
             <p className="text-[#5BC0DE] mb-2.5 text-[11px]">
               {turnoAbierto 
-                ? 'Al cerrar el turno, los ingresos acumulados quedarán registrados para el arqueo final.' 
+                ? 'Al cerrar el turno, los ingresos acumulados quedarán registrados para el arqueo final. Ingresa el monto en caja al cierre:' 
                 : 'Ingresa el monto de base para aperturar la caja.'}
             </p>
-            {!turnoAbierto && (
+            {turnoAbierto ? (
+              <div className="mb-2.5">
+                <label className="text-[#5BC0DE] block mb-1 text-[11px]">Monto Final en Caja ($)</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  value={montoCierre} 
+                  onChange={(e) => setMontoCierre(Number(e.target.value.replace(/\D/g, '')) || 0)} 
+                  className="w-full bg-[#0B132B] border border-[#3A506B] px-2.5 py-1.5 rounded-xl text-[#F4D6B0] text-xs" 
+                />
+              </div>
+            ) : (
               <div className="mb-2.5">
                 <label className="text-[#5BC0DE] block mb-1 text-[11px]">Base Inicial ($)</label>
                 <input 
@@ -1346,8 +1627,11 @@ export default function Caja(): React.ReactElement {
               </button>
               <button 
                 onClick={() => {
-                  setTurnoAbierto(!turnoAbierto);
-                  setModalTurno(false);
+                  if (turnoAbierto) {
+                    void cerrarTurnoOperacional(montoCierre);
+                  } else {
+                    void abrirTurnoOperacional(baseInicial);
+                  }
                 }} 
                 className={`flex-1 font-bold py-1.5 rounded-xl text-xs ${turnoAbierto ? 'bg-[#D97706] text-white' : 'bg-[#5BC0DE] text-[#0B132B]'}`}
               >

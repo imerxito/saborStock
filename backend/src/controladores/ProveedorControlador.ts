@@ -1,7 +1,7 @@
 import {Request, Response} from "express";
 import { ProveedorServicio } from "../servicios/ProveedorServicio.js";
 
-const proveedorServicio = new ProveedorServicio({} as any);
+const proveedorServicio = new ProveedorServicio();
 
 export class ProveedorControlador {
 

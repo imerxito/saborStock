@@ -1,4 +1,5 @@
-import { useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { InventarioServicio } from "../../servicios/InventarioServicio";
 
 type UnidadMedida = {
   id_unidad: number;
@@ -157,9 +158,11 @@ function calcular(i: Insumo, unidades: UnidadMedida[]) {
 }
 
 export default function Inventario() {
-  const [insumos, setInsumos] = useState<Insumo[]>(INICIAL);
-  const [unidades, setUnidades] = useState<UnidadMedida[]>(UNIDADES_INICIALES);
-  const [categorias, setCategorias] = useState<CategoriaIngrediente[]>(CATEGORIAS_INICIALES);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [unidades, setUnidades] = useState<UnidadMedida[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaIngrediente[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState("");
   
   const [busqueda, setBusqueda] = useState("");
   const [selectedCategoria, setSelectedCategoria] = useState<number | 'todas'>('todas');
@@ -176,6 +179,55 @@ export default function Inventario() {
   const [error, setError] = useState("");
   const [errorUnidad, setErrorUnidad] = useState("");
   const [errorCategoria, setErrorCategoria] = useState("");
+
+  const cargarDatos = async () => {
+    setCargando(true);
+    setErrorCarga("");
+    try {
+      const [insumosData, categoriasData, unidadesData] = await Promise.all([
+        InventarioServicio.listarInsumos(),
+        InventarioServicio.listarCategorias(),
+        InventarioServicio.listarUnidades(),
+      ]);
+
+      setInsumos(
+        (insumosData || []).map((i) => ({
+          id: i.id_ingrediente,
+          codigo: i.codigo,
+          nombre: i.nombre,
+          id_unidad: Number(i.id_unidad),
+          id_categoria: i.id_categoria_ingrediente ?? 0,
+          stock: Number(i.stock),
+          minimo: Number(i.stock_minimo),
+          maximo: Number(i.stock_maximo ?? 0),
+          precioReferencia: Number(i.precio_referencia),
+          caducidad: i.caducidad ?? undefined,
+        }))
+      );
+
+      setCategorias(
+        (categoriasData || []).map((c) => ({ id: c.id, nombre: c.nombre }))
+      );
+
+      setUnidades(
+        (unidadesData || []).map((u) => ({
+          id_unidad: Number(u.id),
+          nombre: u.nombre,
+          abreviatura: u.abreviatura,
+          descripcion: u.descripcion ?? "",
+          activo: u.activo ?? true,
+        }))
+      );
+    } catch (e: any) {
+      setErrorCarga(e?.message || "No se pudo cargar el inventario desde el backend.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    void cargarDatos();
+  }, []);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -201,7 +253,7 @@ export default function Inventario() {
     setError("");
   };
 
-  const guardarInsumo = (e: React.FormEvent) => {
+  const guardarInsumo = async (e: React.FormEvent) => {
     e.preventDefault();
     const nombre = form.nombre.trim();
     const stock = Number(form.stock);
@@ -210,37 +262,38 @@ export default function Inventario() {
     const id_unidad = Number(form.id_unidad);
     const id_categoria = Number(form.id_categoria);
     const precioReferencia = Number(form.precioReferencia) || 0;
-    const caducidad = form.caducidad;
+    const caducidad = form.caducidad || null;
 
     if (!nombre) return setError("El nombre del insumo es obligatorio.");
-    if (insumos.some((i) => i.nombre.toLowerCase() === nombre.toLowerCase()))
-      return setError("Ya existe un insumo con ese nombre.");
     if ([stock, minimo, maximo].some((n) => Number.isNaN(n) || n < 0))
       return setError("Stock, mínimo y máximo deben ser números válidos (0 o mayor).");
     if (form.stock === "" || form.minimo === "" || form.maximo === "")
       return setError("Completa stock, mínimo y máximo.");
     if (maximo <= 0) return setError("El máximo debe ser mayor que 0.");
     if (minimo > maximo) return setError("El mínimo no puede ser mayor que el máximo.");
+    if (!categorias.some((c) => c.id === id_categoria)) return setError("Selecciona una categoría válida.");
+    if (!unidades.some((u) => u.id_unidad === id_unidad)) return setError("Selecciona una unidad válida.");
 
-    setInsumos((prev) => [
-      ...prev,
-      {
-        id: prev.length ? Math.max(...prev.map((i) => i.id)) + 1 : 1,
-        codigo: form.codigo.trim() || `ING-00${prev.length + 1}`,
+    try {
+      await InventarioServicio.crearInsumo({
+        codigo: form.codigo.trim() || `ING-${Date.now().toString().slice(-6)}`,
         nombre,
         id_unidad,
-        id_categoria,
+        id_categoria_ingrediente: id_categoria,
         stock,
-        minimo,
-        maximo,
-        precioReferencia,
+        stock_minimo: minimo,
+        stock_maximo: maximo,
+        precio_referencia: precioReferencia,
         caducidad,
-      },
-    ]);
-    cerrarForm();
+      });
+      await cargarDatos();
+      cerrarForm();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo guardar el insumo en el backend.");
+    }
   };
 
-  const guardarUnidad = (e: React.FormEvent) => {
+  const guardarUnidad = async (e: React.FormEvent) => {
     e.preventDefault();
     const nombre = formUnidad.nombre.trim();
     const abreviatura = formUnidad.abreviatura.trim().toLowerCase();
@@ -250,19 +303,20 @@ export default function Inventario() {
     if (unidades.some((u) => u.abreviatura === abreviatura || u.nombre.toLowerCase() === nombre.toLowerCase()))
       return setErrorUnidad("Esta unidad o abreviatura ya se encuentra registrada.");
 
-    const nuevoId = unidades.length ? Math.max(...unidades.map((u) => u.id_unidad)) + 1 : 1;
-
-    setUnidades((prev) => [
-      ...prev,
-      { id_unidad: nuevoId, nombre, abreviatura, descripcion, activo: true },
-    ]);
-    setForm((prev) => ({ ...prev, id_unidad: String(nuevoId) }));
-    setFormUnidad({ nombre: "", abreviatura: "", descripcion: "" });
-    setErrorUnidad("");
-    setMostrarModalUnidad(false);
+    try {
+      const creada = await InventarioServicio.crearUnidad({ nombre, abreviatura, descripcion });
+      const nuevoId = Number(creada.id);
+      await cargarDatos();
+      setForm((prev) => ({ ...prev, id_unidad: String(nuevoId) }));
+      setFormUnidad({ nombre: "", abreviatura: "", descripcion: "" });
+      setErrorUnidad("");
+      setMostrarModalUnidad(false);
+    } catch (err: any) {
+      setErrorUnidad(err?.message || "No se pudo crear la unidad en el backend.");
+    }
   };
 
-  const guardarCategoria = (e: React.FormEvent) => {
+  const guardarCategoria = async (e: React.FormEvent) => {
     e.preventDefault();
     const nombre = formCategoria.nombre.trim();
 
@@ -270,26 +324,45 @@ export default function Inventario() {
     if (categorias.some((c) => c.nombre.toLowerCase() === nombre.toLowerCase()))
       return setErrorCategoria("Esta categoría ya se encuentra registrada.");
 
-    const nuevoId = categorias.length ? Math.max(...categorias.map((c) => c.id)) + 1 : 1;
-
-    setCategorias((prev) => [
-      ...prev,
-      { id: nuevoId, nombre },
-    ]);
-    setForm((prev) => ({ ...prev, id_categoria: String(nuevoId) }));
-    setFormCategoria({ nombre: "" });
-    setErrorCategoria("");
-    setMostrarModalCategoria(false);
+    try {
+      await InventarioServicio.crearCategoria(nombre);
+      await cargarDatos();
+      setFormCategoria({ nombre: "" });
+      setErrorCategoria("");
+      setMostrarModalCategoria(false);
+    } catch (err: any) {
+      setErrorCategoria(err?.message || "No se pudo crear la categoría en el backend.");
+    }
   };
 
-  const cambiarStock = (id: number, valor: number) => {
-    const stock = Math.max(0, Number.isNaN(valor) ? 0 : valor);
-    setInsumos((prev) => prev.map((i) => (i.id === id ? { ...i, stock } : i)));
+  const cambiarStock = async (id: number, valor: number) => {
+    const insumo = insumos.find((i) => i.id === id);
+    if (!insumo) return;
+    const nuevoStock = Math.max(0, Number.isNaN(valor) ? 0 : valor);
+    const diferencia = nuevoStock - insumo.stock;
+    if (diferencia === 0) return;
+
+    try {
+      await InventarioServicio.registrarMovimiento({
+        id_ingrediente: id,
+        tipo: diferencia > 0 ? "ENTRADA" : "SALIDA",
+        cantidad: Math.abs(diferencia),
+        motivo: "Ajuste manual de inventario",
+      });
+      await cargarDatos();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo actualizar el stock en el backend.");
+    }
   };
 
-  const eliminar = (id: number) => {
+  const eliminar = async (id: number) => {
     if (window.confirm("¿Eliminar este insumo?")) {
-      setInsumos((prev) => prev.filter((i) => i.id !== id));
+      try {
+        await InventarioServicio.desactivarInsumo(id);
+        await cargarDatos();
+      } catch (err: any) {
+        setError(err?.message || "No se pudo eliminar el insumo en el backend.");
+      }
     }
   };
 

@@ -12,7 +12,8 @@ function mapearCompraRow(row: CompraRow): Compra {
         id_proveedor: row.id_proveedor,
         fecha: row.fecha,
         estado: row.estado,
-        total: Number(row.total)
+        total: Number(row.total),
+        factura: row.factura ?? null
     };
 }
 
@@ -74,6 +75,17 @@ export class CompraRepositorio {
 
         if (error) {
             throw new Error(`Error al actualizar compra: ${error.message}`);
+        }
+    }
+
+    async eliminar(id: number): Promise<void> {
+        const { error } = await supabase
+            .from("compra")
+            .delete()
+            .eq("id_compra", id);
+
+        if (error) {
+            throw new Error(`Error al eliminar compra: ${error.message}`);
         }
     }
 }

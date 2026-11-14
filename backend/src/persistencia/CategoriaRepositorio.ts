@@ -4,11 +4,13 @@ import { Categoria, CrearCategoriaDTO, ActualizarCategoriaDTO } from "../modelos
 const Tabla = "categoria";
 
 function filaCategoria(fila: any): Categoria {
+    const idVal = fila.id_categoria ?? fila.id;
     return {
-        id: fila.id,
+        id: idVal,
+        id_categoria: Number(idVal),
         nombre: fila.nombre,
         descripcion: fila.descripcion ?? null,
-        activo: fila.activo
+        activo: fila.activo ?? true
     };
 }
 
@@ -17,31 +19,31 @@ export class CategoriaRepositorio {
         const { data, error } = await supabase
             .from(Tabla)
             .select("*")
-            .order("nombre");
+            .order("id_categoria", { ascending: true });
         if (error) {
             throw new Error(`Error al listar categorías: ${error.message}`);
         }
-        return data.map(filaCategoria);
+        return (data || []).map(filaCategoria);
     }
 
-    async obtenerPorId(id:string):Promise<Categoria|null>{
-        const {data,error}= await supabase
-        .from(Tabla)
-        .select('*')
-        .eq('id',id)
-        .maybeSingle();
+    async obtenerPorId(id: string | number): Promise<Categoria | null> {
+        const { data, error } = await supabase
+            .from(Tabla)
+            .select("*")
+            .eq("id_categoria", id)
+            .maybeSingle();
         if (error) {
             throw new Error(`Error al obtener categoría por ID: ${error.message}`);
         }
         return data ? filaCategoria(data) : null;
     }
 
-    async buscarPorNombre(nombre:string):Promise<Categoria|null>{
-        const {data,error}= await supabase
-        .from(Tabla)
-        .select('*')
-        .eq('nombre',nombre)
-        .maybeSingle();
+    async buscarPorNombre(nombre: string): Promise<Categoria | null> {
+        const { data, error } = await supabase
+            .from(Tabla)
+            .select("*")
+            .eq("nombre", nombre)
+            .maybeSingle();
         if (error) {
             throw new Error(`Error al buscar categoría por nombre: ${error.message}`);
         }
@@ -64,15 +66,16 @@ export class CategoriaRepositorio {
         return filaCategoria(data);
     }
 
-    async actualizar(id: string, params: ActualizarCategoriaDTO): Promise<Categoria> {
+    async actualizar(id: string | number, params: ActualizarCategoriaDTO): Promise<Categoria> {
+        const campos: Record<string, unknown> = {};
+        if (params.nombre !== undefined) campos.nombre = params.nombre;
+        if (params.descripcion !== undefined) campos.descripcion = params.descripcion;
+        if (params.activo !== undefined) campos.activo = params.activo;
+
         const { data, error } = await supabase
             .from(Tabla)
-            .update({
-                nombre: params.nombre,
-                descripcion: params.descripcion ?? null,
-                activo: params.activo
-            })
-            .eq('id', id)
+            .update(campos)
+            .eq("id_categoria", id)
             .select()
             .single();
         if (error) {
@@ -81,21 +84,21 @@ export class CategoriaRepositorio {
         return filaCategoria(data);
     }
 
-    async cambiarEstado(id: string, activo: boolean): Promise<void> {
+    async cambiarEstado(id: string | number, activo: boolean): Promise<void> {
         const { error } = await supabase
             .from(Tabla)
             .update({ activo })
-            .eq('id', id);
+            .eq("id_categoria", id);
         if (error) {
             throw new Error(`Error al cambiar estado de categoría: ${error.message}`);
         }
     }
 
-    async eliminar(id: string): Promise<void> {
+    async eliminar(id: string | number): Promise<void> {
         const { error } = await supabase
             .from(Tabla)
             .delete()
-            .eq('id', id);
+            .eq("id_categoria", id);
         if (error) {
             throw new Error(`Error al eliminar categoría: ${error.message}`);
         }

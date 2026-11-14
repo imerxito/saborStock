@@ -1,100 +1,118 @@
 import { supabase } from "../configuracion/Supabase.js";
-import { Factura, FacturaRow } from "../modelos/Factura.js";
+import { Factura, FacturaRow, mapFacturaFromRow } from "../modelos/Factura.js";
+import { MetodoPago } from "../tipos/MetodoPago.js";
+import { EstadoFactura } from "../tipos/EstadoFactura.js";
 
-function mapearFacturaRow(row: FacturaRow): Factura {
-  return {
-    id: row.id_factura,
-    idMesa: row.id_mesa,
-    idUsuario: row.id_usuario,
-    fechaEmision: new Date(row.fecha_emision),
-    subtotal: Number(row.subtotal),
-    propina: Number(row.propina),
-    totalPagar: Number(row.total_pagar),
-  };
-}
-
-// Datos ya calculados por el servicio (incluye totalPagar)
 export interface DatosCrearFactura {
-  idMesa: number;
-  idUsuario: number;
-  subtotal: number;
-  propina: number;
-  totalPagar: number;
+    idVenta?: number | null;
+    idMesa: number | null;
+    idUsuario: number;
+    cliente?: string;
+    subtotal: number;
+    descuento: number;
+    propina: number;
+    totalPagar: number;
+    metodoPago: MetodoPago;
+    montoEfectivo?: number | null;
+    montoTarjeta?: number | null;
+    montoTransferencia?: number | null;
+    estado?: EstadoFactura;
 }
 
 export interface DatosActualizarFactura {
-  idMesa?: number;
-  idUsuario?: number;
-  subtotal?: number;
-  propina?: number;
-  totalPagar?: number;
+    idVenta?: number | null;
+    idMesa?: number | null;
+    idUsuario?: number;
+    cliente?: string;
+    subtotal?: number;
+    descuento?: number;
+    propina?: number;
+    totalPagar?: number;
+    metodoPago?: MetodoPago;
+    montoEfectivo?: number | null;
+    montoTarjeta?: number | null;
+    montoTransferencia?: number | null;
+    estado?: EstadoFactura;
 }
 
 export class FacturaRepositorio {
-  async listar(): Promise<Factura[]> {
-    const { data, error } = await supabase
-      .from("factura")
-      .select("*")
-      .order("fecha_emision", { ascending: false });
+    async listar(): Promise<Factura[]> {
+        const { data, error } = await supabase
+            .from("factura")
+            .select("*")
+            .order("fecha_emision", { ascending: false });
 
-    if (error) throw new Error(`Error al listar facturas: ${error.message}`);
-    return (data as FacturaRow[]).map(mapearFacturaRow);
-  }
-
-  async obtenerPorId(id: number): Promise<Factura | null> {
-    const { data, error } = await supabase
-      .from("factura")
-      .select("*")
-      .eq("id_factura", id)
-      .single();
-
-    if (error) {
-      if (error.code === "PGRST116") return null;
-      throw new Error(`Error al obtener factura: ${error.message}`);
+        if (error) throw new Error(`Error al listar facturas: ${error.message}`);
+        return (data as FacturaRow[]).map(mapFacturaFromRow);
     }
-    return mapearFacturaRow(data as FacturaRow);
-  }
 
-  async crearFactura(datos: DatosCrearFactura): Promise<Factura> {
-    const { data, error } = await supabase
-      .from("factura")
-      .insert({
-        id_mesa: datos.idMesa,
-        id_usuario: datos.idUsuario,
-        subtotal: datos.subtotal,
-        propina: datos.propina,
-        total_pagar: datos.totalPagar,
-      })
-      .select()
-      .single();
+    async obtenerPorId(id: number): Promise<Factura | null> {
+        const { data, error } = await supabase
+            .from("factura")
+            .select("*")
+            .eq("id_factura", id)
+            .maybeSingle();
 
-    if (error) {
-      if (error.code === "23503") throw new Error("La mesa o el usuario indicado no existe");
-      if (error.code === "23514") throw new Error("Subtotal, propina y total no pueden ser negativos");
-      throw new Error(`Error al crear factura: ${error.message}`);
+        if (error) throw new Error(`Error al obtener factura: ${error.message}`);
+        return data ? mapFacturaFromRow(data as FacturaRow) : null;
     }
-    return mapearFacturaRow(data as FacturaRow);
-  }
 
-  async actualizarFactura(id: number, cambios: DatosActualizarFactura): Promise<void> {
-    const campos: Record<string, unknown> = {};
-    if (cambios.idMesa !== undefined) campos.id_mesa = cambios.idMesa;
-    if (cambios.idUsuario !== undefined) campos.id_usuario = cambios.idUsuario;
-    if (cambios.subtotal !== undefined) campos.subtotal = cambios.subtotal;
-    if (cambios.propina !== undefined) campos.propina = cambios.propina;
-    if (cambios.totalPagar !== undefined) campos.total_pagar = cambios.totalPagar;
+    async crearFactura(datos: DatosCrearFactura): Promise<Factura> {
+        const { data, error } = await supabase
+            .from("factura")
+            .insert({
+                id_venta: datos.idVenta ?? null,
+                id_mesa: datos.idMesa && datos.idMesa > 0 ? datos.idMesa : null,
+                id_usuario: datos.idUsuario,
+                cliente: datos.cliente?.trim() || "Consumidor Final",
+                subtotal: datos.subtotal,
+                descuento: datos.descuento,
+                propina: datos.propina,
+                total_pagar: datos.totalPagar,
+                metodo_pago: datos.metodoPago,
+                monto_efectivo: datos.montoEfectivo ?? null,
+                monto_tarjeta: datos.montoTarjeta ?? null,
+                monto_transferencia: datos.montoTransferencia ?? null,
+                estado: datos.estado ?? "Pagada",
+            })
+            .select()
+            .single();
 
-    if (Object.keys(campos).length === 0) return;
-
-    const { error } = await supabase
-      .from("factura")
-      .update(campos)
-      .eq("id_factura", id);
-
-    if (error) {
-      if (error.code === "23503") throw new Error("La mesa o el usuario indicado no existe");
-      if (error.code === "23514") throw new Error("Subtotal, propina y total no pueden ser negativos");
-      throw new Error(`Error al actualizar factura: ${error.message}`);
+        if (error) {
+            if (error.code === "23503") throw new Error("La venta, mesa o usuario indicado no existe");
+            if (error.code === "23514") throw new Error("Los valores de la factura no son válidos");
+            throw new Error(`Error al crear factura: ${error.message}`);
+        }
+        return mapFacturaFromRow(data as FacturaRow);
     }
-  }
+
+    async actualizarFactura(id: number, cambios: DatosActualizarFactura): Promise<void> {
+        const campos: Record<string, unknown> = {};
+        if (cambios.idVenta !== undefined) campos.id_venta = cambios.idVenta;
+        if (cambios.idMesa !== undefined) campos.id_mesa = cambios.idMesa && cambios.idMesa > 0 ? cambios.idMesa : null;
+        if (cambios.idUsuario !== undefined) campos.id_usuario = cambios.idUsuario;
+        if (cambios.cliente !== undefined) campos.cliente = cambios.cliente;
+        if (cambios.subtotal !== undefined) campos.subtotal = cambios.subtotal;
+        if (cambios.descuento !== undefined) campos.descuento = cambios.descuento;
+        if (cambios.propina !== undefined) campos.propina = cambios.propina;
+        if (cambios.totalPagar !== undefined) campos.total_pagar = cambios.totalPagar;
+        if (cambios.metodoPago !== undefined) campos.metodo_pago = cambios.metodoPago;
+        if (cambios.montoEfectivo !== undefined) campos.monto_efectivo = cambios.montoEfectivo;
+        if (cambios.montoTarjeta !== undefined) campos.monto_tarjeta = cambios.montoTarjeta;
+        if (cambios.montoTransferencia !== undefined) campos.monto_transferencia = cambios.montoTransferencia;
+        if (cambios.estado !== undefined) campos.estado = cambios.estado;
+
+        if (Object.keys(campos).length === 0) return;
+
+        const { error } = await supabase
+            .from("factura")
+            .update(campos)
+            .eq("id_factura", id);
+
+        if (error) {
+            if (error.code === "23503") throw new Error("La venta, mesa o usuario indicado no existe");
+            if (error.code === "23514") throw new Error("Los valores de la factura no son válidos");
+            throw new Error(`Error al actualizar factura: ${error.message}`);
+        }
+    }
 }

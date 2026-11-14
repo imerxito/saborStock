@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, LogIn as LogInIcon, AlertCircle, Loader2 } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Mail, Lock, Eye, EyeOff, LogIn as LogInIcon, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
 import { login } from "../servicios/AuthServicio";
 import { useAuth } from "../contexto/AuthContexto";
 
@@ -13,6 +13,8 @@ export function Login() {
 
     const { iniciarSesion } = useAuth();
     const navegar = useNavigate();
+    const location = useLocation();
+    const mensajeExito = (location.state as any)?.mensaje;
 
     async function manejarSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -47,6 +49,13 @@ export function Login() {
                 <h3 className="text-xl sm:text-2xl font-black text-[#F4D6B0] tracking-tight">Bienvenido de nuevo</h3>
                 <p className="text-xs font-semibold text-[#3A506B] mt-0.5">Ingresa tus datos corporativos para abrir turno</p>
             </div>
+
+            {mensajeExito && (
+                <div className="flex items-center gap-2.5 p-3 mb-3 text-xs font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded-xl">
+                    <CheckCircle2 size={17} className="shrink-0 text-emerald-400" />
+                    <span>{mensajeExito}</span>
+                </div>
+            )}
 
             <form onSubmit={manejarSubmit} className="flex flex-col gap-3 [@media(max-height:700px)]:gap-2.5">
                 <div className="flex flex-col gap-1 w-full">

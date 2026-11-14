@@ -1,4 +1,3 @@
-
 import {
     Producto,
     CrearProducto,
@@ -36,9 +35,9 @@ export class ProductoServicio {
 
     // Registrar un producto nuevo.
     async crear(datos: CrearProducto): Promise<Producto> {
-        if (datos.codigo.trim() === "") throw new Error("El código del producto no puede estar vacío");
+        if (!datos.codigo || datos.codigo.trim() === "") throw new Error("El código del producto no puede estar vacío");
 
-        if (datos.nombre.trim() === "") {
+        if (!datos.nombre || datos.nombre.trim() === "") {
             throw new Error("El nombre del producto es obligatorio");
         }
 
@@ -54,11 +53,20 @@ export class ProductoServicio {
             throw new Error("El precio de venta debe ser un número mayor o igual a cero");
         }
 
+        const codigoBase = datos.codigo.trim();
+        const tipo = datos.tipo ?? "cocina";
+        const codigo = /PRD-(COC|DIR|PAK)-/i.test(codigoBase)
+            ? codigoBase
+            : `PRD-${tipo === "directo" ? "DIR" : tipo === "paquete" ? "PAK" : "COC"}-${codigoBase.replace(/^PRD-/, "")}`;
         return await this.repositorio.crear({
             ...datos,
-            codigo: datos.codigo.trim(),
+            codigo,
             nombre: datos.nombre.trim(),
             descripcion: datos.descripcion?.trim() || "",
+            id_categoria: Number(datos.id_categoria),
+            precio_venta: Number(datos.precio_venta),
+            activo: datos.activo ?? true,
+            tipo,
         });
     }
 
@@ -137,5 +145,18 @@ export class ProductoServicio {
         }
 
         await this.repositorio.desactivar(id);
+    }
+
+    async eliminar(id: number): Promise<void> {
+        if (!Number.isInteger(id) || id <= 0) {
+            throw new Error("El ID del producto no es válido");
+        }
+
+        const producto = await this.repositorio.obtenerPorId(id);
+        if (!producto) {
+            throw new Error("El producto no existe");
+        }
+
+        await this.repositorio.eliminar(id);
     }
 }

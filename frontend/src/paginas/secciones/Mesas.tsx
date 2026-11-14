@@ -64,20 +64,6 @@ export interface Mesa {
   ventasActuales: VentaMesa[];
 }
 
-const MENU_RESPALDO: Producto[] = [
-  { id: 'p1', idProducto: 1, nombre: 'Bandeja Paisa Tradicional', precio: 34000, categoria: 'Platos Fuertes', descripcion: 'Chicharrón crujiente, carne molida, huevo, arepa y aguacate.' },
-  { id: 'p2', idProducto: 2, nombre: 'Sancocho de Gallina Criolla', precio: 28000, categoria: 'Platos Fuertes', descripcion: 'Servido con arroz, banano, aguacate y arepa dorada.' },
-  { id: 'p3', idProducto: 3, nombre: 'Lomo al Trapo (300g)', precio: 42000, categoria: 'Platos Fuertes', descripcion: 'Corte magro a la parrilla con papas al vapor.' },
-  { id: 'p4', idProducto: 4, nombre: 'Hamburguesa Artesanal Doble', precio: 26000, categoria: 'Comidas Rápidas', descripcion: 'Pan brioche, queso cheddar doble y tocineta.' },
-  { id: 'p5', idProducto: 5, nombre: 'Salchipapa Especial Gigante', precio: 22000, categoria: 'Comidas Rápidas', descripcion: 'Papas, salchicha manguera, queso costeño.' },
-  { id: 'p6', idProducto: 6, nombre: 'Arepa de Choclo con Queso', precio: 12000, categoria: 'Entradas', descripcion: 'Queso doble crema fundido.' },
-  { id: 'p7', idProducto: 7, nombre: 'Empanadas Criollas (5 uds)', precio: 10000, categoria: 'Entradas', descripcion: 'Rellenas de carne y papa.' },
-  { id: 'p8', idProducto: 8, nombre: 'Jugo Natural en Agua / Leche', precio: 8500, categoria: 'Bebidas', descripcion: 'Mango, Maracuyá, Lulo, Mora.' },
-  { id: 'p9', idProducto: 9, nombre: 'Limonada de Coco Cremosita', precio: 11000, categoria: 'Bebidas', descripcion: 'Crema de coco natural.' },
-  { id: 'p10', idProducto: 10, nombre: 'Cerveza Club Colombia', precio: 7500, categoria: 'Bebidas', descripcion: 'Botella helada 330ml.' },
-  { id: 'p11', idProducto: 11, nombre: 'Tres Leches de la Casa', precio: 12000, categoria: 'Postres', descripcion: 'Bizcocho húmedo con canela.' },
-];
-
 const CATEGORIAS: CategoriaProducto[] = ['Platos Fuertes', 'Comidas Rápidas', 'Entradas', 'Bebidas', 'Postres'];
 
 const ESPERA_INICIAL_MIN = 20;
@@ -96,7 +82,7 @@ export default function Mesas() {
 
   const [mesasRaw, setMesasRaw] = useState<MesaBackend[]>([]);
   const [seccionesRaw, setSeccionesRaw] = useState<SeccionBackend[]>([]);
-  const [productosMenu, setProductosMenu] = useState<Producto[]>(MENU_RESPALDO);
+  const [productosMenu, setProductosMenu] = useState<Producto[]>([]);
   
   const [seccionFiltro, setSeccionFiltro] = useState<string>('Todas');
   const [cargando, setCargando] = useState(true);
@@ -173,20 +159,18 @@ export default function Mesas() {
       setMesasRaw(mesasData);
       setSeccionesRaw(secsData);
 
-      if (prodsData && prodsData.length > 0) {
-        const prodsMapeados: Producto[] = prodsData.map((p) => {
-          let cat: CategoriaProducto = 'Platos Fuertes';
-          const nom = p.nombre.toLowerCase();
-          if (nom.includes('hamburguesa') || nom.includes('salchipapa') || nom.includes('perro')) cat = 'Comidas Rápidas';
-          else if (nom.includes('arepa') || nom.includes('empanada') || nom.includes('patacón')) cat = 'Entradas';
-          else if (nom.includes('jugo') || nom.includes('limonada') || nom.includes('cerveza') || nom.includes('gaseosa')) cat = 'Bebidas';
-          else if (nom.includes('leches') || nom.includes('flan') || nom.includes('postre')) cat = 'Postres';
-          return { id: `p-${p.id_producto}`, idProducto: p.id_producto, nombre: p.nombre, precio: p.precio_venta, categoria: cat, descripcion: p.descripcion };
-        });
-        setProductosMenu(prodsMapeados);
-      }
+      setProductosMenu(prodsData.map((p) => {
+        let cat: CategoriaProducto = 'Platos Fuertes';
+        const nom = p.nombre.toLowerCase();
+        if (nom.includes('hamburguesa') || nom.includes('salchipapa') || nom.includes('perro')) cat = 'Comidas Rápidas';
+        else if (nom.includes('arepa') || nom.includes('empanada') || nom.includes('patacón')) cat = 'Entradas';
+        else if (nom.includes('jugo') || nom.includes('limonada') || nom.includes('cerveza') || nom.includes('gaseosa')) cat = 'Bebidas';
+        else if (nom.includes('leches') || nom.includes('flan') || nom.includes('postre')) cat = 'Postres';
+        return { id: `p-${p.id_producto}`, idProducto: p.id_producto, nombre: p.nombre, precio: p.precio_venta, categoria: cat, descripcion: p.descripcion };
+      }));
     } catch (e) {
       console.warn('Error al cargar:', e);
+      if (!silencioso) alert('Error al cargar datos de mesas: ' + (e instanceof Error ? e.message : 'Error desconocido'));
     } finally {
       if (!silencioso) setCargando(false);
     }
@@ -215,7 +199,7 @@ export default function Mesas() {
   const mesas = useMemo<Mesa[]>(() => {
     return mesasRaw.map((m) => {
       const comandasActivas = comandas.filter(
-        (c) => (c.idMesa === m.id || c.mesa === m.numero) && c.estado !== 'Entregada' && c.estado !== 'Cerrado'
+        (c) => (c.idMesa === m.id || c.mesa === m.numero) && c.estado !== 'Cerrado'
       );
 
       const mapaVentas = new Map<string, ComandaTicket[]>();
@@ -430,18 +414,26 @@ export default function Mesas() {
     setGuardando(true);
     try {
       const clienteObjetivo = nombreCliente.trim() || ventaEnEdicion?.cliente || 'Cliente General';
-      
+      const notaComanda = notasMesa.trim();
+
+      const idUsuarioActual = Number(usuario?.idUsuario ?? usuario?.id_usuario) || null;
       await crear({
         mesa: mesaSeleccionada.numero,
         idMesa: mesaSeleccionada.idBackend,
-        items: carrito.map((it) => ({
-          idProducto: it.producto.idProducto, producto: it.producto.nombre, cantidad: it.cantidad, precio: it.producto.precio, categoria: it.producto.categoria, nota: it.notas?.trim() || undefined,
+        idUsuario: idUsuarioActual,
+        items: carrito.map((item) => ({
+          idProducto: item.producto.idProducto,
+          producto: item.producto.nombre,
+          cantidad: item.cantidad,
+          precio: item.producto.precio,
+          categoria: item.producto.categoria,
+          nota: item.notas?.trim() || undefined,
         })),
-        nota: notasMesa.trim(),
-        mesero: usuario?.nombre?.trim() || 'Sin asignar', 
+        nota: notaComanda,
+        mesero: usuario?.nombre?.trim() || 'Sin asignar',
         cliente: clienteObjetivo,
         personas: personas,
-      } as any);
+      });
 
       await MesaServicio.actualizarMesa(mesaSeleccionada.idBackend, { estado: 'Ocupada' });
       await recargar();
@@ -472,7 +464,7 @@ export default function Mesas() {
     try {
       for (const ticket of venta.comandasTicket) {
         if (ticket.comandaId) {
-          await cambiarEstado(ticket.comandaId, 'Entregada');
+          await cambiarEstado(ticket.comandaId, 'Cerrado');
           setPedidosPagando(prev => { const next = new Set(prev); next.delete(ticket.comandaId!); return next; });
         }
       }
@@ -489,6 +481,7 @@ export default function Mesas() {
       }
     } catch (err) {
       console.error('Error al despachar la venta completa:', err);
+      alert('Error al despachar la venta: ' + (err instanceof Error ? err.message : 'Error desconocido'));
     } finally {
       setGuardando(false);
     }
@@ -504,7 +497,7 @@ export default function Mesas() {
       for (const venta of mesaTarget.ventasActuales) {
         for (const ticket of venta.comandasTicket) {
           if (ticket.comandaId) {
-            await cambiarEstado(ticket.comandaId, 'Entregada');
+            await cambiarEstado(ticket.comandaId, 'Cerrado');
             setPedidosPagando(prev => { const next = new Set(prev); next.delete(ticket.comandaId!); return next; });
           }
         }
@@ -515,6 +508,7 @@ export default function Mesas() {
       cerrarModal();
     } catch (err) {
       console.error('Error al liberar mesa:', err);
+      alert('Error al liberar la mesa: ' + (err instanceof Error ? err.message : 'Error desconocido'));
     } finally {
       setGuardando(false);
     }

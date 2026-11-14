@@ -67,4 +67,16 @@ export class ReporteControlador {
             res.status(400).json({ mensaje: error.message });
         }
     }
+
+    // Dashboard consolidado para la pantalla de Reportes: GET /api/reportes/dashboard?filtro=Hoy|Semana|Mes
+    async dashboard(req: Request, res: Response): Promise<void> {
+        try {
+            const filtroRaw = textoDeQuery(req.query.filtro);
+            const filtroValido = filtroRaw === "Semana" || filtroRaw === "Mes" ? filtroRaw : "Hoy";
+            const datos = await reporteServicio.obtenerDashboard(filtroValido);
+            res.status(200).json(datos);
+        } catch (error: any) {
+            res.status(500).json({ mensaje: error.message });
+        }
+    }
 }

@@ -3,6 +3,7 @@ import { RolUsuario } from "./RolUsuario.js";
 
 export interface Usuario {
     id: string;              
+    idUsuario?: number;
     nombre: string;
     correo: string;
     rol: RolUsuario;

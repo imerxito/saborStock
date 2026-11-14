@@ -43,15 +43,21 @@ export class RecetaServicio {
         return receta;
     }
 
-    async crear(datos: CrearReceta): Promise<Receta> {
-        this.validarIdentificadores(
-            datos.id_producto,
-            datos.id_ingrediente
-        );
+    async crear(datos: CrearReceta & { idProducto?: number; idIngrediente?: number }): Promise<Receta> {
+        const id_producto = Number(datos.id_producto ?? datos.idProducto);
+        const id_ingrediente = Number(datos.id_ingrediente ?? datos.idIngrediente);
+        const cantidad = Number(datos.cantidad);
 
-        this.validarCantidad(datos.cantidad);
+        this.validarIdentificadores(id_producto, id_ingrediente);
+        this.validarCantidad(cantidad);
 
-        return await this.recetaRepositorio.crear(datos);
+        const existente = await this.recetaRepositorio.obtenerPorId(id_producto, id_ingrediente);
+        if (existente) {
+            await this.recetaRepositorio.actualizar(id_producto, id_ingrediente, { cantidad });
+            return { id_producto, id_ingrediente, cantidad };
+        }
+
+        return await this.recetaRepositorio.crear({ id_producto, id_ingrediente, cantidad });
     }
 
     async actualizar(

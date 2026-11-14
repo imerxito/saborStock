@@ -94,16 +94,17 @@ function calcularBloques(cola: Comanda[], intervaloMin: number): Bloque[] {
     const blockMs = Math.max(1, intervaloMin) * 60 * 1000;
     const mapa = new Map<number, Comanda[]>();
     cola.forEach((c) => {
-        const inicio = Math.floor(c.creada / blockMs) * blockMs;
+        const t = typeof c.creada === "number" && !isNaN(c.creada) && c.creada > 0 ? c.creada : Date.now();
+        const inicio = Math.floor(t / blockMs) * blockMs;
         const lista = mapa.get(inicio) ?? [];
-        lista.push(c);
+        lista.push({ ...c, creada: t });
         mapa.set(inicio, lista);
     });
     return [...mapa.entries()]
         .sort((a, b) => a[0] - b[0])
         .map(([inicio, lista]) => ({
             inicio,
-            comandas: lista.sort((a, b) => a.creada - b.creada),
+            comandas: lista.sort((a, b) => (a.creada || 0) - (b.creada || 0)),
         }));
 }
 
@@ -119,14 +120,15 @@ function leerEliminadas(): Set<number> {
 }
 
 function Cocina() {
-    const { comandas, cambiarEstado } = useComandas();
+    const { comandas, cambiarEstado, conectadoBackend, recargar } = useComandas();
     const { usuario } = useAuth();
     const ahora = useAhora();
 
     const rol = String(usuario?.rol ?? "").toLowerCase();
     const esGerente = rol.includes("due") || rol.includes("admin");
     const esCocina = rol.includes("coc") || rol.includes("chef");
-    const puedeOperar = esGerente || esCocina;
+    const esCaja = rol.includes("caja");
+    const puedeOperar = esGerente || esCocina || esCaja;
     const puedeConfigurar = esGerente;
 
     const [configAbierta, setConfigAbierta] = useState(false);
@@ -153,13 +155,16 @@ function Cocina() {
     const cola = useMemo(
         () =>
             comandas
-                .filter((c) => !eliminadas.has(c.id))
                 .filter(
                     (c) =>
-                        (c.estado === "Pendiente" || c.estado === "En preparación") &&
-                        c.creada >= corteCola
+                        c.estado === "Pendiente" ||
+                        c.estado === "En preparación" ||
+                        c.estado === "Abierto" ||
+                        c.estado === "Enviado"
                 )
-                .sort((a, b) => a.creada - b.creada),
+                .filter((c) => !eliminadas.has(c.id) || c.estado === "Pendiente")
+                .filter((c) => !corteCola || (c.creada || 0) >= corteCola)
+                .sort((a, b) => (a.creada || 0) - (b.creada || 0)),
         [comandas, corteCola, eliminadas]
     );
 
@@ -170,9 +175,9 @@ function Cocina() {
                 .filter(
                     (c) =>
                         (c.estado === "Lista" || c.estado === "Entregada") &&
-                        (c.despachadaEn ?? 0) >= corteHistorial
+                        (!corteHistorial || (c.despachadaEn ?? c.creada ?? 0) >= corteHistorial)
                 )
-                .sort((a, b) => (b.despachadaEn ?? 0) - (a.despachadaEn ?? 0)),
+                .sort((a, b) => (b.despachadaEn ?? b.creada ?? 0) - (a.despachadaEn ?? a.creada ?? 0)),
         [comandas, corteHistorial, eliminadas]
     );
 
@@ -210,21 +215,18 @@ function Cocina() {
         return [...mapa.entries()];
     }, [itemsVisibles, categoria]);
 
-    const empezar = (id: number) => {
+    const ejecutarCambioEstado = async (id: number, estado: "En preparación" | "Lista" | "Pendiente", sonidoTipo: Sonido) => {
         if (!puedeOperar) return;
-        sonar("click");
-        cambiarEstado(id, "En preparación");
+        sonar(sonidoTipo);
+        try {
+            await cambiarEstado(id, estado);
+        } catch (err) {
+            alert('Error al actualizar la comanda: ' + (err instanceof Error ? err.message : 'Error desconocido'));
+        }
     };
-    const despachar = (id: number) => {
-        if (!puedeOperar) return;
-        sonar("rasgar");
-        cambiarEstado(id, "Lista");
-    };
-    const restaurar = (id: number) => {
-        if (!puedeOperar) return;
-        sonar("restaurar");
-        cambiarEstado(id, "Pendiente");
-    };
+    const empezar = (id: number) => { void ejecutarCambioEstado(id, "En preparación", "click"); };
+    const despachar = (id: number) => { void ejecutarCambioEstado(id, "Lista", "rasgar"); };
+    const restaurar = (id: number) => { void ejecutarCambioEstado(id, "Pendiente", "restaurar"); };
 
     // 🔹 Elimina una comanda del historial (permanente)
     const eliminarComandaHistorial = (id: number) => {
@@ -293,9 +295,21 @@ function Cocina() {
                                 {!puedeOperar && " · Modo lectura"}
                             </span>
                         </p>
+                        <p className={`flex items-center gap-1 text-[10px] font-semibold truncate mt-0.5 ${conectadoBackend ? "text-[#4ADE80]" : "text-[#D97706]"}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${conectadoBackend ? "bg-[#4ADE80] animate-pulse" : "bg-[#D97706]"}`} />
+                            {conectadoBackend ? "Backend conectado" : "Sin conexión al backend"}
+                        </p>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => { sonar("click"); void recargar(); }}
+                            className="rounded-xl border border-[#3A506B] bg-[#0B132B] p-2.5 transition hover:bg-[#1C2541] hover:border-[#5BC0DE] text-[#F4D6B0]"
+                            title="Actualizar comandas ahora"
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                        </button>
                         {puedeConfigurar && (
                             <button
                                 type="button"
@@ -587,7 +601,7 @@ function Cocina() {
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <span className="flex items-center gap-1 text-xs font-black text-[#5BC0DE]">
                                                         <TableIcon className="h-3 w-3" />
-                                                        Mesa {c.mesa}
+                                                        {c.mesa > 0 ? `Mesa ${c.mesa}` : "Caja"}
                                                     </span>
                                                     <span className="text-[11px] text-[#F4D6B0]">
                                                         {c.mesero}
@@ -852,8 +866,8 @@ function TicketCocina({
                         <div className="flex items-center gap-2">
                             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-[#5BC0DE] bg-[#0B132B]">
                                 <div className="flex flex-col items-center leading-none">
-                                    <span className="text-[6px] font-bold uppercase text-[#5BC0DE] tracking-wider">Mesa</span>
-                                    <span className="text-base font-black text-[#F4D6B0]">{comanda.mesa}</span>
+                                    <span className="text-[6px] font-bold uppercase text-[#5BC0DE] tracking-wider">{comanda.mesa > 0 ? "Mesa" : "Caja"}</span>
+                                    <span className="text-base font-black text-[#F4D6B0]">{comanda.mesa > 0 ? comanda.mesa : "Venta"}</span>
                                 </div>
                             </div>
                             <div className="min-w-0">
