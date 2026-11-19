@@ -15,9 +15,16 @@ import {
     Plus,
     Download,
     Trash2,
+    Copy,
+    Check,
+    Bot,
+    User,
+    TrendingUp,
+    Lightbulb
 } from "lucide-react";
 import { IaServicio, type ConversacionIA, type FilaExcelPreview } from "../../servicios/IaServicio";
 import { useAuth } from "../../contexto/AuthContexto";
+import FormatoContenidoIA from "../../componentes/FormatoContenidoIA";
 
 /* ============================================================
    TIPOS
@@ -228,8 +235,8 @@ function SeccionChat() {
         }
     };
 
-    const enviar = async () => {
-        const limpio = texto.trim();
+    const enviar = async (consultaDirecta?: string) => {
+        const limpio = (consultaDirecta ?? texto).trim();
         if (!limpio || enviando) return;
 
         const nuevo: MensajeIA = {
@@ -239,7 +246,7 @@ function SeccionChat() {
             fecha: new Date(),
         };
         setMensajes((prev) => [...prev, nuevo]);
-        setTexto("");
+        if (!consultaDirecta) setTexto("");
         setEnviando(true);
 
         try {
@@ -315,15 +322,42 @@ function SeccionChat() {
                 </div>
             )}
 
+            {/* Sugerencias rápidas cuando la conversación inicia */}
+            {mensajes.length <= 1 && (
+                <div className="px-3 pt-3">
+                    <p className="text-[11px] text-[#5BC0DE] font-semibold mb-2 flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-[#FBBF24]" /> Consultas recomendadas:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {[
+                            "📊 ¿Cuáles son los platos más vendidos de hoy?",
+                            "⚠️ ¿Qué insumos tienen stock bajo o crítico?",
+                            "💰 Resumen de balance neto e ingresos",
+                            "💡 ¿Cómo puedo optimizar márgenes y costos?",
+                        ].map((sugerencia, idx) => (
+                            <button
+                                key={idx}
+                                type="button"
+                                onClick={() => void enviar(sugerencia)}
+                                disabled={enviando}
+                                className="text-left text-xs bg-[#1C2541] hover:bg-[#3A506B]/60 text-[#F4D6B0] border border-[#3A506B] px-3 py-1.5 rounded-xl transition-all hover:border-[#5BC0DE] active:scale-95 shadow-sm"
+                            >
+                                {sugerencia}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Lista de mensajes */}
-            <div className="flex-1 px-3 pt-3 space-y-3">
+            <div className="flex-1 px-3 pt-3 space-y-4">
                 {mensajes.map((m) => (
                     <BurbujaMensaje key={m.id} mensaje={m} />
                 ))}
                 {enviando && (
-                    <div className="flex items-center gap-2 text-[#5BC0DE] text-xs px-2">
-                        <Loader2 size={14} className="animate-spin" />
-                        Pensando...
+                    <div className="flex items-center gap-2.5 bg-[#1C2541] border border-[#3A506B] rounded-2xl p-3 w-fit text-[#5BC0DE] text-xs">
+                        <Loader2 size={16} className="animate-spin text-[#5BC0DE]" />
+                        <span>Analizando datos y preparando respuesta…</span>
                     </div>
                 )}
                 <div ref={finRef} />
@@ -350,7 +384,7 @@ function SeccionChat() {
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
-                                enviar();
+                                void enviar();
                             }
                         }}
                         placeholder="Pregunta sobre ventas, stock o sube un archivo…"
@@ -358,9 +392,9 @@ function SeccionChat() {
                     />
                     <button
                         type="button"
-                        onClick={enviar}
+                        onClick={() => void enviar()}
                         disabled={!texto.trim() || enviando}
-                        className="grid place-items-center w-11 h-11 shrink-0 bg-[#5BC0DE] text-[#0B132B] rounded-xl font-bold active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100"
+                        className="grid place-items-center w-11 h-11 shrink-0 bg-[#5BC0DE] text-[#0B132B] rounded-xl font-bold active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100 shadow-md"
                         title="Enviar"
                     >
                         <Send size={18} />
@@ -373,17 +407,65 @@ function SeccionChat() {
 
 function BurbujaMensaje({ mensaje }: { mensaje: MensajeIA }) {
     const esUsuario = mensaje.rol === "user";
+    const [copiado, setCopiado] = useState(false);
+
+    const copiarTexto = () => {
+        void navigator.clipboard.writeText(mensaje.contenido);
+        setCopiado(true);
+        setTimeout(() => setCopiado(false), 2000);
+    };
+
+    const horaFormateada = mensaje.fecha
+        ? new Date(mensaje.fecha).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "";
+
+    if (esUsuario) {
+        return (
+            <div className="flex justify-end gap-2 items-end">
+                <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-gradient-to-r from-[#5BC0DE]/20 to-[#5BC0DE]/10 text-[#F4D6B0] border border-[#5BC0DE]/40 shadow-md">
+                    <p className="leading-relaxed whitespace-pre-wrap">{mensaje.contenido}</p>
+                    <span className="text-[10px] text-[#5BC0DE]/70 block text-right mt-1 font-mono">
+                        {horaFormateada}
+                    </span>
+                </div>
+                <div className="w-7 h-7 rounded-full bg-[#5BC0DE] text-[#0B132B] font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
+                    <User size={14} />
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className={`flex ${esUsuario ? "justify-end" : "justify-start"}`}>
-            <div
-                className={[
-                    "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap",
-                    esUsuario
-                        ? "bg-[#5BC0DE]/15 text-[#5BC0DE] border border-[#5BC0DE]/30 rounded-br-md"
-                        : "bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B] rounded-bl-md",
-                ].join(" ")}
-            >
-                {mensaje.contenido}
+        <div className="flex justify-start gap-2 items-start">
+            <div className="w-8 h-8 rounded-xl bg-[#5BC0DE]/15 border border-[#5BC0DE]/30 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                <Sparkles size={16} className="text-[#5BC0DE]" />
+            </div>
+            <div className="max-w-[92%] sm:max-w-[85%] rounded-2xl rounded-tl-sm bg-[#1C2541] border border-[#3A506B] shadow-lg overflow-hidden">
+                {/* Cabecera del mensaje del asistente */}
+                <div className="px-4 py-2 bg-[#0B132B]/60 border-b border-[#3A506B]/50 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-[#F4D6B0]">Sabor & Stock IA</span>
+                        <span className="text-[9px] bg-[#5BC0DE]/15 text-[#5BC0DE] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider border border-[#5BC0DE]/30">
+                            Asistente
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-[#5BC0DE]/60 font-mono">{horaFormateada}</span>
+                        <button
+                            type="button"
+                            onClick={copiarTexto}
+                            className="p-1 rounded-md text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B]/50 transition-colors"
+                            title="Copiar respuesta"
+                        >
+                            {copiado ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Contenido enriquecido con soporte de tablas, viñetas, negritas y métricas */}
+                <div className="p-4 text-xs sm:text-sm text-[#F4D6B0] leading-relaxed">
+                    <FormatoContenidoIA contenido={mensaje.contenido} />
+                </div>
             </div>
         </div>
     );

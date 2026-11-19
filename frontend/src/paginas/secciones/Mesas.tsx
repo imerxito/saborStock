@@ -79,6 +79,8 @@ export interface Mesa {
   idBackend: number;
   numero: number;
   seccion: string;
+  idSeccion?: number;
+  seccionId?: number;
   capacidad: number;
   estado: 'Disponible' | 'Ocupada' | 'Reservada' | 'Pagando';
   ventasActuales: VentaMesa[];
@@ -175,6 +177,13 @@ export default function Mesas() {
   const cargarDatosBackend = useCallback(async (silencioso = false) => {
     if (!silencioso) setCargando(true);
     try {
+      if (silencioso) {
+        // En segundo plano sólo refrescar el estado dinámico de las mesas
+        const mesasData = await MesaServicio.listarMesas();
+        setMesasRaw(mesasData);
+        return;
+      }
+
       const [mesasData, prodsData, secsData, negData, factData, impData] = await Promise.all([
         MesaServicio.listarMesas(),
         MesaServicio.obtenerProductos(),
@@ -219,11 +228,11 @@ export default function Mesas() {
 
   useEffect(() => {
     const intervalo = setInterval(() => {
-      void recargar();
+      if (document.hidden) return;
       void cargarDatosBackend(true);
-    }, 4000);
+    }, 5000);
     return () => clearInterval(intervalo);
-  }, [recargar, cargarDatosBackend]);
+  }, [cargarDatosBackend]);
 
   const seccionesDisponibles = useMemo(() => {
     const prioridadZonas: Record<string, number> = {
@@ -349,6 +358,8 @@ export default function Mesas() {
         idBackend: m.id,
         numero: m.numero,
         seccion: m.seccionNombre || 'Salón Principal',
+        idSeccion: m.idSeccion,
+        seccionId: m.idSeccion,
         capacidad: m.numero === 5 || m.numero === 8 ? 8 : m.numero % 2 === 0 ? 6 : 4,
         estado: estadoMesa,
         ventasActuales: ventasDesordenadas,
@@ -618,15 +629,10 @@ export default function Mesas() {
       impresionesPendientes.push({ impresora: imps[0], items: datos.items });
     }
 
-    const paraNavegador: {
-      impresora: ImpresoraFrontend;
-      items: ItemPedido[];
-    }[] = [];
-
+    // Despacho directo a impresoras físicas configuradas (sin diálogo emergente del navegador)
     for (const job of impresionesPendientes) {
-      let impresoSocket = false;
       try {
-        const res = await ConfiguracionServicio.imprimirComandaDirecta(job.impresora.id, {
+        await ConfiguracionServicio.imprimirComandaDirecta(job.impresora.id, {
           mesa: datos.mesaNumero,
           seccion: datos.seccionNombre,
           cliente: datos.cliente,
@@ -637,41 +643,9 @@ export default function Mesas() {
             nota: it.notas,
           })),
         });
-        if (res.success) {
-          impresoSocket = true;
-        }
-      } catch {}
-
-      if (!impresoSocket) {
-        paraNavegador.push(job);
+      } catch (err) {
+        console.warn(`Aviso al enviar comanda directa a impresora ${job.impresora.nombre}:`, err);
       }
-    }
-
-    if (paraNavegador.length > 0) {
-      const nombresImp = paraNavegador.map((p) => p.impresora.nombre).join(' + ');
-      const itemsComanda = paraNavegador.flatMap((p) => p.items);
-      const total = itemsComanda.reduce((sum, it) => sum + it.producto.precio * it.cantidad, 0);
-
-      setTicketAImprimir({
-        venta: {
-          id: `CMD-${datos.comandaId || Date.now()}`,
-          idMesa: mesaSeleccionada?.idBackend || 0,
-          numeroMesa: datos.mesaNumero,
-          idSeccion: datos.seccionId,
-          seccionNombre: datos.seccionNombre || 'General',
-          cliente: datos.cliente,
-          meseroPrincipal: datos.mesero,
-          personas: 1,
-          horaApertura: '',
-          comandasTicket: [],
-          itemsConsolidados: [],
-          totalVentaAcumulado: total,
-        },
-        tipo: 'comanda',
-        impresoraNombre: nombresImp || 'Cocina',
-        itemsFiltrados: itemsComanda,
-        totalTicket: total,
-      });
     }
   };
 
@@ -1003,17 +977,6 @@ export default function Mesas() {
                                 className="flex-1 sm:flex-none text-xs font-bold text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] hover:bg-[#3A506B] px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                               >
                                 <Printer className="w-4 h-4 text-[#5BC0DE]" /> Imprimir Pre-cuenta
-                              </button>
-
-                              <button 
-                                onClick={() => {
-                                  setRondaSeleccionadaId('ultima');
-                                  setModalImpresorasMesa(venta);
-                                }} 
-                                className="flex-1 sm:flex-none text-xs font-bold text-[#5BC0DE] bg-[#0B132B] border border-[#5BC0DE]/40 hover:bg-[#5BC0DE]/10 px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-                                title="Imprimir comanda dirigida a impresoras según categorías y secciones"
-                              >
-                                <Utensils className="w-4 h-4 text-[#5BC0DE]" /> Comandas Cocina/Barra
                               </button>
 
                               {puedeLiberar && (

@@ -29,8 +29,11 @@ export class InventarioServicio {
             if (!Number.isFinite(item.cantidad) || item.cantidad <= 0) {
                 throw new Error("La cantidad vendida debe ser mayor a 0");
             }
-            await this.acumularProducto(item.idProducto, item.cantidad, consumo, visitados);
         }
+
+        await Promise.all(
+            items.map((item) => this.acumularProducto(item.idProducto, item.cantidad, consumo, visitados))
+        );
 
         return consumo;
     }
@@ -119,9 +122,15 @@ export class InventarioServicio {
     }
 
     private async validarStock(consumo: Map<number, number>): Promise<void> {
+        const ids = Array.from(consumo.keys());
+        if (ids.length === 0) return;
+
+        const ingredientes = await this.ingredienteRepo.obtenerPorIds(ids);
+        const mapaIngredientes = new Map(ingredientes.map((i) => [i.id_ingrediente, i]));
+
         const faltantes: string[] = [];
         for (const [idIngrediente, requerido] of consumo.entries()) {
-            const ingrediente = await this.ingredienteRepo.obtenerPorId(idIngrediente);
+            const ingrediente = mapaIngredientes.get(idIngrediente);
             if (!ingrediente) {
                 throw new Error(`El ingrediente ${idIngrediente} no existe`);
             }

@@ -5,8 +5,8 @@ import { ComandaRepositorio } from "../persistencia/ComandaRepositorio.js";
 export class ComandaServicio {
     constructor(private comandaRepo = new ComandaRepositorio()) {}
 
-    async listar(): Promise<Comanda[]> {
-        return this.comandaRepo.listar();
+    async listar(limite: number = 300): Promise<Comanda[]> {
+        return this.comandaRepo.listar(limite);
     }
 
     async obtenerPorId(id: number): Promise<Comanda> {

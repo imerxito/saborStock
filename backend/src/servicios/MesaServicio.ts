@@ -60,18 +60,19 @@ export class MesaServicio {
             );
         }
 
-        const creadas: Mesa[] = [];
+        const tareas: Promise<Mesa>[] = [];
         for (let i = 0; i < datos.cantidad; i++) {
             const numero = desde[i];
-            const mesa = await this.mesaRepo.crearMesa({
-                numero,
-                idSeccion: datos.idSeccion,
-                estado: datos.estado ?? EstadoMesa.Libre,
-                idUsuario: datos.idUsuario ?? null,
-            });
-            creadas.push(mesa);
+            tareas.push(
+                this.mesaRepo.crearMesa({
+                    numero,
+                    idSeccion: datos.idSeccion,
+                    estado: datos.estado ?? EstadoMesa.Libre,
+                    idUsuario: datos.idUsuario ?? null,
+                })
+            );
         }
-        return creadas;
+        return await Promise.all(tareas);
     }
 
     async actualizar(id: number, cambios: ActualizarMesa): Promise<Mesa> {

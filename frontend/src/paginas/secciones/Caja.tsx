@@ -25,13 +25,19 @@ import {
   Search,
   X,
   RotateCw,
-  Printer
+  Printer,
+  Settings,
+  Edit2,
+  Store,
+  Power
 } from 'lucide-react';
 import { useAuth } from '../../contexto/AuthContexto';
 import { useComandas } from '../../contexto/ComandasContexto';
+import { ComandaServicio } from '../../servicios/ComandaServicio';
 import { MesaServicio } from '../../servicios/MesaServicio';
 import { ProductoServicio } from '../../servicios/ProductoServicio';
 import { CajaServicio, type TurnoCajaDTO } from '../../servicios/CajaServicio';
+import type { Caja as TipoCaja } from '../../tipos/Caja';
 import { UsuarioServicio } from '../../servicios/UsuarioServicio';
 import { NominaServicio, type PagoNomina } from '../../servicios/NominaServicio';
 import { 
@@ -55,6 +61,7 @@ export interface TicketCaja {
   total: number;
   metodoPago: string;
   fecha: string;
+  mensajePie?: string;
 }
 
 // --- Tipos de Datos ---
@@ -84,6 +91,7 @@ interface SubVenta {
 
 interface HistorialMesaItem { 
   id: string; 
+  idFactura?: number;
   mesa: string; 
   seccion: string; 
   cliente: string; 
@@ -94,6 +102,20 @@ interface HistorialMesaItem {
   fechaApertura: string; 
   fechaCierre: string; 
   items: { nombre: string; cantidad: number; precio: number }[]; 
+}
+
+export interface EventoHistorialMesa {
+  id: number;
+  idMesa: number;
+  mesa: string;
+  seccion: string;
+  idVenta: number | null;
+  idUsuario: number;
+  usuario: string;
+  estado: string;
+  monto: number | null;
+  motivo: string;
+  fecha: string;
 }
 
 interface MesaActiva { 
@@ -108,22 +130,107 @@ interface MesaActiva {
 // Componente Principal
 export default function Caja(): React.ReactElement {
   const { usuario } = useAuth();
-  const { comandas, crear, recargar } = useComandas();
+  const { comandas, crear, cambiarEstado, recargar } = useComandas();
 
   const [mesasRaw, setMesasRaw] = useState<MesaBackend[]>([]);
   const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>([]);
   const [turnoActual, setTurnoActual] = useState<TurnoCajaDTO | null>(null);
-  const [turnoAbierto, setTurnoAbierto] = useState<boolean>(false);
+  const [turnoAbierto, setTurnoAbierto] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sabor_turno_abierto') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [verificandoTurno, setVerificandoTurno] = useState<boolean>(true);
+  const [bannerCerradoDescartado, setBannerCerradoDescartado] = useState<boolean>(false);
   const [baseInicial, setBaseInicial] = useState<number>(150000);
   const [montoCierre, setMontoCierre] = useState<number>(0);
   const [modalTurno, setModalTurno] = useState<boolean>(false);
   const [cargando, setCargando] = useState<boolean>(false);
+  const [cobrandoMesa, setCobrandoMesa] = useState<boolean>(false);
+  const [cobrandoVentaDirecta, setCobrandoVentaDirecta] = useState<boolean>(false);
   const [ticketAImprimir, setTicketAImprimir] = useState<TicketCaja | null>(null);
   const [negocioConfig, setNegocioConfig] = useState<ConfiguracionNegocio | null>(null);
   const [facturacionConfig, setFacturacionConfig] = useState<ConfiguracionFacturacion | null>(null);
   const [impresorasConfig, setImpresorasConfig] = useState<ImpresoraFrontend[]>([]);
   
+  // Estados de Movimientos, Nómina y Empleados
+  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
+  const [nuevoMovTipo, setNuevoMovTipo] = useState<'ingreso' | 'egreso'>('ingreso');
+  const [nuevoMovConcepto, setNuevoMovConcepto] = useState<string>('');
+  const [nuevoMovMonto, setNuevoMovMonto] = useState<string>('');
+
+  const [nominas, setNominas] = useState<PagoNomina[]>([]);
+  const [empleados, setEmpleados] = useState<EmpleadoNomina[]>([]);
+  const [busquedaEmpleado, setBusquedaEmpleado] = useState<string>('');
+  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<EmpleadoNomina | null>(null);
+  const [mostrarSugerencias, setMostrarSugerencias] = useState<boolean>(false);
+  const [nomBase, setNomBase] = useState<number>(50000);
+  const [nomBono, setNomBono] = useState<number>(0);
+  const [metodoPagoNomina, setMetodoPagoNomina] = useState<string>('Efectivo');
+
+  const totalesTurno = useMemo(() => {
+    let ventasEfectivo = 0;
+    let ventasOtros = 0;
+    let egresos = 0;
+
+    for (const m of movimientos) {
+      const monto = Number(m.monto || 0);
+      if (m.tipo === 'egreso') {
+        egresos += monto;
+      } else {
+        const cLower = (m.concepto || '').toLowerCase();
+        if (cLower.includes('tarjeta') || cLower.includes('transf')) {
+          ventasOtros += monto;
+        } else {
+          ventasEfectivo += monto;
+        }
+      }
+    }
+
+    const efectivoEstimado = baseInicial + ventasEfectivo - egresos;
+    return {
+      baseInicial,
+      ventasEfectivo,
+      ventasOtros,
+      egresos,
+      efectivoEstimado: Math.max(0, efectivoEstimado),
+    };
+  }, [baseInicial, movimientos]);
+
+  const esDuenoOAdmin = useMemo(() => {
+    const r = (usuario?.rol || '').toLowerCase();
+    return r.includes('due') || r.includes('admin');
+  }, [usuario?.rol]);
+
+  // Estados de Cajas Físicas / Personalización
+  const [cajas, setCajas] = useState<TipoCaja[]>([]);
+  const [cajaActivaId, setCajaActivaId] = useState<number>(() => {
+    try {
+      const guardada = localStorage.getItem('sabor_caja_id');
+      return guardada ? Number(guardada) : 1;
+    } catch {
+      return 1;
+    }
+  });
+  const [modalGestionCajas, setModalGestionCajas] = useState<boolean>(false);
+  const [nuevaCajaNombre, setNuevaCajaNombre] = useState<string>('');
+  const [cajaEditandoId, setCajaEditandoId] = useState<number | null>(null);
+  const [cajaEditandoNombre, setCajaEditandoNombre] = useState<string>('');
+  const [guardandoCaja, setGuardandoCaja] = useState<boolean>(false);
+
   const [activeTab, setActiveTab] = useState<'ventas' | 'cobrar' | 'historialMesas' | 'movimientos' | 'nomina'>('ventas');
+
+  // Estados para Historial Mesas (Cuentas y Auditoría de eventos)
+  const [historialMesas, setHistorialMesas] = useState<HistorialMesaItem[]>([]);
+  const [eventosMesas, setEventosMesas] = useState<EventoHistorialMesa[]>([]);
+  const [busquedaHistorial, setBusquedaHistorial] = useState<string>('');
+  const [filtroTipoHistorial, setFiltroTipoHistorial] = useState<'todos' | 'mesas' | 'directa'>('todos');
+  const [filtroSeccionHistorial, setFiltroSeccionHistorial] = useState<string>('Todas');
+  const [vistaHistorial, setVistaHistorial] = useState<'cuentas' | 'eventos'>('cuentas');
+  const [cargandoHistorial, setCargandoHistorial] = useState<boolean>(false);
+  const [mesaDetalleModal, setMesaDetalleModal] = useState<HistorialMesaItem | null>(null);
 
   useEffect(() => {
     if (ticketAImprimir) {
@@ -138,10 +245,25 @@ export default function Caja(): React.ReactElement {
   const cargarDatos = useCallback(async () => {
     try {
       setCargando(true);
-      const [mesasData, prodsData, turno, movs, facturas, negData, factData, usuariosData, nominasData, impData] = await Promise.all([
-        MesaServicio.listarMesas(),
-        ProductoServicio.listar(),
-        CajaServicio.obtenerTurnoActual().catch(() => null),
+      const idCajaConsulta = Number(localStorage.getItem('sabor_caja_id')) || cajaActivaId || 1;
+      const [
+        mesasData, 
+        prodsData, 
+        cajasData,
+        turno, 
+        movs, 
+        facturas, 
+        negData, 
+        factData, 
+        usuariosData, 
+        nominasData, 
+        impData,
+        historialEventosData
+      ] = await Promise.all([
+        MesaServicio.listarMesas().catch(() => []),
+        ProductoServicio.listar().catch(() => []),
+        CajaServicio.listarCajas().catch(() => []),
+        CajaServicio.obtenerTurnoActual(idCajaConsulta).catch(() => null),
         CajaServicio.listarMovimientos().catch(() => []),
         CajaServicio.listarFacturas().catch(() => []),
         ConfiguracionServicio.obtenerNegocio().catch(() => null),
@@ -149,7 +271,17 @@ export default function Caja(): React.ReactElement {
         UsuarioServicio.listar().catch(() => []),
         NominaServicio.listar().catch(() => []),
         ConfiguracionServicio.listarImpresoras().catch(() => []),
+        MesaServicio.obtenerHistorial().catch(() => []),
       ]);
+
+      if (cajasData && cajasData.length > 0) {
+        setCajas(cajasData);
+        if (!cajasData.some(c => c.id === idCajaConsulta)) {
+          const primera = cajasData.find(c => c.activo) || cajasData[0];
+          setCajaActivaId(primera.id);
+          try { localStorage.setItem('sabor_caja_id', String(primera.id)); } catch {}
+        }
+      }
 
       if (negData) setNegocioConfig(negData);
       if (factData) setFacturacionConfig(factData);
@@ -192,9 +324,11 @@ export default function Caja(): React.ReactElement {
         setTurnoActual(turno);
         setTurnoAbierto(true);
         setBaseInicial(turno.montoInicial);
+        try { localStorage.setItem('sabor_turno_abierto', 'true'); } catch {}
       } else {
         setTurnoActual(null);
         setTurnoAbierto(false);
+        try { localStorage.setItem('sabor_turno_abierto', 'false'); } catch {}
       }
 
       setMovimientos((movs || []).map(m => ({
@@ -205,22 +339,62 @@ export default function Caja(): React.ReactElement {
         hora: new Date(m.fechaMovimiento).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       })));
 
-      const mesaPorId = new Map((mesasData || []).map(m => [m.id, m.numero]));
+      const mesaPorId = new Map((mesasData || []).map(m => [m.id, m]));
+      const usuarioPorId = new Map((usuariosData || []).map((u: any) => [Number(u.idUsuario || u.id_usuario || u.id), u.nombre]));
+
+      // 1. Mapear Eventos de Mesas desde /api/historial-mesas
+      const eventosMapeados: EventoHistorialMesa[] = (historialEventosData || []).map((ev: any) => {
+        const mesaInfo = mesaPorId.get(ev.idMesa);
+        const numeroMesa = mesaInfo?.numero ?? ev.idMesa;
+        const nombreSeccion = mesaInfo?.seccionNombre || 'Salón';
+        const nombreUsuario = usuarioPorId.get(ev.idUsuario) || (ev.idUsuario ? `Usuario #${ev.idUsuario}` : 'Sistema');
+        const fechaObj = ev.fechaAccion ? new Date(ev.fechaAccion) : new Date();
+        return {
+          id: ev.id,
+          idMesa: ev.idMesa,
+          mesa: `Mesa ${numeroMesa}`,
+          seccion: nombreSeccion,
+          idVenta: ev.idVenta,
+          idUsuario: ev.idUsuario,
+          usuario: nombreUsuario,
+          estado: ev.estado || 'Actualización',
+          monto: ev.monto ?? null,
+          motivo: ev.motivo || 'Movimiento de mesa',
+          fecha: isNaN(fechaObj.getTime()) ? String(ev.fechaAccion) : fechaObj.toLocaleString('es-CO', {
+            dateStyle: 'short',
+            timeStyle: 'medium'
+          })
+        };
+      });
+      setEventosMesas(eventosMapeados);
+
+      // 2. Mapear Cuentas / Cobros de Mesas y Ventas Directas
       setHistorialMesas((facturas || []).map(f => {
-        const numeroMesa = f.idMesa != null ? mesaPorId.get(f.idMesa) : undefined;
+        const mesaInfo = f.idMesa != null ? mesaPorId.get(f.idMesa) : undefined;
+        const numeroMesa = f.mesaNumero ?? (mesaInfo ? mesaInfo.numero : undefined);
+        const nombreSeccion = f.seccionNombre || mesaInfo?.seccionNombre || (numeroMesa != null ? 'Salón' : '');
+        const nombreMesero = f.usuarioNombre || (f.idUsuario ? usuarioPorId.get(f.idUsuario) : undefined) || 'Caja';
         const fecha = f.fechaEmision ? new Date(f.fechaEmision) : new Date();
+        const items = Array.isArray(f.detalles) && f.detalles.length > 0
+          ? f.detalles.map((d: any) => ({
+              nombre: d.nombre || d.producto?.nombre || `Producto #${d.idProducto}`,
+              cantidad: Number(d.cantidad) || 1,
+              precio: Number(d.precioUnitario ?? d.precio_unitario) || 0,
+            }))
+          : [];
         return {
           id: `F-${f.id}`,
+          idFactura: f.id,
           mesa: numeroMesa != null ? `Mesa ${numeroMesa}` : 'Venta directa',
-          seccion: '',
+          seccion: nombreSeccion,
           cliente: f.cliente || 'Cliente General',
           monto: f.totalPagar,
-          mesero: 'Caja',
+          mesero: nombreMesero,
           metodoPago: String(f.metodoPago || 'Efectivo'),
           estado: 'Pagada' as const,
-          fechaApertura: fecha.toLocaleString(),
-          fechaCierre: fecha.toLocaleString(),
-          items: [],
+          fechaApertura: isNaN(fecha.getTime()) ? String(f.fechaEmision) : fecha.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium' }),
+          fechaCierre: isNaN(fecha.getTime()) ? String(f.fechaEmision) : fecha.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium' }),
+          items,
         };
       }));
     } catch (e: any) {
@@ -228,12 +402,135 @@ export default function Caja(): React.ReactElement {
       alert('Error al cargar datos de caja: ' + (e?.message || 'Error desconocido'));
     } finally {
       setCargando(false);
+      setVerificandoTurno(false);
     }
   }, []);
 
   useEffect(() => {
     void cargarDatos();
   }, [cargarDatos]);
+
+  const cambiarCajaActiva = useCallback(async (id: number) => {
+    if (turnoAbierto && id !== cajaActivaId) {
+      const cajaActual = cajas.find(c => c.id === cajaActivaId)?.nombre || `Caja #${cajaActivaId}`;
+      const deseaCerrar = window.confirm(
+        `Solo puedes operar una caja a la vez.\n` +
+        `Actualmente tienes el turno abierto en "${cajaActual}".\n\n` +
+        `¿Deseas cerrar el turno de "${cajaActual}" primero para poder operar la otra caja?`
+      );
+      if (deseaCerrar) {
+        setMontoCierre(totalesTurno.efectivoEstimado);
+        setModalTurno(true);
+      }
+      return;
+    }
+    setCajaActivaId(id);
+    try { localStorage.setItem('sabor_caja_id', String(id)); } catch {}
+    setVerificandoTurno(true);
+    try {
+      const [turno, movs] = await Promise.all([
+        CajaServicio.obtenerTurnoActual(id).catch(() => null),
+        CajaServicio.listarMovimientos().catch(() => []),
+      ]);
+      if (turno && turno.estado === 'Abierto') {
+        setTurnoActual(turno);
+        setTurnoAbierto(true);
+        setBaseInicial(turno.montoInicial);
+        try { localStorage.setItem('sabor_turno_abierto', 'true'); } catch {}
+      } else {
+        setTurnoActual(null);
+        setTurnoAbierto(false);
+        try { localStorage.setItem('sabor_turno_abierto', 'false'); } catch {}
+      }
+      setMovimientos((movs || []).map(m => ({
+        id: String(m.id),
+        tipo: m.tipoPago.toLowerCase().includes('egreso') ? 'egreso' : 'ingreso',
+        concepto: m.descripcion || `Movimiento #${m.id} (${m.metodoPago})`,
+        monto: m.monto,
+        hora: new Date(m.fechaMovimiento).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      })));
+    } finally {
+      setVerificandoTurno(false);
+    }
+  }, [turnoAbierto, cajaActivaId, cajas, totalesTurno]);
+
+  // Funciones de personalización de cajas (Dueño / Admin)
+  const crearCaja = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const nombre = nuevaCajaNombre.trim();
+    if (!nombre) {
+      alert('Por favor ingresa un nombre para la caja.');
+      return;
+    }
+    setGuardandoCaja(true);
+    try {
+      const creada = await CajaServicio.crearCaja({ nombre });
+      setCajas(prev => [...prev, creada]);
+      setNuevaCajaNombre('');
+      alert(`✓ Caja "${creada.nombre}" creada con éxito.`);
+    } catch (err: any) {
+      alert('Error al crear la caja: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      setGuardandoCaja(false);
+    }
+  };
+
+  const guardarEdicionCaja = async (id: number) => {
+    const nombre = cajaEditandoNombre.trim();
+    if (!nombre) {
+      alert('El nombre no puede estar vacío.');
+      return;
+    }
+    setGuardandoCaja(true);
+    try {
+      const actualizada = await CajaServicio.actualizarCaja(id, { nombre });
+      setCajas(prev => prev.map(c => c.id === id ? actualizada : c));
+      setCajaEditandoId(null);
+      setCajaEditandoNombre('');
+    } catch (err: any) {
+      alert('Error al actualizar caja: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      setGuardandoCaja(false);
+    }
+  };
+
+  const alternarEstadoCaja = async (caja: TipoCaja) => {
+    setGuardandoCaja(true);
+    try {
+      const actualizada = await CajaServicio.actualizarCaja(caja.id, { activo: !caja.activo });
+      setCajas(prev => prev.map(c => c.id === caja.id ? actualizada : c));
+    } catch (err: any) {
+      alert('Error al cambiar estado: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      setGuardandoCaja(false);
+    }
+  };
+
+  const eliminarCaja = async (caja: TipoCaja) => {
+    if (cajas.length <= 1) {
+      alert('No puedes eliminar la única caja del sistema.');
+      return;
+    }
+    if (!window.confirm(`¿Estás seguro de eliminar "${caja.nombre}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+    setGuardandoCaja(true);
+    try {
+      await CajaServicio.eliminarCaja(caja.id);
+      setCajas(prev => prev.filter(c => c.id !== caja.id));
+      if (cajaActivaId === caja.id) {
+        const restante = cajas.find(c => c.id !== caja.id);
+        if (restante) {
+          void cambiarCajaActiva(restante.id);
+        }
+      }
+      alert('✓ Caja eliminada con éxito.');
+    } catch (err: any) {
+      alert('Error al eliminar la caja: ' + (err?.message || 'Es posible que tenga turnos o movimientos asociados.'));
+    } finally {
+      setGuardandoCaja(false);
+    }
+  };
 
   const categoriasDisponibles = useMemo(() => {
     const cats = Array.from(new Set(productosDisponibles.map(p => p.categoria)));
@@ -242,9 +539,19 @@ export default function Caja(): React.ReactElement {
 
   // Estados Venta Directa
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('Todas');
+  const [busquedaProductoVenta, setBusquedaProductoVenta] = useState<string>('');
   const [carrito, setCarrito] = useState<ItemPedido[]>([]);
   const [nombreCliente, setNombreCliente] = useState<string>('');
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+
+  const productosFiltradosVenta = useMemo(() => {
+    const q = busquedaProductoVenta.trim().toLowerCase();
+    return productosDisponibles.filter(p => {
+      const matchCat = categoriaSeleccionada === 'Todas' || p.categoria === categoriaSeleccionada;
+      const matchQuery = !q || p.nombre.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q);
+      return matchCat && matchQuery;
+    });
+  }, [productosDisponibles, categoriaSeleccionada, busquedaProductoVenta]);
   
   // Modal de Cobro Venta Directa
   const [modalCobroVenta, setModalCobroVenta] = useState<boolean>(false);
@@ -320,24 +627,129 @@ export default function Caja(): React.ReactElement {
   const [descuento, setDescuento] = useState<number>(0); // NUEVO
   const [montoRecibidoSimple, setMontoRecibidoSimple] = useState<number>(0);
 
-  const [historialMesas, setHistorialMesas] = useState<HistorialMesaItem[]>([]);
-  const [mesaDetalleModal, setMesaDetalleModal] = useState<HistorialMesaItem | null>(null);
+  const seccionesHistorial = useMemo(() => {
+    const setSec = new Set<string>();
+    historialMesas.forEach(h => { if (h.seccion) setSec.add(h.seccion); });
+    eventosMesas.forEach(e => { if (e.seccion) setSec.add(e.seccion); });
+    return ['Todas', ...Array.from(setSec)];
+  }, [historialMesas, eventosMesas]);
 
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
-  const [nuevoMovTipo, setNuevoMovTipo] = useState<'ingreso' | 'egreso'>('ingreso');
-  const [nuevoMovConcepto, setNuevoMovConcepto] = useState<string>('');
-  const [nuevoMovMonto, setNuevoMovMonto] = useState<string>('');
+  const historialMesasFiltrado = useMemo(() => {
+    const q = busquedaHistorial.trim().toLowerCase();
+    return historialMesas.filter((item) => {
+      const esMesa = item.mesa.toLowerCase().includes('mesa');
+      if (filtroTipoHistorial === 'mesas' && !esMesa) return false;
+      if (filtroTipoHistorial === 'directa' && esMesa) return false;
+      if (filtroSeccionHistorial !== 'Todas' && item.seccion !== filtroSeccionHistorial) return false;
 
-  const [nominas, setNominas] = useState<PagoNomina[]>([]);
-  const [empleados, setEmpleados] = useState<EmpleadoNomina[]>([]);
-  const [busquedaEmpleado, setBusquedaEmpleado] = useState<string>('');
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<EmpleadoNomina | null>(null);
-  const [mostrarSugerencias, setMostrarSugerencias] = useState<boolean>(false);
-  const [nomBase, setNomBase] = useState<number>(50000);
-  const [nomBono, setNomBono] = useState<number>(0);
-  const [metodoPagoNomina, setMetodoPagoNomina] = useState<string>('Efectivo');
+      if (!q) return true;
+      return (
+        item.mesa.toLowerCase().includes(q) ||
+        item.cliente.toLowerCase().includes(q) ||
+        item.mesero.toLowerCase().includes(q) ||
+        item.seccion.toLowerCase().includes(q) ||
+        item.metodoPago.toLowerCase().includes(q) ||
+        item.id.toLowerCase().includes(q)
+      );
+    });
+  }, [historialMesas, busquedaHistorial, filtroTipoHistorial, filtroSeccionHistorial]);
+
+  const eventosMesasFiltrados = useMemo(() => {
+    const q = busquedaHistorial.trim().toLowerCase();
+    return eventosMesas.filter((ev) => {
+      if (filtroSeccionHistorial !== 'Todas' && ev.seccion !== filtroSeccionHistorial) return false;
+      if (!q) return true;
+      return (
+        ev.mesa.toLowerCase().includes(q) ||
+        ev.seccion.toLowerCase().includes(q) ||
+        ev.usuario.toLowerCase().includes(q) ||
+        ev.estado.toLowerCase().includes(q) ||
+        ev.motivo.toLowerCase().includes(q) ||
+        String(ev.id).includes(q)
+      );
+    });
+  }, [eventosMesas, busquedaHistorial, filtroSeccionHistorial]);
+
+  const totalRecaudadoHistorial = useMemo(() => {
+    return historialMesasFiltrado.reduce((acc, it) => acc + (it.monto || 0), 0);
+  }, [historialMesasFiltrado]);
+
+  const recargarHistorial = async () => {
+    setCargandoHistorial(true);
+    try {
+      const [facturas, evs, mesas, usuarios] = await Promise.all([
+        CajaServicio.listarFacturas().catch(() => []),
+        MesaServicio.obtenerHistorial().catch(() => []),
+        MesaServicio.listarMesas().catch(() => []),
+        UsuarioServicio.listar().catch(() => []),
+      ]);
+      if (mesas && mesas.length > 0) setMesasRaw(mesas);
+      const mesaPorId = new Map((mesas || []).map(m => [m.id, m]));
+      const usuarioPorId = new Map((usuarios || []).map((u: any) => [Number(u.idUsuario || u.id_usuario || u.id), u.nombre]));
+
+      setEventosMesas((evs || []).map((ev: any) => {
+        const mesaInfo = mesaPorId.get(ev.idMesa);
+        const numeroMesa = mesaInfo?.numero ?? ev.idMesa;
+        const nombreSeccion = mesaInfo?.seccionNombre || mesaInfo?.seccion?.nombre || 'Salón';
+        const nombreUsuario = usuarioPorId.get(ev.idUsuario) || (ev.idUsuario ? `Usuario #${ev.idUsuario}` : 'Sistema');
+        const fechaObj = ev.fechaAccion ? new Date(ev.fechaAccion) : new Date();
+        return {
+          id: ev.id,
+          idMesa: ev.idMesa,
+          mesa: `Mesa ${numeroMesa}`,
+          seccion: nombreSeccion,
+          idVenta: ev.idVenta,
+          idUsuario: ev.idUsuario,
+          usuario: nombreUsuario,
+          estado: ev.estado || 'Actualización',
+          monto: ev.monto ?? null,
+          motivo: ev.motivo || 'Movimiento de mesa',
+          fecha: isNaN(fechaObj.getTime()) ? String(ev.fechaAccion) : fechaObj.toLocaleString('es-CO', {
+            dateStyle: 'short',
+            timeStyle: 'medium'
+          })
+        };
+      }));
+
+      setHistorialMesas((facturas || []).map(f => {
+        const mesaInfo = f.idMesa != null ? mesaPorId.get(f.idMesa) : undefined;
+        const numeroMesa = f.mesaNumero ?? (mesaInfo ? mesaInfo.numero : undefined);
+        const nombreSeccion = f.seccionNombre || mesaInfo?.seccion?.nombre || (numeroMesa != null ? 'Salón' : '');
+        const nombreMesero = f.usuarioNombre || (f.idUsuario ? usuarioPorId.get(f.idUsuario) : undefined) || 'Caja';
+        const fecha = f.fechaEmision ? new Date(f.fechaEmision) : new Date();
+        const items = Array.isArray(f.detalles) && f.detalles.length > 0
+          ? f.detalles.map((d: any) => ({
+              nombre: d.nombre || d.producto?.nombre || `Producto #${d.idProducto}`,
+              cantidad: Number(d.cantidad) || 1,
+              precio: Number(d.precioUnitario ?? d.precio_unitario) || 0,
+            }))
+          : [];
+        return {
+          id: `F-${f.id}`,
+          idFactura: f.id,
+          mesa: numeroMesa != null ? `Mesa ${numeroMesa}` : 'Venta directa',
+          seccion: nombreSeccion,
+          cliente: f.cliente || 'Cliente General',
+          monto: f.totalPagar,
+          mesero: nombreMesero,
+          metodoPago: String(f.metodoPago || 'Efectivo'),
+          estado: 'Pagada' as const,
+          fechaApertura: isNaN(fecha.getTime()) ? String(f.fechaEmision) : fecha.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium' }),
+          fechaCierre: isNaN(fecha.getTime()) ? String(f.fechaEmision) : fecha.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium' }),
+          items,
+        };
+      }));
+    } finally {
+      setCargandoHistorial(false);
+    }
+  };
 
   const agregarAlCarrito = (prod: Producto) => {
+    if (!turnoAbierto) {
+      alert('🔒 La caja está cerrada. Debes abrir un turno para agregar productos y realizar ventas.');
+      setModalTurno(true);
+      return;
+    }
     setLastAddedId(prod.id);
     setTimeout(() => setLastAddedId(null), 500); // Reset animation state
 
@@ -353,6 +765,7 @@ export default function Caja(): React.ReactElement {
   };
 
   const actualizarCantidadItem = (id: string, nuevaCantidad: number) => {
+    if (!turnoAbierto) return;
     if (isNaN(nuevaCantidad) || nuevaCantidad <= 0) {
       setCarrito(prev => prev.filter(item => item.producto.id !== id));
     } else {
@@ -386,12 +799,19 @@ export default function Caja(): React.ReactElement {
   }, [metodoPagoVenta, montoRecibidoVenta, montoEfectivoVenta, montoDigitalVenta, totalCarrito]);
 
   const cobrarComandaRapida = async () => {
+    if (cobrandoVentaDirecta) return;
     if (carrito.length === 0) return;
+    if (!turnoAbierto) {
+      setModalTurno(true);
+      alert('Debes abrir el turno de caja antes de registrar un cobro.');
+      return;
+    }
     if (isPagoIncompletoVenta) {
       alert('El monto ingresado es menor al total a pagar. Por favor verifica.');
       return;
     }
 
+    setCobrandoVentaDirecta(true);
     try {
       const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const clienteStr = nombreCliente.trim() || 'Venta Rápida (Sin Mesa)';
@@ -489,6 +909,22 @@ export default function Caja(): React.ReactElement {
       setMovimientos(prev => [nuevoMov, ...prev]);
       
       const itemsComprados = carrito.map(it => ({ nombre: it.producto.nombre, cantidad: it.cantidad, precio: it.producto.precio }));
+      
+      const nuevoHistorial: HistorialMesaItem = {
+        id: `VD-${Date.now()}`,
+        mesa: 'Venta directa',
+        seccion: '',
+        cliente: clienteStr,
+        monto: totalCarrito,
+        mesero: usuario?.nombre?.trim() || 'Caja',
+        metodoPago: metodoPagoVenta.toUpperCase(),
+        estado: 'Pagada',
+        fechaApertura: new Date().toLocaleString(),
+        fechaCierre: new Date().toLocaleString(),
+        items: itemsComprados,
+      };
+      setHistorialMesas(prev => [nuevoHistorial, ...prev]);
+
       setCarrito([]);
       setNombreCliente('');
       setMetodoPagoVenta('efectivo');
@@ -509,9 +945,11 @@ export default function Caja(): React.ReactElement {
         });
       }
 
-      await recargar();
+      void recargar();
     } catch (err: any) {
       alert('Error al procesar comanda rápida: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      setCobrandoVentaDirecta(false);
     }
   };
 
@@ -527,6 +965,11 @@ export default function Caja(): React.ReactElement {
 
   // Lógica para iniciar el cobro de una mesa
   const abrirCobroMesa = (mesa: MesaActiva) => {
+    if (!turnoAbierto) {
+      alert('🔒 La caja está cerrada. Debes abrir un turno para cobrar mesas.');
+      setModalTurno(true);
+      return;
+    }
     setMesaACobrar(mesa);
     setVentaSeleccionada(mesa.ventas[0]); // Por defecto selecciona la primera venta
     setMetodoPago('efectivo');
@@ -573,12 +1016,19 @@ export default function Caja(): React.ReactElement {
   }, [metodoPago, montoRecibidoSimple, totalCobroMesa, montoEfectivo, montoDigital]);
 
   const cobrarVentaMesa = async () => {
+    if (cobrandoMesa) return;
     if (!mesaACobrar || !ventaSeleccionada) return;
+    if (!turnoAbierto) {
+      setModalTurno(true);
+      alert('Debes abrir el turno de caja antes de registrar un cobro.');
+      return;
+    }
     if (isPagoIncompletoMesa) {
       alert('El monto ingresado es menor al total a pagar. Por favor verifica.');
       return;
     }
 
+    setCobrandoMesa(true);
     try {
       const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const fechaActual = new Date().toLocaleDateString() + ' - ' + horaActual;
@@ -638,11 +1088,21 @@ export default function Caja(): React.ReactElement {
         detalles: detallesFactura,
       });
 
-      for (const idCmd of idsComandas) {
-        await cambiarEstado(idCmd, 'Cerrado').catch(() => {});
+      // Actualizaciones concurrentes de estado local / remoto
+      const tareasActualizacion: Promise<unknown>[] = [];
+      if (idsComandas.length > 0) {
+        tareasActualizacion.push(...idsComandas.map((idCmd) => {
+          if (typeof cambiarEstado === 'function') {
+            return cambiarEstado(idCmd, 'Cerrado').catch(() => {});
+          }
+          return ComandaServicio.cambiarEstado(idCmd, 'Cerrado').catch(() => {});
+        }));
       }
       if (mesaACobrar.idBackend) {
-        await MesaServicio.actualizarMesa(mesaACobrar.idBackend, { estado: 'Libre' }).catch(() => {});
+        tareasActualizacion.push(MesaServicio.actualizarMesa(mesaACobrar.idBackend, { estado: 'Libre' }).catch(() => {}));
+      }
+      if (tareasActualizacion.length > 0) {
+        await Promise.all(tareasActualizacion);
       }
 
       // 4. Agregar a historial local de mesas
@@ -676,9 +1136,40 @@ export default function Caja(): React.ReactElement {
       };
       setMovimientos(prev => [nuevoMov, ...prev]);
 
-      // Refrescar mesas y comandas
-      await recargar();
-      await MesaServicio.listarMesas().then(setMesasRaw);
+      // Refrescar mesas, comandas e historial concurrentemente
+      await Promise.all([
+        recargar().catch(() => {}),
+        MesaServicio.listarMesas().then(setMesasRaw).catch(() => {}),
+        MesaServicio.obtenerHistorial().then((evs) => {
+          if (evs && evs.length > 0) {
+            const mesaMap = new Map((mesasRaw || []).map(m => [m.id, m]));
+            const userMap = new Map(empleados.map(e => [e.idUsuario, e.nombre]));
+            setEventosMesas(evs.map((ev: any) => {
+              const mesaInfo = mesaMap.get(ev.idMesa);
+              const numMesa = mesaInfo?.numero ?? ev.idMesa;
+              const secNom = mesaInfo?.seccionNombre || (mesaInfo as any)?.seccion?.nombre || 'Salón';
+              const usrNom = userMap.get(ev.idUsuario) || (ev.idUsuario ? `Usuario #${ev.idUsuario}` : 'Sistema');
+              const fObj = ev.fechaAccion ? new Date(ev.fechaAccion) : new Date();
+              return {
+                id: ev.id,
+                idMesa: ev.idMesa,
+                mesa: `Mesa ${numMesa}`,
+                seccion: secNom,
+                idVenta: ev.idVenta,
+                idUsuario: ev.idUsuario,
+                usuario: usrNom,
+                estado: ev.estado || 'Actualización',
+                monto: ev.monto ?? null,
+                motivo: ev.motivo || 'Movimiento de mesa',
+                fecha: isNaN(fObj.getTime()) ? String(ev.fechaAccion) : fObj.toLocaleString('es-CO', {
+                  dateStyle: 'short',
+                  timeStyle: 'medium'
+                })
+              };
+            }));
+          }
+        }).catch(() => {})
+      ]);
 
       const datosTicket = {
         titulo: 'Factura / Comprobante de Pago',
@@ -709,11 +1200,18 @@ export default function Caja(): React.ReactElement {
       }
     } catch (err: any) {
       alert('Error al cobrar la venta: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      setCobrandoMesa(false);
     }
   };
 
   const registrarMovimiento = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!turnoAbierto || !turnoActual?.id) {
+      alert('🔒 La caja está cerrada. Debes abrir un turno para registrar movimientos de dinero.');
+      setModalTurno(true);
+      return;
+    }
     if (!nuevoMovConcepto.trim() || !nuevoMovMonto || parseFloat(nuevoMovMonto) <= 0) return;
     const montoNum = parseFloat(nuevoMovMonto);
     const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -749,18 +1247,23 @@ export default function Caja(): React.ReactElement {
     }
   };
 
-  const abrirTurnoOperacional = async (monto: number) => {
+  const abrirTurnoOperacional = async (monto: number, idCajaObjetivo?: number) => {
     try {
+      const idCajaApertura = idCajaObjetivo ?? cajaActivaId ?? 1;
       const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
-      const nuevoTurno = await CajaServicio.abrirTurno(monto, 1, idUsuarioActual);
+      const nuevoTurno = await CajaServicio.abrirTurno(monto, idCajaApertura, idUsuarioActual);
+      setCajaActivaId(idCajaApertura);
+      try { localStorage.setItem('sabor_caja_id', String(idCajaApertura)); } catch {}
       setTurnoActual(nuevoTurno);
       setTurnoAbierto(true);
       setBaseInicial(monto);
       setModalTurno(false);
+      try { localStorage.setItem('sabor_turno_abierto', 'true'); } catch {}
+      const nombreCajaApertura = cajas.find(c => c.id === idCajaApertura)?.nombre || `Caja #${idCajaApertura}`;
       const nuevoMov: Movimiento = {
         id: Date.now().toString(),
         tipo: 'ingreso',
-        concepto: 'Base inicial de caja',
+        concepto: `Base inicial (${nombreCajaApertura})`,
         monto: monto,
         hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
@@ -770,34 +1273,6 @@ export default function Caja(): React.ReactElement {
     }
   };
 
-  const totalesTurno = useMemo(() => {
-    let ventasEfectivo = 0;
-    let ventasOtros = 0;
-    let egresos = 0;
-
-    for (const m of movimientos) {
-      const monto = Number(m.monto || 0);
-      if (m.tipo === 'egreso') {
-        egresos += monto;
-      } else {
-        const cLower = (m.concepto || '').toLowerCase();
-        if (cLower.includes('tarjeta') || cLower.includes('transf')) {
-          ventasOtros += monto;
-        } else {
-          ventasEfectivo += monto;
-        }
-      }
-    }
-
-    const efectivoEstimado = baseInicial + ventasEfectivo - egresos;
-    return {
-      baseInicial,
-      ventasEfectivo,
-      ventasOtros,
-      egresos,
-      efectivoEstimado: Math.max(0, efectivoEstimado),
-    };
-  }, [baseInicial, movimientos]);
 
   const cerrarTurnoOperacional = async (montoFinalVal: number) => {
     try {
@@ -812,6 +1287,7 @@ export default function Caja(): React.ReactElement {
       setTurnoAbierto(false);
       setModalTurno(false);
       setMontoCierre(0);
+      try { localStorage.setItem('sabor_turno_abierto', 'false'); } catch {}
       await cargarDatos();
       alert('✓ Turno de caja cerrado con éxito. Se ha registrado el arqueo final.');
     } catch (err: any) {
@@ -821,6 +1297,11 @@ export default function Caja(): React.ReactElement {
 
   const registrarNomina = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!turnoAbierto) {
+      alert('🔒 La caja está cerrada. Debes abrir un turno para pagar nómina desde la caja.');
+      setModalTurno(true);
+      return;
+    }
     if (!empleadoSeleccionado) {
       alert('Por favor selecciona un empleado para registrar la nómina.');
       return;
@@ -886,7 +1367,7 @@ export default function Caja(): React.ReactElement {
       subtotal: pago.montoTotal,
       total: pago.montoTotal,
       metodoPago: pago.metodo,
-      fechaHora: pago.fecha,
+      fecha: pago.fecha,
       mensajePie: 'Comprobante de entrega de nómina y liquidación.',
     });
   };
@@ -911,60 +1392,112 @@ export default function Caja(): React.ReactElement {
           </span>
         </div>
 
-        <div className="flex items-center gap-2 bg-[#1C2541] px-2 py-0.5 rounded-lg border border-[#3A506B] h-7">
-          <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${turnoAbierto ? 'bg-[#5BC0DE] animate-pulse' : 'bg-[#D97706]'}`} />
-            <span className="text-[11px] font-semibold text-[#F4D6B0]">{turnoAbierto ? 'Turno Abierto' : 'Turno Cerrado'}</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Selector de Caja Activa */}
+          <div className="flex items-center gap-1.5 bg-[#1C2541] px-2 py-0.5 rounded-lg border border-[#3A506B] h-7">
+            <Store size={13} className="text-[#5BC0DE] shrink-0" />
+            <select
+              value={cajaActivaId}
+              onChange={(e) => void cambiarCajaActiva(Number(e.target.value))}
+              className="bg-transparent text-[#F4D6B0] text-[11px] font-bold focus:outline-none cursor-pointer pr-1"
+            >
+              {cajas.map(c => (
+                <option key={c.id} value={c.id} className="bg-[#0B132B] text-[#F4D6B0]">
+                  {c.nombre} {!c.activo ? '(Inactiva)' : ''}
+                </option>
+              ))}
+            </select>
+            {esDuenoOAdmin && (
+              <button
+                type="button"
+                onClick={() => setModalGestionCajas(true)}
+                title="Personalizar Cajas (Dueño / Admin)"
+                className="p-1 hover:bg-[#3A506B] text-[#5BC0DE] hover:text-[#F4D6B0] rounded-md transition-all ml-0.5"
+              >
+                <Settings size={12} />
+              </button>
+            )}
           </div>
-          <button
-            onClick={() => {
-              if (turnoAbierto) {
-                setMontoCierre(totalesTurno.efectivoEstimado);
-              }
-              setModalTurno(true);
-            }}
-            className={`flex items-center gap-1 px-2 py-0.2 rounded font-bold text-[10px] transition-all ${
-              turnoAbierto 
-                ? 'bg-[#D97706]/15 text-[#D97706] border border-[#D97706]/30 hover:bg-[#D97706]/25' 
-                : 'bg-[#5BC0DE] text-[#0B132B] hover:bg-[#5BC0DE]/90 shadow-sm'
-            }`}
-          >
-            {turnoAbierto ? <Lock size={10} /> : <Unlock size={10} />}
-            {turnoAbierto ? 'Cerrar Turno' : 'Abrir Turno'}
-          </button>
+
+          {/* Indicador de Turno */}
+          <div className="flex items-center gap-2 bg-[#1C2541] px-2 py-0.5 rounded-lg border border-[#3A506B] h-7">
+            <div className="flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                verificandoTurno
+                  ? 'bg-[#5BC0DE]/50 animate-pulse'
+                  : turnoAbierto
+                    ? 'bg-[#5BC0DE] animate-pulse'
+                    : 'bg-[#D97706]'
+              }`} />
+              <span className="text-[11px] font-semibold text-[#F4D6B0]">
+                {verificandoTurno
+                  ? (turnoAbierto ? 'Turno Abierto' : 'Verificando...')
+                  : (turnoAbierto ? 'Turno Abierto' : 'Turno Cerrado')}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                if (turnoAbierto) {
+                  setMontoCierre(totalesTurno.efectivoEstimado);
+                }
+                setModalTurno(true);
+              }}
+              className={`flex items-center gap-1 px-2 py-0.2 rounded font-bold text-[10px] transition-all ${
+                turnoAbierto 
+                  ? 'bg-[#D97706]/15 text-[#D97706] border border-[#D97706]/30 hover:bg-[#D97706]/25' 
+                  : 'bg-[#5BC0DE] text-[#0B132B] hover:bg-[#5BC0DE]/90 shadow-sm'
+              }`}
+            >
+              {turnoAbierto ? <Lock size={10} /> : <Unlock size={10} />}
+              {turnoAbierto ? 'Cerrar Turno' : 'Abrir Turno'}
+            </button>
+          </div>
         </div>
       </header>
 
-      {!turnoAbierto ? (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-6 text-center max-w-sm w-full shadow-2xl">
-            <AlertCircle className="mx-auto text-[#D97706] mb-2" size={40} />
-            <h2 className="text-lg font-bold text-[#F4D6B0] mb-1">La caja se encuentra cerrada</h2>
-            <p className="text-[#5BC0DE] text-xs mb-4">Ingresa la base inicial en efectivo para aperturar el turno operacional.</p>
-            <div className="flex flex-col gap-2.5">
-              <div className="text-left">
-                <label className="text-xs text-[#5BC0DE] font-semibold mb-1 block">Base Inicial de Caja ($)</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  value={baseInicial}
-                  onChange={(e) => setBaseInicial(Number(e.target.value.replace(/\D/g, '')) || 0)}
-                  className="w-full bg-[#0B132B] border border-[#3A506B] px-3.5 py-2 rounded-xl text-center text-[#F4D6B0] text-base font-bold focus:outline-none focus:border-[#5BC0DE]"
-                />
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        {!verificandoTurno && !turnoAbierto && !bannerCerradoDescartado && (
+          <div className="bg-[#D97706]/15 border border-[#D97706]/40 p-2.5 sm:p-3 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-[#F4D6B0] mb-2.5 shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} className="text-[#D97706] shrink-0" />
+              <div>
+                <p className="font-bold text-[#F4D6B0]">
+                  {cajas.find(c => c.id === cajaActivaId)?.nombre || 'Caja'} actualmente sin turno abierto
+                </p>
+                <p className="text-[11px] text-[#5BC0DE]">
+                  Puedes navegar por el menú, consultar historial de mesas y movimientos. Para procesar cobros, abre un turno.
+                </p>
               </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <button 
-                onClick={() => void abrirTurnoOperacional(baseInicial)}
-                className="w-full bg-[#5BC0DE] text-[#0B132B] font-bold py-2.5 rounded-xl text-xs hover:bg-[#5BC0DE]/90 transition-all shadow-md mt-1"
+                onClick={() => setModalTurno(true)} 
+                className="px-3 py-1.5 bg-[#D97706] hover:bg-[#B45309] text-white rounded-xl font-bold transition-all text-xs flex items-center gap-1.5 shadow-md"
               >
-                Abrir Turno Ahora
+                <Unlock size={12} /> Abrir Turno de Caja
+              </button>
+              {esDuenoOAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setModalGestionCajas(true)}
+                  className="px-2.5 py-1.5 bg-[#1C2541] hover:bg-[#3A506B] text-[#5BC0DE] border border-[#3A506B] rounded-xl font-bold transition-all text-xs flex items-center gap-1"
+                >
+                  <Settings size={12} /> Personalizar Cajas
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setBannerCerradoDescartado(true)}
+                title="Descartar aviso"
+                className="p-1 hover:bg-[#D97706]/20 rounded-lg text-[#F4D6B0]/70 hover:text-white transition-all"
+              >
+                <X size={15} />
               </button>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        )}
           
-          <div className="flex gap-2 border-b border-[#3A506B] mb-3 overflow-x-auto pb-1 shrink-0 scrollbar-none">
+        <div className="flex gap-2 border-b border-[#3A506B] mb-3 overflow-x-auto pb-1 shrink-0 scrollbar-none">
             {[
               { id: 'ventas', label: 'Venta Directa', icon: ShoppingCart },
               { id: 'cobrar', label: 'Cobrar Mesas', icon: Receipt },
@@ -991,9 +1524,30 @@ export default function Caja(): React.ReactElement {
             {activeTab === 'ventas' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:h-full">
                 <div className="lg:col-span-2 bg-[#1C2541] p-3.5 rounded-2xl border border-[#3A506B] flex flex-col lg:h-full lg:min-h-0">
-                  <div className="flex items-center gap-2 mb-2.5 shrink-0">
-                    <Layers size={16} className="text-[#5BC0DE]" />
-                    <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0]">Menú Rápido por Categorías</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <Layers size={16} className="text-[#5BC0DE]" />
+                      <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0]">Menú Rápido por Categorías</h3>
+                    </div>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#5BC0DE]" size={13} />
+                      <input
+                        type="text"
+                        placeholder="Buscar producto o comida..."
+                        value={busquedaProductoVenta}
+                        onChange={(e) => setBusquedaProductoVenta(e.target.value)}
+                        className="w-full bg-[#0B132B] border border-[#3A506B] pl-8 pr-7 py-1 rounded-xl text-xs text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE] placeholder:text-[#5BC0DE]/40"
+                      />
+                      {busquedaProductoVenta && (
+                        <button
+                          type="button"
+                          onClick={() => setBusquedaProductoVenta('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#5BC0DE] hover:text-[#F4D6B0]"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2.5 border-b border-[#3A506B] shrink-0 scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
                     {categoriasDisponibles.map((cat) => (
@@ -1010,23 +1564,41 @@ export default function Caja(): React.ReactElement {
                       </button>
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 flex-1 overflow-y-auto pr-1 max-h-[50vh] lg:max-h-none">
-                    {productosDisponibles.filter(p => categoriaSeleccionada === 'Todas' || p.categoria === categoriaSeleccionada).map((prod) => (
-                      <motion.button
-                        key={prod.id}
-                        onClick={() => agregarAlCarrito(prod)}
-                        whileTap={{ scale: 0.95 }}
-                        className={`bg-[#0B132B] border p-3 rounded-xl text-left transition-colors flex flex-col justify-between group shadow-sm ${
-                          lastAddedId === prod.id ? 'border-[#5BC0DE] bg-[#5BC0DE]/10' : 'border-[#3A506B] hover:border-[#5BC0DE]'
-                        }`}
-                      >
-                        <div>
-                          <span className="text-[9px] text-[#5BC0DE] font-bold uppercase tracking-wider">{prod.categoria}</span>
-                          <span className="block font-medium text-[#F4D6B0] group-hover:text-white mt-1 text-xs">{prod.nombre}</span>
-                        </div>
-                        <span className="text-[#5BC0DE] font-bold mt-2 text-xs sm:text-sm">${prod.precio.toLocaleString()}</span>
-                      </motion.button>
-                    ))}
+                  <div className="flex-1 overflow-y-auto pr-1 max-h-[50vh] lg:max-h-none">
+                    {productosFiltradosVenta.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-center text-[#5BC0DE]/60 text-xs">
+                        <Search size={24} className="mb-2 text-[#5BC0DE]/30" />
+                        <p>No se encontraron productos coincidentes.</p>
+                        {busquedaProductoVenta && (
+                          <button
+                            type="button"
+                            onClick={() => setBusquedaProductoVenta('')}
+                            className="mt-2 text-[11px] text-[#5BC0DE] underline hover:text-[#F4D6B0]"
+                          >
+                            Limpiar búsqueda
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {productosFiltradosVenta.map((prod) => (
+                          <motion.button
+                            key={prod.id}
+                            onClick={() => agregarAlCarrito(prod)}
+                            whileTap={{ scale: 0.95 }}
+                            className={`bg-[#0B132B] border p-3 rounded-xl text-left transition-colors flex flex-col justify-between group shadow-sm ${
+                              lastAddedId === prod.id ? 'border-[#5BC0DE] bg-[#5BC0DE]/10' : 'border-[#3A506B] hover:border-[#5BC0DE]'
+                            }`}
+                          >
+                            <div>
+                              <span className="text-[9px] text-[#5BC0DE] font-bold uppercase tracking-wider">{prod.categoria}</span>
+                              <span className="block font-medium text-[#F4D6B0] group-hover:text-white mt-1 text-xs">{prod.nombre}</span>
+                            </div>
+                            <span className="text-[#5BC0DE] font-bold mt-2 text-xs sm:text-sm">${prod.precio.toLocaleString()}</span>
+                          </motion.button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1096,11 +1668,19 @@ export default function Caja(): React.ReactElement {
                         <Trash2 size={15} />
                       </button>
                       <button 
-                        disabled={carrito.length === 0} 
-                        onClick={() => setModalCobroVenta(true)} 
-                        className="flex-1 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 text-[#0B132B] font-bold py-2 rounded-xl text-xs transition-all shadow-md"
+                        disabled={!turnoAbierto || carrito.length === 0} 
+                        onClick={() => {
+                          if (!turnoAbierto) {
+                            alert('🔒 La caja está cerrada. Debes abrir un turno para operar.');
+                            setModalTurno(true);
+                            return;
+                          }
+                          setModalCobroVenta(true);
+                        }} 
+                        className="flex-1 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 text-[#0B132B] font-bold py-2 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
                       >
-                        Cobrar Comanda Rápida
+                        {!turnoAbierto ? <Lock size={12} /> : null}
+                        {!turnoAbierto ? 'Caja Cerrada (Abrir Turno)' : 'Cobrar Comanda Rápida'}
                       </button>
                     </div>
                   </div>
@@ -1155,16 +1735,45 @@ export default function Caja(): React.ReactElement {
                             <div className="flex justify-between items-start mb-1.5 gap-1">
                               <div className="min-w-0 pr-1">
                                 <span className="font-bold text-[#F4D6B0] text-xs truncate block">{m.nombre}</span>
-                                <span className="block text-[9px] text-[#5BC0DE] truncate">{m.seccion} • {m.mesero.split(' ')[0]}</span>
+                                <span className="block text-[9px] text-[#5BC0DE] truncate">{m.seccion} • {(m.mesero || 'Mesero').split(' ')[0]}</span>
                               </div>
                               <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-[#D97706]/15 text-[#D97706] text-[9px] font-semibold">{m.ventas.length} Ventas</span>
                             </div>
-                            <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-[#3A506B] text-[10px]">
+
+                            {/* Preview de productos consumidos */}
+                            <div className="my-1 space-y-0.5 max-h-14 overflow-y-auto scrollbar-none bg-[#1C2541]/70 p-1.5 rounded-lg border border-[#3A506B]/50 text-[10px]">
+                              {m.ventas.flatMap(v => v.items).slice(0, 3).map((it, idx) => (
+                                <div key={idx} className="flex justify-between text-[#5BC0DE] truncate">
+                                  <span className="truncate">{it.cantidad}x {it.nombre}</span>
+                                  <span className="text-[#F4D6B0] ml-1 shrink-0 font-mono">${(it.precio * it.cantidad).toLocaleString()}</span>
+                                </div>
+                              ))}
+                              {m.ventas.flatMap(v => v.items).length > 3 && (
+                                <span className="text-[9px] text-[#5BC0DE]/60 italic block text-center">
+                                  +{m.ventas.flatMap(v => v.items).length - 3} ítems más...
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex justify-between items-center mt-1 pt-1.5 border-t border-[#3A506B] text-[10px]">
                               <span className="text-[#5BC0DE]">Total Mesa:</span>
                               <span className="font-bold text-[#D97706] text-sm">${totalMesa.toLocaleString()}</span>
                             </div>
-                            <button className="w-full mt-2 py-1 bg-[#5BC0DE]/10 text-[#5BC0DE] border border-[#5BC0DE]/30 rounded-lg text-[10px] font-bold hover:bg-[#5BC0DE]/20 transition-colors">
-                              Gestionar Cobro
+                            <button 
+                              disabled={!turnoAbierto}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!turnoAbierto) {
+                                  alert('🔒 La caja está cerrada. Debes abrir un turno para cobrar mesas.');
+                                  setModalTurno(true);
+                                  return;
+                                }
+                                abrirCobroMesa(m);
+                              }}
+                              className="w-full mt-2 py-1 bg-[#5BC0DE]/10 text-[#5BC0DE] border border-[#5BC0DE]/30 rounded-lg text-[10px] font-bold hover:bg-[#5BC0DE]/20 transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+                            >
+                              {!turnoAbierto ? <Lock size={10} /> : null}
+                              {!turnoAbierto ? 'Abrir Turno para Cobrar' : 'Gestionar Cobro'}
                             </button>
                           </div>
                         );
@@ -1176,48 +1785,336 @@ export default function Caja(): React.ReactElement {
             )}
 
             {activeTab === 'historialMesas' && (
-              <div className="bg-[#1C2541] p-3.5 rounded-2xl border border-[#3A506B] flex flex-col lg:h-full lg:min-h-0">
-                <div className="mb-2.5 shrink-0">
-                  <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] flex items-center gap-1.5">
-                    <Calendar className="text-[#5BC0DE]" size={16} /> Historial General de Mesas
-                  </h3>
-                  <p className="text-[11px] text-[#5BC0DE]">Registro histórico de comandes, mesero y estado de cobro.</p>
+              <div className="bg-[#1C2541] p-3 sm:p-3.5 rounded-2xl border border-[#3A506B] flex flex-col lg:h-full lg:min-h-0">
+                {/* Header de la sección de Historial */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2.5 border-b border-[#3A506B] shrink-0">
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] flex items-center gap-1.5">
+                      <Clock className="text-[#5BC0DE]" size={16} /> Historial y Trazabilidad de Mesas
+                    </h3>
+                    <p className="text-[11px] text-[#5BC0DE]">
+                      Registro de cobros facturados, detalles de pedidos y auditoría de cambios de estado en mesas.
+                    </p>
+                  </div>
+
+                  {/* Switcher de Vistas & Botón Recargar */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex bg-[#0B132B] p-0.5 rounded-xl border border-[#3A506B]">
+                      <button
+                        type="button"
+                        onClick={() => setVistaHistorial('cuentas')}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          vistaHistorial === 'cuentas'
+                            ? 'bg-[#5BC0DE] text-[#0B132B] shadow-sm'
+                            : 'text-[#5BC0DE]/70 hover:text-[#F4D6B0]'
+                        }`}
+                      >
+                        <Receipt size={13} /> Cuentas Cobradas ({historialMesasFiltrado.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVistaHistorial('eventos')}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          vistaHistorial === 'eventos'
+                            ? 'bg-[#5BC0DE] text-[#0B132B] shadow-sm'
+                            : 'text-[#5BC0DE]/70 hover:text-[#F4D6B0]'
+                        }`}
+                      >
+                        <RotateCw size={13} /> Auditoría Estados ({eventosMesasFiltrados.length})
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={cargandoHistorial}
+                      onClick={() => void recargarHistorial()}
+                      title="Refrescar historial de mesas"
+                      className="px-2.5 py-1 bg-[#0B132B] hover:bg-[#3A506B] text-[#5BC0DE] border border-[#3A506B] rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                    >
+                      <RotateCw size={13} className={cargandoHistorial ? 'animate-spin text-[#5BC0DE]' : ''} />
+                      <span className="hidden sm:inline">Refrescar</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 overflow-x-auto overflow-y-auto border border-[#3A506B] rounded-xl bg-[#0B132B] min-h-0 max-h-[65vh] lg:max-h-none scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead className="sticky top-0 bg-[#1C2541] border-b border-[#3A506B] text-[11px] font-bold text-[#5BC0DE] uppercase tracking-wider z-10">
-                      <tr>
-                        <th className="py-2.5 px-3">Mesa</th>
-                        <th className="py-2.5 px-3">Cliente</th>
-                        <th className="py-2.5 px-3">Mesero</th>
-                        <th className="py-2.5 px-3">Cierre</th>
-                        <th className="py-2.5 px-3">Método Pago</th>
-                        <th className="py-2.5 px-3 text-right">Total</th>
-                        <th className="py-2.5 px-3 text-center">Detalle</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#3A506B]/60 text-xs text-[#F4D6B0]">
-                      {historialMesas.map((hm) => (
-                        <tr key={hm.id} className="hover:bg-[#1C2541]/60 transition-colors">
-                          <td className="py-2.5 px-3 font-bold text-white">{hm.mesa}</td>
-                          <td className="py-2.5 px-3 text-[#5BC0DE]">{hm.cliente}</td>
-                          <td className="py-2.5 px-3">{hm.mesero}</td>
-                          <td className="py-2.5 px-3 text-[#5BC0DE] text-[11px]">{hm.fechaCierre}</td>
-                          <td className="py-2.5 px-3">{hm.metodoPago}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-[#5BC0DE]">${hm.monto.toLocaleString()}</td>
-                          <td className="py-2.5 px-3 text-center">
-                            <button 
-                              onClick={() => setMesaDetalleModal(hm)} 
-                              className="p-1.5 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#5BC0DE] rounded-lg transition-all"
-                            >
-                              <Eye size={14} />
-                            </button>
-                          </td>
+
+                {/* Filtros, Buscador y Métricas */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 mb-3 shrink-0">
+                  <div className="flex items-center gap-2 flex-1 flex-wrap">
+                    {/* Buscador */}
+                    <div className="relative flex-1 min-w-[190px] sm:max-w-xs">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#5BC0DE]" size={13} />
+                      <input
+                        type="text"
+                        placeholder={vistaHistorial === 'cuentas' ? "Buscar mesa, cliente, mesero..." : "Buscar mesa, estado, motivo..."}
+                        value={busquedaHistorial}
+                        onChange={(e) => setBusquedaHistorial(e.target.value)}
+                        className="w-full bg-[#0B132B] border border-[#3A506B] pl-8 pr-7 py-1 rounded-xl text-xs text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE] placeholder:text-[#5BC0DE]/40"
+                      />
+                      {busquedaHistorial && (
+                        <button
+                          type="button"
+                          onClick={() => setBusquedaHistorial('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#5BC0DE] hover:text-[#F4D6B0]"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filtro por Sección */}
+                    {seccionesHistorial.length > 2 && (
+                      <select
+                        value={filtroSeccionHistorial}
+                        onChange={(e) => setFiltroSeccionHistorial(e.target.value)}
+                        className="bg-[#0B132B] border border-[#3A506B] px-2.5 py-1 rounded-xl text-xs text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE]"
+                      >
+                        {seccionesHistorial.map(s => (
+                          <option key={s} value={s}>{s === 'Todas' ? 'Todas las secciones' : s}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* Filtro de Tipo si está en cuentas */}
+                    {vistaHistorial === 'cuentas' && (
+                      <div className="flex gap-1 overflow-x-auto scrollbar-none">
+                        {(['todos', 'mesas', 'directa'] as const).map(f => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => setFiltroTipoHistorial(f)}
+                            className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
+                              filtroTipoHistorial === f
+                                ? 'bg-[#5BC0DE]/20 text-[#5BC0DE] border border-[#5BC0DE]'
+                                : 'bg-[#0B132B] text-[#5BC0DE]/60 border border-[#3A506B] hover:text-[#F4D6B0]'
+                            }`}
+                          >
+                            {f === 'todos' ? 'Todos' : f === 'mesas' ? 'Solo Mesas' : 'Venta Directa'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Badges de Métricas */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {vistaHistorial === 'cuentas' && (
+                      <div className="bg-[#0B132B] px-2.5 py-1 rounded-xl border border-[#3A506B] text-[11px] flex items-center gap-1.5">
+                        <span className="text-[#5BC0DE]">Recaudado:</span>
+                        <span className="font-bold text-emerald-400">${totalRecaudadoHistorial.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="bg-[#0B132B] px-2.5 py-1 rounded-xl border border-[#3A506B] text-[11px] text-[#5BC0DE]">
+                      <span>Registros: <strong className="text-[#F4D6B0]">{vistaHistorial === 'cuentas' ? historialMesasFiltrado.length : eventosMesasFiltrados.length}</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* VISTA 1: TABLA DE CUENTAS COBRADAS */}
+                {vistaHistorial === 'cuentas' && (
+                  <div className="flex-1 overflow-x-auto overflow-y-auto border border-[#3A506B] rounded-xl bg-[#0B132B] min-h-0 max-h-[65vh] lg:max-h-none scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
+                    <table className="w-full text-left border-collapse min-w-[750px]">
+                      <thead className="sticky top-0 bg-[#1C2541] border-b border-[#3A506B] text-[11px] font-bold text-[#5BC0DE] uppercase tracking-wider z-10">
+                        <tr>
+                          <th className="py-2.5 px-3">Mesa / Origen</th>
+                          <th className="py-2.5 px-3">Cliente</th>
+                          <th className="py-2.5 px-3">Productos Consumidos</th>
+                          <th className="py-2.5 px-3">Atendido Por</th>
+                          <th className="py-2.5 px-3">Fecha y Hora</th>
+                          <th className="py-2.5 px-3">Método Pago</th>
+                          <th className="py-2.5 px-3 text-right">Total Cobrado</th>
+                          <th className="py-2.5 px-3 text-center">Acciones</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-[#3A506B]/60 text-xs text-[#F4D6B0]">
+                        {historialMesasFiltrado.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="py-10 text-center text-[#5BC0DE]/60 text-xs">
+                              <Receipt size={24} className="mx-auto mb-2 text-[#5BC0DE]/30" />
+                              <p>No se encontraron cuentas registradas con los filtros aplicados.</p>
+                              {(busquedaHistorial || filtroTipoHistorial !== 'todos' || filtroSeccionHistorial !== 'Todas') && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBusquedaHistorial('');
+                                    setFiltroTipoHistorial('todos');
+                                    setFiltroSeccionHistorial('Todas');
+                                  }}
+                                  className="mt-2 text-[11px] text-[#5BC0DE] underline hover:text-[#F4D6B0]"
+                                >
+                                  Restablecer filtros
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ) : (
+                          historialMesasFiltrado.map((hm) => (
+                            <tr key={hm.id} className="hover:bg-[#1C2541]/60 transition-colors">
+                              <td className="py-2.5 px-3 font-bold text-white">
+                                <div className="flex items-center gap-1.5">
+                                  <span>{hm.mesa}</span>
+                                  {hm.seccion && (
+                                    <span className="text-[10px] font-normal px-1.5 py-0.2 rounded bg-[#3A506B]/50 text-[#5BC0DE]">
+                                      {hm.seccion}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-[#5BC0DE]">{hm.cliente}</td>
+                              <td className="py-2.5 px-3 max-w-[280px]">
+                                {hm.items && hm.items.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1 items-center">
+                                    {hm.items.slice(0, 3).map((it, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#0B132B] border border-[#3A506B] text-[10px] text-[#F4D6B0]"
+                                        title={`${it.cantidad}x ${it.nombre} - $${(it.precio * it.cantidad).toLocaleString()}`}
+                                      >
+                                        <strong className="text-[#5BC0DE] font-bold">{it.cantidad}x</strong>
+                                        <span className="truncate max-w-[110px]">{it.nombre}</span>
+                                      </span>
+                                    ))}
+                                    {hm.items.length > 3 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setMesaDetalleModal(hm)}
+                                        className="text-[10px] text-[#5BC0DE] font-bold hover:text-white px-1.5 py-0.5 rounded bg-[#3A506B]/50 hover:bg-[#3A506B] transition-all"
+                                      >
+                                        +{hm.items.length - 3} más
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-[#5BC0DE]/50 italic">Sin detalle individual</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-[#F4D6B0]">{hm.mesero}</td>
+                              <td className="py-2.5 px-3 text-[#5BC0DE] text-[11px] whitespace-nowrap">{hm.fechaCierre}</td>
+                              <td className="py-2.5 px-3">
+                                <span className="inline-block px-2 py-0.5 rounded-md bg-[#1C2541] border border-[#3A506B] text-[10px] font-semibold text-[#F4D6B0]">
+                                  {hm.metodoPago}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-bold text-[#5BC0DE] text-sm">
+                                ${hm.monto.toLocaleString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setMesaDetalleModal(hm)}
+                                    title="Ver detalle del pedido consumido"
+                                    className="p-1.5 bg-[#3A506B] hover:bg-[#5BC0DE] hover:text-[#0B132B] text-[#5BC0DE] rounded-lg transition-all"
+                                  >
+                                    <Eye size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTicketAImprimir({
+                                        titulo: `Comprobante de Pago - ${hm.mesa}`,
+                                        cliente: hm.cliente,
+                                        mesa: hm.mesa,
+                                        seccion: hm.seccion,
+                                        items: hm.items.map(it => ({ nombre: it.nombre, cantidad: it.cantidad, precio: it.precio })),
+                                        subtotal: hm.monto,
+                                        total: hm.monto,
+                                        metodoPago: hm.metodoPago,
+                                        fecha: hm.fechaCierre || new Date().toLocaleDateString('es-CO'),
+                                      });
+                                    }}
+                                    title="Reimprimir ticket térmico"
+                                    className="p-1.5 bg-[#3A506B] hover:bg-[#5BC0DE] hover:text-[#0B132B] text-[#5BC0DE] rounded-lg transition-all"
+                                  >
+                                    <Printer size={13} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* VISTA 2: TABLA DE EVENTOS Y AUDITORÍA DE MESAS (/api/historial-mesas) */}
+                {vistaHistorial === 'eventos' && (
+                  <div className="flex-1 overflow-x-auto overflow-y-auto border border-[#3A506B] rounded-xl bg-[#0B132B] min-h-0 max-h-[65vh] lg:max-h-none scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
+                    <table className="w-full text-left border-collapse min-w-[750px]">
+                      <thead className="sticky top-0 bg-[#1C2541] border-b border-[#3A506B] text-[11px] font-bold text-[#5BC0DE] uppercase tracking-wider z-10">
+                        <tr>
+                          <th className="py-2.5 px-3">Mesa / Sección</th>
+                          <th className="py-2.5 px-3">Estado Registrado</th>
+                          <th className="py-2.5 px-3">Motivo / Acción</th>
+                          <th className="py-2.5 px-3">Usuario Responsable</th>
+                          <th className="py-2.5 px-3 text-right">Monto</th>
+                          <th className="py-2.5 px-3">Fecha y Hora</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#3A506B]/60 text-xs text-[#F4D6B0]">
+                        {eventosMesasFiltrados.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-10 text-center text-[#5BC0DE]/60 text-xs">
+                              <RotateCw size={24} className="mx-auto mb-2 text-[#5BC0DE]/30" />
+                              <p>No se encontraron eventos de mesas registrados con los filtros aplicados.</p>
+                              {busquedaHistorial && (
+                                <button
+                                  type="button"
+                                  onClick={() => setBusquedaHistorial('')}
+                                  className="mt-2 text-[11px] text-[#5BC0DE] underline hover:text-[#F4D6B0]"
+                                >
+                                  Limpiar búsqueda
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ) : (
+                          eventosMesasFiltrados.map((ev) => {
+                            const estLower = ev.estado.toLowerCase();
+                            const badgeColor = 
+                              estLower.includes('libre') || estLower.includes('disponible')
+                                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                : estLower.includes('ocupad')
+                                ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                : estLower.includes('pagan')
+                                ? 'bg-[#5BC0DE]/15 text-[#5BC0DE] border-[#5BC0DE]/30'
+                                : 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+
+                            return (
+                              <tr key={ev.id} className="hover:bg-[#1C2541]/60 transition-colors">
+                                <td className="py-2.5 px-3 font-bold text-white">
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{ev.mesa}</span>
+                                    <span className="text-[10px] font-normal px-1.5 py-0.2 rounded bg-[#3A506B]/50 text-[#5BC0DE]">
+                                      {ev.seccion}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold ${badgeColor}`}>
+                                    {ev.estado}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-[#F4D6B0]">
+                                  {ev.motivo}
+                                </td>
+                                <td className="py-2.5 px-3 text-[#5BC0DE]">
+                                  {ev.usuario}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-[#5BC0DE]">
+                                  {ev.monto != null ? `$${ev.monto.toLocaleString()}` : '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-[#5BC0DE] text-[11px] whitespace-nowrap">
+                                  {ev.fecha}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1270,8 +2167,13 @@ export default function Caja(): React.ReactElement {
                         className="w-full bg-[#0B132B] border border-[#3A506B] px-2.5 py-1.5 rounded-xl text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE]" 
                       />
                     </div>
-                    <button type="submit" className="w-full bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-bold py-2 rounded-xl transition-all shadow-md">
-                      Guardar Movimiento
+                    <button 
+                      type="submit" 
+                      disabled={!turnoAbierto}
+                      className="w-full bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 text-[#0B132B] font-bold py-2 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+                    >
+                      {!turnoAbierto ? <Lock size={13} /> : null}
+                      {!turnoAbierto ? 'Turno Cerrado (Abrir para registrar)' : 'Guardar Movimiento'}
                     </button>
                   </form>
                 </div>
@@ -1410,10 +2312,11 @@ export default function Caja(): React.ReactElement {
                       </div>
                       <button 
                         type="submit" 
-                        disabled={!empleadoSeleccionado}
+                        disabled={!turnoAbierto || !empleadoSeleccionado}
                         className="w-full bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 text-[#0B132B] font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md"
                       >
-                        <Plus size={15} /> Registrar Pago Nómina
+                        {!turnoAbierto ? <Lock size={14} /> : <Plus size={15} />}
+                        {!turnoAbierto ? 'Turno Cerrado (Abrir para pagar)' : 'Registrar Pago Nómina'}
                       </button>
                     </div>
                   </form>
@@ -1479,7 +2382,6 @@ export default function Caja(): React.ReactElement {
 
           </div>
         </div>
-      )}
 
       {/* MODAL DE COBRO PARA VENTA DIRECTA */}
       {modalCobroVenta && (
@@ -1557,11 +2459,20 @@ export default function Caja(): React.ReactElement {
               </div>
             )}
             <div className="flex gap-2 mt-2">
-              <button onClick={() => setModalCobroVenta(false)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all">
+              <button disabled={cobrandoVentaDirecta} onClick={() => setModalCobroVenta(false)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 disabled:opacity-40 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all">
                 Cancelar
               </button>
-              <button disabled={isPagoIncompletoVenta} onClick={cobrarComandaRapida} className="flex-1 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5">
-                <CheckCircle size={15} /> Confirmar
+              <button disabled={isPagoIncompletoVenta || cobrandoVentaDirecta} onClick={cobrarComandaRapida} className="flex-1 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5">
+                {cobrandoVentaDirecta ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-[#0B132B] border-t-transparent rounded-full animate-spin" />
+                    <span>Confirmando...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={15} /> Confirmar
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1805,11 +2716,20 @@ export default function Caja(): React.ReactElement {
             )}
 
             <div className="flex gap-2 mt-2">
-              <button onClick={() => setMesaACobrar(null)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all">
+              <button disabled={cobrandoMesa} onClick={() => setMesaACobrar(null)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 disabled:opacity-40 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all">
                 Cancelar
               </button>
-              <button disabled={isPagoIncompletoMesa} onClick={cobrarVentaMesa} className="flex-1 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5">
-                <CheckCircle size={15} /> Cobrar Venta
+              <button disabled={isPagoIncompletoMesa || cobrandoMesa} onClick={cobrarVentaMesa} className="flex-1 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5">
+                {cobrandoMesa ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-[#0B132B] border-t-transparent rounded-full animate-spin" />
+                    <span>Cobrando...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={15} /> Cobrar Venta
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1819,28 +2739,68 @@ export default function Caja(): React.ReactElement {
       {mesaDetalleModal && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl max-w-sm w-full p-4 shadow-2xl text-xs max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-2.5">
-              <h3 className="font-bold text-[#F4D6B0] text-xs">Detalle {mesaDetalleModal.mesa} ({mesaDetalleModal.seccion})</h3>
-              <button onClick={() => setMesaDetalleModal(null)} className="text-[#5BC0DE] hover:text-[#F4D6B0] font-bold"><X size={15} /></button>
+            <div className="flex justify-between items-center mb-2.5 pb-2 border-b border-[#3A506B]">
+              <div>
+                <h3 className="font-bold text-[#F4D6B0] text-sm flex items-center gap-1.5">
+                  <Receipt size={15} className="text-[#5BC0DE]" /> {mesaDetalleModal.mesa}
+                </h3>
+                {mesaDetalleModal.seccion && (
+                  <span className="text-[10px] text-[#5BC0DE]">{mesaDetalleModal.seccion}</span>
+                )}
+              </div>
+              <button onClick={() => setMesaDetalleModal(null)} className="text-[#5BC0DE] hover:text-[#F4D6B0] font-bold p-1"><X size={16} /></button>
             </div>
-            <div className="text-xs font-bold text-[#5BC0DE] mb-1">Cliente: <span className="text-[#F4D6B0]">{mesaDetalleModal.cliente}</span></div>
-            <div className="space-y-1 bg-[#0B132B] p-2.5 rounded-xl border border-[#3A506B] mb-2.5 max-h-36 overflow-y-auto scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
-              {mesaDetalleModal.items.map((it, idx) => (
-                <div key={idx} className="flex justify-between text-[#F4D6B0] pb-1 border-b border-[#3A506B]/40 last:border-0 text-[11px]">
-                  <span>{it.cantidad}x {it.nombre}</span>
-                  <span className="font-semibold text-[#5BC0DE]">${(it.precio * it.cantidad).toLocaleString()}</span>
-                </div>
-              ))}
+            
+            <div className="bg-[#0B132B] p-2.5 rounded-xl border border-[#3A506B] mb-2.5 space-y-1 text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-[#5BC0DE]">Cliente:</span>
+                <span className="font-bold text-[#F4D6B0]">{mesaDetalleModal.cliente}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5BC0DE]">Atendido por:</span>
+                <span className="text-[#F4D6B0]">{mesaDetalleModal.mesero}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5BC0DE]">Fecha y hora:</span>
+                <span className="text-[#F4D6B0]">{mesaDetalleModal.fechaCierre}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5BC0DE]">Método de pago:</span>
+                <span className="text-emerald-400 font-semibold">{mesaDetalleModal.metodoPago}</span>
+              </div>
             </div>
-            <div className="flex justify-between items-center font-bold text-[#F4D6B0] mb-2.5 text-xs">
-              <span>Total Consumido:</span>
-              <span className="text-[#5BC0DE]">${mesaDetalleModal.monto.toLocaleString()}</span>
+
+            <div className="mb-2.5">
+              <span className="text-[10px] text-[#5BC0DE] font-bold uppercase tracking-wider block mb-1">
+                Productos Consumidos ({mesaDetalleModal.items.length})
+              </span>
+              <div className="space-y-1 bg-[#0B132B] p-2.5 rounded-xl border border-[#3A506B] max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-[#3A506B] scrollbar-track-transparent">
+                {mesaDetalleModal.items.length === 0 ? (
+                  <p className="text-center py-2 text-[#5BC0DE]/50 text-xs">Sin detalle de productos individuales</p>
+                ) : (
+                  mesaDetalleModal.items.map((it, idx) => (
+                    <div key={idx} className="flex justify-between text-[#F4D6B0] pb-1 border-b border-[#3A506B]/40 last:border-0 text-[11px]">
+                      <div>
+                        <span className="text-white font-medium">{it.cantidad}x </span>
+                        <span>{it.nombre}</span>
+                      </div>
+                      <span className="font-semibold text-[#5BC0DE]">${(it.precio * it.cantidad).toLocaleString()}</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
+
+            <div className="flex justify-between items-center font-bold text-sm bg-[#0B132B] px-3 py-2 rounded-xl border border-[#3A506B] mb-3">
+              <span className="text-[#F4D6B0]">Total Pagado:</span>
+              <span className="text-emerald-400">${mesaDetalleModal.monto.toLocaleString()}</span>
+            </div>
+
             <div className="flex gap-2">
               <button 
                 onClick={() => {
                   setTicketAImprimir({
-                    titulo: 'Factura / Comprobante de Venta',
+                    titulo: `Comprobante de Pago - ${mesaDetalleModal.mesa}`,
                     cliente: mesaDetalleModal.cliente,
                     mesa: mesaDetalleModal.mesa,
                     seccion: mesaDetalleModal.seccion,
@@ -1853,7 +2813,7 @@ export default function Caja(): React.ReactElement {
                 }}
                 className="flex-1 bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] py-2 rounded-xl font-bold transition-all text-xs flex items-center justify-center gap-1.5 shadow-md"
               >
-                <Printer size={14} /> Imprimir Factura
+                <Printer size={14} /> Reimprimir Ticket
               </button>
               <button onClick={() => setMesaDetalleModal(null)} className="px-3 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] py-2 rounded-xl font-bold transition-all text-xs">
                 Cerrar
@@ -1928,19 +2888,90 @@ export default function Caja(): React.ReactElement {
                 </div>
               </div>
             ) : (
-              <div className="mb-2.5">
-                <label className="text-[#5BC0DE] block mb-1 text-[11px]">Base Inicial ($)</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  value={baseInicial} 
-                  onChange={(e) => setBaseInicial(Number(e.target.value.replace(/\D/g, '')) || 0)} 
-                  className="w-full bg-[#0B132B] border border-[#3A506B] px-2.5 py-1.5 rounded-xl text-[#F4D6B0] text-xs" 
-                />
+              <div className="space-y-3 mb-3">
+                {/* 1. Selector de Caja */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="text-[#5BC0DE] text-[11px] font-semibold flex items-center gap-1">
+                      <Store size={13} /> 1. Selecciona la Caja a Aperturar:
+                    </label>
+                    {esDuenoOAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalTurno(false);
+                          setModalGestionCajas(true);
+                        }}
+                        className="text-[10px] text-[#5BC0DE] hover:text-[#F4D6B0] flex items-center gap-1 underline font-medium"
+                      >
+                        <Settings size={11} /> Personalizar Cajas
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                    {cajas.filter(c => c.activo).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setCajaActivaId(c.id);
+                          try { localStorage.setItem('sabor_caja_id', String(c.id)); } catch {}
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${
+                          cajaActivaId === c.id
+                            ? 'bg-[#5BC0DE]/20 border-[#5BC0DE] text-white shadow-sm'
+                            : 'bg-[#0B132B] border-[#3A506B] text-[#F4D6B0] hover:border-[#5BC0DE]/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Store size={14} className={cajaActivaId === c.id ? 'text-[#5BC0DE]' : 'text-[#5BC0DE]/50'} />
+                          <span className="font-bold text-xs">{c.nombre}</span>
+                        </div>
+                        {cajaActivaId === c.id && (
+                          <span className="text-[10px] font-bold text-[#5BC0DE] bg-[#5BC0DE]/20 px-1.5 py-0.2 rounded border border-[#5BC0DE]/40">
+                            Elegida
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Base Inicial */}
+                <div>
+                  <label className="text-[#5BC0DE] block mb-1 text-[11px] font-semibold">
+                    2. Monto Base Inicial en Efectivo ($)
+                  </label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={baseInicial} 
+                    onChange={(e) => setBaseInicial(Number(e.target.value.replace(/\D/g, '')) || 0)} 
+                    className="w-full bg-[#0B132B] border border-[#3A506B] px-3 py-1.5 rounded-xl text-white text-sm font-bold focus:outline-none focus:border-[#5BC0DE]" 
+                  />
+                  <div className="flex gap-1.5 mt-1.5">
+                    {[50000, 100000, 150000, 200000].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setBaseInicial(val)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+                          baseInicial === val
+                            ? 'bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE]'
+                            : 'bg-[#0B132B] text-[#5BC0DE]/70 border-[#3A506B] hover:text-[#F4D6B0]'
+                        }`}
+                      >
+                        ${val.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
+
             <div className="flex gap-2">
-              <button onClick={() => setModalTurno(false)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] py-1.5 rounded-xl font-bold text-xs">
+              <button onClick={() => setModalTurno(false)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] py-2 rounded-xl font-bold text-xs">
                 Cancelar
               </button>
               <button 
@@ -1948,12 +2979,206 @@ export default function Caja(): React.ReactElement {
                   if (turnoAbierto) {
                     void cerrarTurnoOperacional(montoCierre);
                   } else {
-                    void abrirTurnoOperacional(baseInicial);
+                    void abrirTurnoOperacional(baseInicial, cajaActivaId);
                   }
                 }} 
-                className={`flex-1 font-bold py-1.5 rounded-xl text-xs ${turnoAbierto ? 'bg-[#D97706] text-white' : 'bg-[#5BC0DE] text-[#0B132B]'}`}
+                className={`flex-1 font-bold py-2 rounded-xl text-xs transition-all shadow-md ${
+                  turnoAbierto ? 'bg-[#D97706] hover:bg-[#B45309] text-white' : 'bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B]'
+                }`}
               >
-                Confirmar
+                {turnoAbierto ? 'Cerrar Turno' : `Abrir ${cajas.find(c => c.id === cajaActivaId)?.nombre || 'Caja'}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PERSONALIZAR CAJAS (DUEÑO / ADMINISTRADOR) */}
+      {modalGestionCajas && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl max-w-lg w-full p-4 sm:p-5 shadow-2xl text-xs max-h-[90vh] overflow-y-auto">
+            {/* Cabecera */}
+            <div className="flex justify-between items-center mb-3 pb-2.5 border-b border-[#3A506B]">
+              <div className="flex items-center gap-2">
+                <Store size={18} className="text-[#5BC0DE]" />
+                <div>
+                  <h3 className="font-bold text-[#F4D6B0] text-sm">Personalizar Cajas Registradoras</h3>
+                  <p className="text-[11px] text-[#5BC0DE]">Configuración exclusiva para el Dueño o Administrador.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setModalGestionCajas(false);
+                  setCajaEditandoId(null);
+                  setCajaEditandoNombre('');
+                }} 
+                className="text-[#5BC0DE] hover:text-[#F4D6B0] p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Formulario Agregar Nueva Caja */}
+            <form onSubmit={crearCaja} className="mb-4 bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]">
+              <label className="text-[11px] text-[#5BC0DE] font-semibold block mb-1.5">
+                Nueva Caja / Punto de Cobro:
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Ej: Caja Barra, Caja Terraza, Caja #2..."
+                  value={nuevaCajaNombre}
+                  onChange={(e) => setNuevaCajaNombre(e.target.value)}
+                  className="flex-1 bg-[#1C2541] border border-[#3A506B] px-3 py-1.5 rounded-xl text-white text-xs focus:outline-none focus:border-[#5BC0DE] placeholder:text-[#5BC0DE]/40"
+                />
+                <button
+                  type="submit"
+                  disabled={guardandoCaja || !nuevaCajaNombre.trim()}
+                  className="px-3 py-1.5 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 disabled:opacity-40 text-[#0B132B] font-bold rounded-xl text-xs transition-all flex items-center gap-1 shadow-sm shrink-0"
+                >
+                  <Plus size={14} /> Crear Caja
+                </button>
+              </div>
+            </form>
+
+            {/* Listado de Cajas Existentes */}
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[11px] font-bold text-[#5BC0DE] uppercase tracking-wider">
+                  Cajas Registradas ({cajas.length})
+                </span>
+                <span className="text-[10px] text-[#5BC0DE]/60">
+                  Puedes editar nombres, activarlas o desactivarlas.
+                </span>
+              </div>
+
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {cajas.map((c) => {
+                  const estaEditando = cajaEditandoId === c.id;
+                  const esCajaActual = cajaActivaId === c.id;
+
+                  return (
+                    <div 
+                      key={c.id} 
+                      className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                        esCajaActual 
+                          ? 'bg-[#0B132B] border-[#5BC0DE]' 
+                          : 'bg-[#0B132B]/80 border-[#3A506B]'
+                      }`}
+                    >
+                      {estaEditando ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={cajaEditandoNombre}
+                            onChange={(e) => setCajaEditandoNombre(e.target.value)}
+                            className="flex-1 bg-[#1C2541] border border-[#5BC0DE] px-2.5 py-1 rounded-lg text-white text-xs focus:outline-none"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void guardarEdicionCaja(c.id)}
+                            disabled={guardandoCaja || !cajaEditandoNombre.trim()}
+                            className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCajaEditandoId(null);
+                              setCajaEditandoNombre('');
+                            }}
+                            className="px-2.5 py-1 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] rounded-lg text-xs"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2.5">
+                            <div className={`p-2 rounded-xl ${c.activo ? 'bg-[#5BC0DE]/15 text-[#5BC0DE]' : 'bg-gray-500/15 text-gray-400'}`}>
+                              <Store size={16} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-[#F4D6B0] text-xs sm:text-sm">{c.nombre}</span>
+                                {esCajaActual && (
+                                  <span className="text-[9px] bg-[#5BC0DE]/20 text-[#5BC0DE] border border-[#5BC0DE]/40 px-1.5 py-0.2 rounded font-semibold">
+                                    En Uso
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-[#5BC0DE]/70 mt-0.5">
+                                <span>ID: #{c.id}</span>
+                                <span>•</span>
+                                <span className={c.activo ? 'text-emerald-400' : 'text-gray-400'}>
+                                  {c.activo ? 'Activa' : 'Inactiva'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                            {/* Editar nombre */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCajaEditandoId(c.id);
+                                setCajaEditandoNombre(c.nombre);
+                              }}
+                              title="Editar nombre de la caja"
+                              className="p-1.5 bg-[#1C2541] hover:bg-[#3A506B] text-[#5BC0DE] rounded-lg transition-all"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+
+                            {/* Alternar activo/inactivo */}
+                            <button
+                              type="button"
+                              onClick={() => void alternarEstadoCaja(c)}
+                              title={c.activo ? "Desactivar caja" : "Activar caja"}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                c.activo 
+                                  ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/30' 
+                                  : 'bg-gray-500/15 text-gray-400 hover:bg-gray-500/30'
+                              }`}
+                            >
+                              <Power size={13} />
+                            </button>
+
+                            {/* Eliminar caja */}
+                            {cajas.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => void eliminarCaja(c)}
+                                title="Eliminar caja"
+                                className="p-1.5 bg-rose-500/15 text-rose-400 hover:bg-rose-500/30 rounded-lg transition-all"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Pie del modal */}
+            <div className="mt-4 pt-3 border-t border-[#3A506B] flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalGestionCajas(false);
+                  setCajaEditandoId(null);
+                  setCajaEditandoNombre('');
+                }}
+                className="px-4 py-2 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] font-bold rounded-xl text-xs transition-all"
+              >
+                Cerrar
               </button>
             </div>
           </div>

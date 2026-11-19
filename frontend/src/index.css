@@ -37,18 +37,81 @@ button {
 }
 
 /* ========================================================
-   ESTILOS DE IMPRESIÓN TÉRMICA ESC/POS (80mm / 58mm)
-   Garantiza que NUNCA se imprima una "captura de pantalla"
-   del sistema, sino únicamente el formato de ticket térmico.
+   ESTILOS DE IMPRESIÓN (TICKET TÉRMICO POS Y REPORTE EJECUTIVO PDF)
 ======================================================== */
 @media print {
-  @page {
-    size: 80mm auto;
-    margin: 0mm !important;
+  /* CASO 1: REPORTE EJECUTIVO / PDF (A4 / CARTA) */
+  body.imprimiendo-informe-pdf {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  html,
-  body {
+  body.imprimiendo-informe-pdf #root,
+  body.imprimiendo-informe-pdf .Contenedor,
+  body.imprimiendo-informe-pdf main {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+    display: block !important;
+    background: #ffffff !important;
+  }
+
+  body.imprimiendo-informe-pdf aside,
+  body.imprimiendo-informe-pdf header,
+  body.imprimiendo-informe-pdf nav,
+  body.imprimiendo-informe-pdf .no-imprimir {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  body.imprimiendo-informe-pdf .modal-informe-overlay,
+  body.imprimiendo-informe-pdf .modal-informe-card {
+    position: static !important;
+    display: block !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  body.imprimiendo-informe-pdf #seccion-informe-imprimible {
+    visibility: visible !important;
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  body.imprimiendo-informe-pdf #seccion-informe-imprimible * {
+    visibility: visible !important;
+  }
+
+  /* CASO 2: TICKET TÉRMICO ESC/POS (80mm) - Solo si NO es informe ejecutivo */
+  body:not(.imprimiendo-informe-pdf) {
     width: 80mm !important;
     min-width: 80mm !important;
     max-width: 80mm !important;
@@ -63,7 +126,7 @@ button {
     print-color-adjust: exact !important;
   }
 
-  #root {
+  body:not(.imprimiendo-informe-pdf) #root {
     width: 80mm !important;
     height: auto !important;
     min-height: auto !important;
@@ -73,18 +136,16 @@ button {
     background: #ffffff !important;
   }
 
-  /* Ocultar toda la interfaz visual de la pantalla */
-  body * {
+  body:not(.imprimiendo-informe-pdf) * {
     visibility: hidden !important;
   }
 
-  /* Mostrar exclusivamente el contenedor del ticket térmico */
-  #ticket-impresion-pos,
-  #ticket-impresion-pos * {
+  body:not(.imprimiendo-informe-pdf) #ticket-impresion-pos,
+  body:not(.imprimiendo-informe-pdf) #ticket-impresion-pos * {
     visibility: visible !important;
   }
 
-  #ticket-impresion-pos {
+  body:not(.imprimiendo-informe-pdf) #ticket-impresion-pos {
     position: fixed !important;
     left: 0 !important;
     top: 0 !important;

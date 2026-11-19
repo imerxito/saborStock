@@ -61,6 +61,23 @@ export class IngredienteRepositorio {
         return mapearIngredienteRow(data as IngredienteRow);
     }
 
+    async obtenerPorIds(ids: number[]): Promise<Ingrediente[]> {
+        if (!ids || ids.length === 0) return [];
+        const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
+        if (uniqueIds.length === 0) return [];
+
+        const { data, error } = await supabase
+            .from("ingrediente")
+            .select("*")
+            .in("id_ingrediente", uniqueIds);
+
+        if (error) {
+            throw new Error(`Error al obtener ingredientes en lote: ${error.message}`);
+        }
+
+        return (data as IngredienteRow[]).map(mapearIngredienteRow);
+    }
+
     async crear(datos: CrearIngrediente): Promise<Ingrediente> {
         const { data, error } = await supabase
             .from("ingrediente")

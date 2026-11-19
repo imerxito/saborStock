@@ -1,5 +1,6 @@
 import { fetchJson } from "./api";
 import type { MesaBackend, ProductoBackend } from "../tipos/Comanda";
+import type { HistorialMesa } from "../tipos/HistorialMesa";
 
 export interface SeccionBackend {
     id: number;
@@ -101,5 +102,13 @@ export const MesaServicio = {
 
     async obtenerProductos(): Promise<ProductoBackend[]> {
         return await fetchJson<ProductoBackend[]>("/api/productos");
+    },
+
+    async obtenerHistorial(filtros?: { idMesa?: number; idComanda?: number }): Promise<HistorialMesa[]> {
+        const params = new URLSearchParams();
+        if (filtros?.idMesa) params.append("idMesa", String(filtros.idMesa));
+        if (filtros?.idComanda) params.append("idComanda", String(filtros.idComanda));
+        const qs = params.toString() ? `?${params.toString()}` : "";
+        return await fetchJson<HistorialMesa[]>(`/api/historial-mesas${qs}`);
     },
 };

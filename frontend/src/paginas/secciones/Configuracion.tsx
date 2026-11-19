@@ -4,7 +4,7 @@ import {
   Plus, Edit, Save, X, UploadCloud, ShieldCheck, 
   QrCode, DollarSign, Wallet, ChefHat, Beer, 
   Phone, Mail, MapPin, Key, Upload, CheckCircle, RefreshCw, Trash2,
-  Layers, Check, AlertCircle, Utensils
+  Layers, Check, AlertCircle, Utensils, Store, Power
 } from 'lucide-react';
 import { 
   ConfiguracionServicio, 
@@ -16,9 +16,11 @@ import {
 } from '../../servicios/ConfiguracionServicio';
 import { ProductoServicio, CategoriaDTO } from '../../servicios/ProductoServicio';
 import { MesaServicio, SeccionBackend } from '../../servicios/MesaServicio';
+import { CajaServicio } from '../../servicios/CajaServicio';
+import type { Caja as TipoCaja } from '../../tipos/Caja';
 import FormatoTicketTermico from '../../componentes/FormatoTicketTermico';
 
-type TabConfig = 'impresoras' | 'facturacion' | 'pagos' | 'negocio';
+type TabConfig = 'impresoras' | 'cajas' | 'facturacion' | 'pagos' | 'negocio';
 
 const FORM_IMPRESORA_VACIO: Omit<ImpresoraFrontend, 'id'> = {
   nombre: '',
@@ -71,6 +73,13 @@ export default function Configuracion() {
   const [seccionesRestaurante, setSeccionesRestaurante] = useState<SeccionBackend[]>([]);
   const [pagos, setPagos] = useState<MetodoPagoConfig[]>([]);
   const [autoPrint, setAutoPrint] = useState<boolean>(true);
+
+  // Cajas registradoras
+  const [cajas, setCajas] = useState<TipoCaja[]>([]);
+  const [modalCaja, setModalCaja] = useState<boolean>(false);
+  const [cajaEditando, setCajaEditando] = useState<TipoCaja | null>(null);
+  const [nombreNuevaCaja, setNombreNuevaCaja] = useState<string>('');
+  const [guardandoCaja, setGuardandoCaja] = useState<boolean>(false);
 
   // Facturación
   const [facturacion, setFacturacion] = useState<ConfiguracionFacturacion>({
@@ -177,7 +186,7 @@ export default function Configuracion() {
   const cargarDatos = useCallback(async () => {
     setCargando(true);
     try {
-      const [negocioData, facturacionData, impresorasData, pagosData, catsData, secsData, sysImps] = await Promise.all([
+      const [negocioData, facturacionData, impresorasData, pagosData, catsData, secsData, sysImps, cajasData] = await Promise.all([
         ConfiguracionServicio.obtenerNegocio().catch(() => null),
         ConfiguracionServicio.obtenerFacturacion().catch(() => null),
         ConfiguracionServicio.listarImpresoras().catch(() => []),
@@ -185,6 +194,7 @@ export default function Configuracion() {
         ProductoServicio.listarCategorias().catch(() => []),
         MesaServicio.obtenerSecciones().catch(() => []),
         ConfiguracionServicio.listarImpresorasSistema().catch(() => []),
+        CajaServicio.listarCajas().catch(() => []),
       ]);
 
       if (negocioData) setNegocio(negocioData);
@@ -199,6 +209,7 @@ export default function Configuracion() {
       if (pagosData && pagosData.length > 0) setPagos(pagosData);
       if (catsData) setCategoriasMenu(catsData);
       if (secsData) setSeccionesRestaurante(secsData);
+      if (cajasData) setCajas(cajasData);
     } catch (err: any) {
       mostrarToast('Error al cargar la configuración: ' + (err.message || 'Desconocido'), 'error');
     } finally {
@@ -212,6 +223,7 @@ export default function Configuracion() {
 
   const TABS = [
     { id: 'impresoras', label: 'Impresoras', icon: Printer },
+    { id: 'cajas', label: 'Cajas Registradoras', icon: Store },
     { id: 'facturacion', label: 'Facturación', icon: FileText },
     { id: 'pagos', label: 'Pagos', icon: CreditCard },
     { id: 'negocio', label: 'Mi Negocio', icon: Building2 },
@@ -338,6 +350,68 @@ export default function Configuracion() {
       setFormImpresora({ ...formImpresora, seccionesIds: actuales.filter(s => s !== idSec) });
     } else {
       setFormImpresora({ ...formImpresora, seccionesIds: [...actuales, idSec] });
+    }
+  };
+
+  // ================= LÓGICA DE CAJAS =================
+  const abrirModalCrearCaja = () => {
+    setCajaEditando(null);
+    setNombreNuevaCaja('');
+    setModalCaja(true);
+  };
+
+  const abrirModalEditarCaja = (caja: TipoCaja) => {
+    setCajaEditando(caja);
+    setNombreNuevaCaja(caja.nombre);
+    setModalCaja(true);
+  };
+
+  const guardarCaja = async () => {
+    if (!nombreNuevaCaja.trim()) {
+      mostrarToast('El nombre de la caja es obligatorio', 'error');
+      return;
+    }
+    setGuardandoCaja(true);
+    try {
+      if (cajaEditando) {
+        await CajaServicio.actualizarCaja(cajaEditando.id, { nombre: nombreNuevaCaja.trim() });
+        mostrarToast('Caja actualizada exitosamente');
+      } else {
+        await CajaServicio.crearCaja({ nombre: nombreNuevaCaja.trim() });
+        mostrarToast('Nueva caja creada exitosamente');
+      }
+      const data = await CajaServicio.listarCajas();
+      setCajas(data);
+      setModalCaja(false);
+      setNombreNuevaCaja('');
+      setCajaEditando(null);
+    } catch (err: any) {
+      mostrarToast(err?.response?.data?.mensaje || err?.message || 'Error al guardar la caja', 'error');
+    } finally {
+      setGuardandoCaja(false);
+    }
+  };
+
+  const alternarEstadoCaja = async (caja: TipoCaja) => {
+    try {
+      await CajaServicio.actualizarCaja(caja.id, { activo: !caja.activo });
+      const data = await CajaServicio.listarCajas();
+      setCajas(data);
+      mostrarToast(`Caja "${caja.nombre}" ahora está ${!caja.activo ? 'activa' : 'inactiva'}`);
+    } catch (err: any) {
+      mostrarToast(err?.response?.data?.mensaje || err?.message || 'Error al actualizar estado', 'error');
+    }
+  };
+
+  const eliminarCaja = async (caja: TipoCaja) => {
+    if (!window.confirm(`¿Estás seguro de eliminar la caja "${caja.nombre}"?`)) return;
+    try {
+      await CajaServicio.eliminarCaja(caja.id);
+      const data = await CajaServicio.listarCajas();
+      setCajas(data);
+      mostrarToast(`Caja "${caja.nombre}" eliminada`);
+    } catch (err: any) {
+      mostrarToast(err?.response?.data?.mensaje || err?.message || 'No se puede eliminar la caja porque tiene turnos o movimientos registrados', 'error');
     }
   };
 
@@ -742,6 +816,132 @@ export default function Configuracion() {
                     <p className="text-[10px] text-[#D97706]/90 mt-0.5 leading-relaxed">
                       Cada impresora puede filtrar automáticamente qué <strong>Categorías</strong> de productos imprimir (ej: Cocina = Platos Fuertes, Barra = Bebidas) y de qué <strong>Secciones</strong> del restaurante recibirlas (ej: Terraza, Salón Principal). Al enviar comandas o generar pre-cuentas, el sistema enruta los ítems correspondientes.
                     </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB: CAJAS REGISTRADORAS ================= */}
+            {activeTab === 'cajas' && (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-[#F4D6B0] flex items-center gap-2">
+                      <Store className="w-5 h-5 text-[#5BC0DE]" />
+                      Cajas Registradoras y Puntos de Cobro
+                    </h3>
+                    <p className="text-xs text-[#5BC0DE]/80 mt-1">
+                      Gestiona los puntos de venta de tu restaurante. Cada caja mantiene turnos, aperturas y arqueos independientes.
+                    </p>
+                  </div>
+                  <button
+                    onClick={abrirModalCrearCaja}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#5BC0DE] text-[#0B132B] font-bold rounded-xl text-xs hover:bg-[#4CA8C4] transition-all shadow-md shrink-0"
+                  >
+                    <Plus className="w-4 h-4" /> Nueva Caja
+                  </button>
+                </div>
+
+                {/* Grid de Cajas */}
+                {cajas.length === 0 ? (
+                  <div className="bg-[#1C2541]/50 border border-dashed border-[#3A506B] rounded-2xl p-10 text-center flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-2xl bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE]">
+                      <Store className="w-7 h-7" />
+                    </div>
+                    <p className="text-sm font-semibold text-[#F4D6B0]">No hay cajas registradas</p>
+                    <p className="text-xs text-[#5BC0DE]/70 max-w-sm">
+                      Crea al menos una caja (ej: Caja Principal, Barra, Terraza) para poder abrir turnos operativos.
+                    </p>
+                    <button
+                      onClick={abrirModalCrearCaja}
+                      className="mt-2 px-4 py-2 bg-[#5BC0DE] text-[#0B132B] text-xs font-bold rounded-xl hover:bg-[#4CA8C4] transition-all"
+                    >
+                      + Crear Primera Caja
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {cajas.map((caja) => (
+                      <div
+                        key={caja.id}
+                        className={`bg-[#1C2541] border rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all hover:shadow-lg ${
+                          caja.activo ? 'border-[#3A506B] hover:border-[#5BC0DE]/50' : 'border-[#3A506B]/50 opacity-70 bg-[#1C2541]/40'
+                        }`}
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+                                caja.activo ? 'bg-[#5BC0DE]/10 text-[#5BC0DE] border-[#5BC0DE]/30' : 'bg-[#0B132B] text-slate-400 border-[#3A506B]'
+                              }`}>
+                                <Store className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-mono text-[#5BC0DE]/70">Punto #{caja.id}</span>
+                                <h4 className="text-sm font-bold text-[#F4D6B0] leading-tight">{caja.nombre}</h4>
+                              </div>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              caja.activo
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                            }`}>
+                              {caja.activo ? 'Activa' : 'Inactiva'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#5BC0DE]/70">
+                            {caja.activo
+                              ? 'Disponible para selección al abrir turno en Caja.'
+                              : 'Deshabilitada. No aparecerá en el selector de turnos.'}
+                          </p>
+                        </div>
+
+                        {/* Acciones */}
+                        <div className="pt-3 border-t border-[#3A506B]/50 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => alternarEstadoCaja(caja)}
+                            title={caja.activo ? 'Desactivar caja' : 'Activar caja'}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                              caja.activo
+                                ? 'bg-[#0B132B] text-slate-300 border-[#3A506B] hover:text-amber-400 hover:border-amber-400/40'
+                                : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            {caja.activo ? 'Desactivar' : 'Activar'}
+                          </button>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => abrirModalEditarCaja(caja)}
+                              title="Editar nombre"
+                              className="p-1.5 rounded-lg bg-[#0B132B] text-[#5BC0DE] border border-[#3A506B] hover:text-[#F4D6B0] hover:border-[#5BC0DE] transition-all"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => eliminarCaja(caja)}
+                              title="Eliminar caja"
+                              className="p-1.5 rounded-lg bg-[#0B132B] text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-500 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Nota Aclaratoria */}
+                <div className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-4 flex gap-3 items-start">
+                  <span className="text-[#5BC0DE] text-lg">💡</span>
+                  <div className="text-xs text-[#5BC0DE]/80 leading-relaxed">
+                    <p className="font-bold text-[#F4D6B0] mb-0.5">Gestión de Cajas para el Dueño</p>
+                    Puedes crear tantas cajas como puntos de cobro físicos tengas (Caja 1, Caja 2, Barra, Kiosko, etc.). Al momento de abrir turno, el cajero o administrador elegirá en qué caja operará, manteniendo arqueos y montos independientes.
                   </div>
                 </div>
               </div>
@@ -1424,6 +1624,58 @@ export default function Configuracion() {
             className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold"
           >
             Guardar
+          </button>
+        </div>
+      </FixedModal>
+
+      {/* ================= MODAL GESTIÓN DE CAJA ================= */}
+      <FixedModal
+        isOpen={modalCaja}
+        onClose={() => setModalCaja(false)}
+        title={cajaEditando ? `Editar Caja #${cajaEditando.id}` : 'Nueva Caja Registradora'}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#5BC0DE] mb-1.5">
+              Nombre o Identificador del Punto de Venta *
+            </label>
+            <input
+              type="text"
+              value={nombreNuevaCaja}
+              onChange={(e) => setNombreNuevaCaja(e.target.value)}
+              placeholder="Ej: Caja Principal, Caja Terraza, Barra, Kiosko 1..."
+              className="w-full px-3.5 py-2.5 bg-[#0B132B] border border-[#3A506B] rounded-xl text-sm text-[#F4D6B0] placeholder-slate-500 focus:outline-none focus:border-[#5BC0DE]"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  guardarCaja();
+                }
+              }}
+            />
+          </div>
+
+          <div className="bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]/60 text-[11px] text-[#5BC0DE]/80 leading-relaxed">
+            ℹ️ Los turnos se abren y cierran vinculados a cada caja registrada. Podrás cambiar o desactivar puntos en cualquier momento.
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-[#3A506B] flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setModalCaja(false)}
+            className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B] hover:bg-[#3A506B]/30"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={guardarCaja}
+            disabled={guardandoCaja}
+            className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold hover:bg-[#4CA8C4] flex items-center gap-1.5 shadow-md"
+          >
+            <Save size={14} />
+            {guardandoCaja ? 'Guardando...' : (cajaEditando ? 'Guardar Cambios' : 'Crear Caja')}
           </button>
         </div>
       </FixedModal>

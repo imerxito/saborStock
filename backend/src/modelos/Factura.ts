@@ -2,6 +2,15 @@ import { MetodoPago } from "../tipos/MetodoPago.js";
 import { EstadoFactura } from "../tipos/EstadoFactura.js";
 import { aFecha, aNumero, aNumeroNull } from "../tipos/mapeo.js";
 
+export interface FacturaDetalleItem {
+    id: number;
+    idProducto: number;
+    nombre: string;
+    cantidad: number;
+    precioUnitario: number;
+    subtotal: number;
+}
+
 export interface Factura {
     id: number;
     idVenta: number | null;
@@ -18,6 +27,10 @@ export interface Factura {
     montoTarjeta: number | null;
     montoTransferencia: number | null;
     estado: EstadoFactura;
+    detalles?: FacturaDetalleItem[];
+    usuarioNombre?: string | null;
+    mesaNumero?: number | null;
+    seccionNombre?: string | null;
 }
 
 export interface CrearFactura {
@@ -67,9 +80,21 @@ export interface FacturaRow {
     monto_tarjeta: number | string | null;
     monto_transferencia: number | string | null;
     estado: EstadoFactura;
+    detalle_factura?: any[];
 }
 
 export function mapFacturaFromRow(row: FacturaRow): Factura {
+    const detalles: FacturaDetalleItem[] = Array.isArray(row.detalle_factura)
+        ? row.detalle_factura.map((d: any) => ({
+            id: d.id_detalle_factura,
+            idProducto: d.id_producto,
+            nombre: d.producto?.nombre || `Producto #${d.id_producto}`,
+            cantidad: Number(d.cantidad) || 1,
+            precioUnitario: Number(d.precio_unitario) || 0,
+            subtotal: Number(d.subtotal) || 0,
+        }))
+        : [];
+
     return {
         id: row.id_factura,
         idVenta: row.id_venta,
@@ -86,5 +111,9 @@ export function mapFacturaFromRow(row: FacturaRow): Factura {
         montoTarjeta: aNumeroNull(row.monto_tarjeta),
         montoTransferencia: aNumeroNull(row.monto_transferencia),
         estado: row.estado,
+        detalles,
+        usuarioNombre: (row as any).usuario?.nombre || null,
+        mesaNumero: (row as any).mesa?.numero ?? (row as any).venta?.mesa?.numero ?? null,
+        seccionNombre: (row as any).mesa?.seccion?.nombre ?? (row as any).venta?.mesa?.seccion?.nombre ?? null,
     };
 }

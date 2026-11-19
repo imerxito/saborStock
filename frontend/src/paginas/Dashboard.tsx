@@ -3,6 +3,7 @@ import { LogOut, Lock, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-re
 import logo from "../assets/SaborYStock (1).png";
 import { useAuth } from "../contexto/AuthContexto";
 import { modulosPorRol } from "./secciones/Modulos";
+import { ErrorBoundary } from "../componentes/ErrorBoundary";
 
 function iniciales(nombre?: string) {
     if (!nombre) return "?";
@@ -385,7 +386,9 @@ function Dashboard() {
                             style={{ width: '100%', height: '100%' }}
                             aria-label={activo.titulo}
                         >
-                            <Contenido />
+                            <ErrorBoundary key={activo.id} fallbackTitle={`Error en el módulo de ${activo.titulo}`}>
+                                <Contenido />
+                            </ErrorBoundary>
                         </section>
                     </Suspense>
                 ) : (

@@ -1,4 +1,5 @@
 import { fetchJson } from "./api";
+import type { Caja, CrearCaja, ActualizarCaja } from "../tipos/Caja";
 
 export interface TurnoCajaDTO {
     id: number;
@@ -24,11 +25,22 @@ export interface MovimientoCajaDTO {
     fechaMovimiento: string;
 }
 
+export interface FacturaDetalleDTO {
+    id?: number;
+    idProducto: number;
+    nombre?: string;
+    cantidad: number;
+    precioUnitario: number;
+}
+
 export interface FacturaDTO {
     id: number;
     idVenta?: number | null;
     idMesa: number | null;
+    mesaNumero?: number | null;
+    seccionNombre?: string | null;
     idUsuario: number;
+    usuarioNombre?: string | null;
     cliente?: string;
     fechaEmision: string;
     subtotal: number;
@@ -37,9 +49,35 @@ export interface FacturaDTO {
     totalPagar: number;
     metodoPago?: string;
     estado?: string;
+    detalles?: FacturaDetalleDTO[];
 }
 
 export const CajaServicio = {
+    // === GESTIÓN DE CAJAS (PERSONALIZACIÓN) ===
+    async listarCajas(): Promise<Caja[]> {
+        return await fetchJson<Caja[]>("/api/cajas");
+    },
+
+    async crearCaja(datos: CrearCaja): Promise<Caja> {
+        return await fetchJson<Caja>("/api/cajas", {
+            method: "POST",
+            body: JSON.stringify(datos),
+        });
+    },
+
+    async actualizarCaja(id: number, cambios: ActualizarCaja): Promise<Caja> {
+        return await fetchJson<Caja>(`/api/cajas/${id}`, {
+            method: "PUT",
+            body: JSON.stringify(cambios),
+        });
+    },
+
+    async eliminarCaja(id: number): Promise<void> {
+        await fetchJson<unknown>(`/api/cajas/${id}`, {
+            method: "DELETE",
+        });
+    },
+
     // === TURNOS DE CAJA ===
     async obtenerTurnoActual(idCaja: number = 1): Promise<TurnoCajaDTO | null> {
         try {

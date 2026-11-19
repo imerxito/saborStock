@@ -30,6 +30,7 @@ export class HistorialCajaRepositorio {
 
     if (filtros?.idTurnoCaja !== undefined) query = query.eq("id_turno_caja", filtros.idTurnoCaja);
     if (filtros?.idFactura !== undefined) query = query.eq("id_factura", filtros.idFactura);
+    query = query.limit(150);
 
     const { data, error } = await query;
 

@@ -319,11 +319,61 @@ export class ReporteServicio {
             fechaInicioStr = `${y}-${m}-01`;
         }
 
-        // 1. Turnos de Caja
-        const { data: turnosDb } = await supabase
-            .from("turno_caja")
-            .select("*, usuario:id_usuario_apertura(nombre), historial_caja(*)")
-            .order("fecha_apertura", { ascending: false });
+        // 1. Ejecución paralela y optimizada con filtros directos a la base de datos
+        const [
+            { data: turnosDb },
+            { data: facturasDb },
+            { data: todosProductos },
+            { data: usuariosDb },
+            { data: comprasDb },
+            { data: egresosCajaDb },
+            { data: ingredientesDb }
+        ] = await Promise.all([
+            supabase
+                .from("turno_caja")
+                .select("*, usuario:id_usuario_apertura(nombre), historial_caja(*)")
+                .or(`fecha_apertura.gte.${fechaInicioStr}T00:00:00,estado.eq.Abierto`)
+                .order("fecha_apertura", { ascending: false }),
+
+            supabase
+                .from("factura")
+                .select("*, detalle_factura(*, producto:id_producto(nombre, precio_venta, id_categoria, categoria:id_categoria(nombre)))")
+                .gte("fecha_emision", `${fechaInicioStr}T00:00:00`)
+                .lte("fecha_emision", `${fechaHoyStr}T23:59:59`)
+                .neq("estado", "Cancelada")
+                .order("fecha_emision", { ascending: false }),
+
+            supabase
+                .from("producto")
+                .select("*, categoria:id_categoria(nombre)")
+                .eq("activo", true),
+
+            supabase
+                .from("usuario")
+                .select("*, comanda(*), factura(*)")
+                .eq("activo", true),
+
+            supabase
+                .from("compra")
+                .select("*, proveedor:id_proveedor(nombre)")
+                .gte("fecha", `${fechaInicioStr}T00:00:00`)
+                .lte("fecha", `${fechaHoyStr}T23:59:59`)
+                .order("fecha", { ascending: false }),
+
+            supabase
+                .from("historial_caja")
+                .select("*, usuario:id_usuario(nombre)")
+                .eq("tipo_pago", "egreso")
+                .gte("fecha_movimiento", `${fechaInicioStr}T00:00:00`)
+                .lte("fecha_movimiento", `${fechaHoyStr}T23:59:59`)
+                .order("fecha_movimiento", { ascending: false }),
+
+            supabase
+                .from("ingrediente")
+                .select("*, categoria_ingrediente:id_categoria_ingrediente(nombre), unidad_medida:id_unidad(abreviatura, nombre)")
+                .eq("activo", true)
+                .order("nombre", { ascending: true })
+        ]);
 
         const turnosFiltrados = (turnosDb || []).filter((t: any) => {
             if (t.estado === "Abierto") return true;
@@ -394,21 +444,7 @@ export class ReporteServicio {
         });
 
         // 2. Facturas y Productos
-        const { data: facturasDb } = await supabase
-            .from("factura")
-            .select("*, detalle_factura(*, producto:id_producto(nombre, precio_venta, id_categoria, categoria:id_categoria(nombre)))")
-            .order("fecha_emision", { ascending: false });
-
-        const facturasEnPeriodo = (facturasDb || []).filter((f: any) => {
-            if (!f.fecha_emision) return false;
-            const fFecha = String(f.fecha_emision).slice(0, 10);
-            return fFecha >= fechaInicioStr && fFecha <= fechaHoyStr && f.estado !== "Cancelada";
-        });
-
-        const { data: todosProductos } = await supabase
-            .from("producto")
-            .select("*, categoria:id_categoria(nombre)")
-            .eq("activo", true);
+        const facturasEnPeriodo = facturasDb || [];
 
         const ventasPorProducto = new Map<number, { unidades: number; ingresos: number }>();
         for (const f of facturasEnPeriodo) {
@@ -440,11 +476,6 @@ export class ReporteServicio {
         productos.sort((a, b) => b.ingresos - a.ingresos || b.unidadesVendidas - a.unidadesVendidas);
 
         // 3. Empleados / Rendimiento
-        const { data: usuariosDb } = await supabase
-            .from("usuario")
-            .select("*, comanda(*), factura(*)")
-            .eq("activo", true);
-
         const empleados: DashboardEmpleado[] = (usuariosDb || []).map((u: any) => {
             const comandasEnPeriodo = (u.comanda || []).filter((c: any) => {
                 if (!c.fecha_creacion) return false;
@@ -474,21 +505,6 @@ export class ReporteServicio {
         empleados.sort((a, b) => b.totalVendido - a.totalVendido);
 
         // 4. Gastos
-        const { data: comprasDb } = await supabase
-            .from("compra")
-            .select("*, proveedor:id_proveedor(nombre)")
-            .gte("fecha", `${fechaInicioStr}T00:00:00`)
-            .lte("fecha", `${fechaHoyStr}T23:59:59`)
-            .order("fecha", { ascending: false });
-
-        const { data: egresosCajaDb } = await supabase
-            .from("historial_caja")
-            .select("*, usuario:id_usuario(nombre)")
-            .eq("tipo_pago", "egreso")
-            .gte("fecha_movimiento", `${fechaInicioStr}T00:00:00`)
-            .lte("fecha_movimiento", `${fechaHoyStr}T23:59:59`)
-            .order("fecha_movimiento", { ascending: false });
-
         const gastos: DashboardGasto[] = [];
 
         for (const c of comprasDb || []) {
@@ -538,12 +554,6 @@ export class ReporteServicio {
         }
 
         // 5. Inventario
-        const { data: ingredientesDb } = await supabase
-            .from("ingrediente")
-            .select("*, categoria_ingrediente:id_categoria_ingrediente(nombre), unidad_medida:id_unidad(abreviatura, nombre)")
-            .eq("activo", true)
-            .order("nombre", { ascending: true });
-
         let inventarioGastos: DashboardInsumoGasto[] = [];
 
         if (ingredientesDb && ingredientesDb.length > 0) {

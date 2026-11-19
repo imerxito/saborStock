@@ -278,6 +278,14 @@ function Cocina() {
         if (!puedeOperar) return;
         sonar(sonidoTipo);
         try {
+            setEliminadas((prev) => {
+                if (prev.has(id)) {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                }
+                return prev;
+            });
             await cambiarEstado(id, estado);
         } catch (err) {
             alert('Error al actualizar la comanda: ' + (err instanceof Error ? err.message : 'Error desconocido'));

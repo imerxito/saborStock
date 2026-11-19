@@ -2,9 +2,14 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { 
   Calendar, TrendingDown, Users, 
   Package, X, PieChart, BarChart3, 
-  Wallet, Utensils, RotateCw, Sparkles, Copy, Check
+  Wallet, Utensils, RotateCw, Sparkles, Copy, Check,
+  Download, FileSpreadsheet, FileText, Printer, ChevronDown
 } from "lucide-react";
 import { ReporteServicio } from "../../servicios/ReporteServicio";
+import { ConfiguracionServicio, type ConfiguracionNegocio } from "../../servicios/ConfiguracionServicio";
+import FormatoContenidoIA from "../../componentes/FormatoContenidoIA";
+import InformeEjecutivoImpresion from "../../componentes/InformeEjecutivoImpresion";
+import { exportarReporteCSV } from "../../utilidades/exportarReportesCSV";
 
 // ============================================================
 // 1. TIPOS DE DATOS Y INTERFACES
@@ -213,6 +218,15 @@ export default function AnalisisReportes() {
   const [reporteIATexto, setReporteIATexto] = useState<string>("");
   const [copiado, setCopiado] = useState<boolean>(false);
 
+  // Modal de Exportación / Informe Ejecutivo Imprimible
+  const [modalInformeImpresion, setModalInformeImpresion] = useState<boolean>(false);
+  const [menuExportarAbierto, setMenuExportarAbierto] = useState<boolean>(false);
+  const [negocioConfig, setNegocioConfig] = useState<ConfiguracionNegocio | null>(null);
+
+  useEffect(() => {
+    ConfiguracionServicio.obtenerNegocio().then(setNegocioConfig).catch(() => {});
+  }, []);
+
   const cargarDatos = useCallback(async (filtro: "Hoy" | "Semana" | "Mes") => {
     setCargando(true);
     try {
@@ -256,6 +270,62 @@ export default function AnalisisReportes() {
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2500);
     }
+  };
+
+  const handleExportarExcel = () => {
+    exportarReporteCSV({
+      periodo: fechaFiltro === "Hoy" ? "Hoy" : fechaFiltro === "Semana" ? "Esta Semana" : "Este Mes",
+      negocioNombre: negocioConfig?.nombre || "Sabor & Stock",
+      totales: {
+        ingresos: totalGeneradoCajas,
+        gastos: totalGastosRegistrados,
+        balanceNeto,
+        propinas: totalPropinas,
+      },
+      cajas: dataCajas.map(c => ({
+        cajero: c.cajero,
+        fecha: c.fecha,
+        horaApertura: c.horaApertura,
+        horaCierre: c.horaCierre,
+        baseInicial: c.baseInicial,
+        ventasEfectivo: c.ventasEfectivo,
+        ventasTarjeta: c.ventasTarjeta,
+        ventasTransferencia: c.ventasTransferencia,
+        totalGenerado: c.totalGenerado,
+        egresosTotales: c.egresosTotales,
+        diferencia: c.diferencia,
+      })),
+      productos: dataProductos.map(p => ({
+        nombre: p.nombre,
+        categoria: p.categoria,
+        unidadesVendidas: p.unidadesVendidas,
+        precioPromedio: p.precioPromedio,
+        ingresos: p.ingresos,
+      })),
+      gastos: dataGastos.map(g => ({
+        fecha: g.fecha,
+        categoria: g.categoria,
+        concepto: g.concepto,
+        responsable: g.responsable,
+        monto: g.monto,
+      })),
+      empleados: dataEmpleados.map(e => ({
+        nombre: e.nombre,
+        rol: e.rol,
+        comandasAtendidas: e.comandasAtendidas,
+        totalVendido: e.totalVendido,
+        propinas: e.propinas,
+      })),
+      inventario: dataInsumos.map(i => ({
+        nombre: i.nombre,
+        categoria: i.categoria,
+        stockActual: i.stockActual,
+        estado: i.estado,
+        gastoMes: i.gastoMes,
+      })),
+      analisisIA: reporteIATexto || undefined,
+    });
+    setMenuExportarAbierto(false);
   };
 
   // Cálculos dinámicos
@@ -358,6 +428,51 @@ export default function AnalisisReportes() {
                   <Sparkles size={14} className="text-[#0B132B]" />
                   <span>Reporte IA</span>
                 </button>
+
+                {/* BOTÓN Y MENÚ DE EXPORTACIÓN */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuExportarAbierto(prev => !prev)}
+                    className="bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 shrink-0 active:scale-95"
+                    title="Exportar información de reportes"
+                  >
+                    <Download size={14} />
+                    <span>Exportar</span>
+                    <ChevronDown size={12} className={`transition-transform duration-200 ${menuExportarAbierto ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {menuExportarAbierto && (
+                    <div className="absolute right-0 mt-1.5 w-60 bg-[#1C2541] border border-[#3A506B] rounded-xl shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuExportarAbierto(false);
+                          setModalInformeImpresion(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-lg text-xs font-semibold text-[#F4D6B0] hover:bg-[#3A506B]/50 hover:text-[#5BC0DE] transition-colors"
+                      >
+                        <FileText size={16} className="text-[#5BC0DE] shrink-0" />
+                        <div>
+                          <p className="font-bold">Informe PDF / Imprimir</p>
+                          <p className="text-[10px] text-[#5BC0DE]/70 font-normal">Formato ejecutivo con membrete</p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleExportarExcel}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-lg text-xs font-semibold text-[#F4D6B0] hover:bg-[#3A506B]/50 hover:text-[#5BC0DE] transition-colors border-t border-[#3A506B]/40 mt-1 pt-1.5"
+                      >
+                        <FileSpreadsheet size={16} className="text-[#4ADE80] shrink-0" />
+                        <div>
+                          <p className="font-bold">Exportar a Excel (.CSV)</p>
+                          <p className="text-[10px] text-[#5BC0DE]/70 font-normal">Todas las tablas consolidadas</p>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -936,14 +1051,28 @@ export default function AnalisisReportes() {
               </div>
             </div>
             {reporteIATexto && !generandoIA && (
-              <button
-                type="button"
-                onClick={copiarInforme}
-                className="flex items-center gap-1 bg-[#1C2541] hover:bg-[#3A506B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs px-2.5 py-1.5 rounded-lg border border-[#3A506B] transition-colors"
-              >
-                {copiado ? <Check size={14} className="text-[#4ADE80]" /> : <Copy size={14} />}
-                <span>{copiado ? "Copiado" : "Copiar"}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalIA(false);
+                    setModalInformeImpresion(true);
+                  }}
+                  className="flex items-center gap-1.5 bg-[#1C2541] hover:bg-[#3A506B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs px-2.5 py-1.5 rounded-lg border border-[#3A506B] transition-colors"
+                  title="Imprimir informe ejecutivo o guardar en PDF"
+                >
+                  <Printer size={13} />
+                  <span>Imprimir PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={copiarInforme}
+                  className="flex items-center gap-1 bg-[#1C2541] hover:bg-[#3A506B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs px-2.5 py-1.5 rounded-lg border border-[#3A506B] transition-colors"
+                >
+                  {copiado ? <Check size={14} className="text-[#4ADE80]" /> : <Copy size={14} />}
+                  <span>{copiado ? "Copiado" : "Copiar"}</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -953,8 +1082,8 @@ export default function AnalisisReportes() {
               <p className="text-xs font-medium">Analizando métricas y redactando informe...</p>
             </div>
           ) : (
-            <div className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-4 text-xs sm:text-sm text-[#F4D6B0] leading-relaxed whitespace-pre-wrap font-sans [scrollbar-width:thin]">
-              {reporteIATexto}
+            <div className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-4 text-xs sm:text-sm text-[#F4D6B0] leading-relaxed font-sans [scrollbar-width:thin] max-h-[60vh] overflow-y-auto">
+              <FormatoContenidoIA contenido={reporteIATexto} />
             </div>
           )}
 
@@ -1040,6 +1169,30 @@ export default function AnalisisReportes() {
           </div>
         )}
       </FixedModal>
+
+      {/* MODAL / VISTA DE IMPRESIÓN Y EXPORTACIÓN EJECUTIVA */}
+      <InformeEjecutivoImpresion
+        isOpen={modalInformeImpresion}
+        onClose={() => setModalInformeImpresion(false)}
+        negocioNombre={negocioConfig?.nombre}
+        negocioNit={negocioConfig?.nit}
+        negocioDireccion={negocioConfig?.direccion}
+        negocioTelefono={negocioConfig?.telefono}
+        periodo={fechaFiltro}
+        totales={{
+          ingresos: totalGeneradoCajas,
+          gastos: totalGastosRegistrados,
+          balanceNeto,
+          propinas: totalPropinas,
+        }}
+        cajas={dataCajas}
+        productos={dataProductos}
+        gastos={dataGastos}
+        empleados={dataEmpleados}
+        inventarioBajo={insumosCriticos}
+        reporteIATexto={reporteIATexto || undefined}
+        onExportarCSV={handleExportarExcel}
+      />
 
     </div>
   );

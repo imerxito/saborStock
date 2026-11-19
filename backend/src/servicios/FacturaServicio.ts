@@ -37,8 +37,8 @@ export class FacturaServicio {
         private inventarioServicio = new InventarioServicio()
     ) {}
 
-    async listar(): Promise<Factura[]> {
-        return this.facturaRepo.listar();
+    async listar(limite: number = 200): Promise<Factura[]> {
+        return this.facturaRepo.listar(limite);
     }
 
     async obtenerPorId(id: number): Promise<Factura> {
@@ -88,15 +88,18 @@ export class FacturaServicio {
             estado: "Pagada",
         });
 
-        for (const d of detalles) {
-            const precio = Number(d.precioUnitario) || 0;
-            await this.detalleRepo.crearDetalleFactura({
-                idFactura: factura.id,
-                idProducto: d.idProducto,
-                cantidad: d.cantidad,
-                precioUnitario: precio,
-                subtotal: precio * d.cantidad,
+        if (detalles.length > 0) {
+            const detallesAInsertar = detalles.map((d) => {
+                const precio = Number(d.precioUnitario) || 0;
+                return {
+                    idFactura: factura.id,
+                    idProducto: d.idProducto,
+                    cantidad: d.cantidad,
+                    precioUnitario: precio,
+                    subtotal: precio * d.cantidad,
+                };
             });
+            await this.detalleRepo.crearMuchos(detallesAInsertar);
         }
 
         try {
@@ -112,12 +115,15 @@ export class FacturaServicio {
         // y marca la venta como Pagada al insertar la factura.
         await this.cerrarDocumentos(datos);
 
+        const tareasFinales: Promise<unknown>[] = [];
         if (idMesa) {
-            await supabase.from("mesa").update({ estado: "Libre" }).eq("id_mesa", idMesa);
+            tareasFinales.push(Promise.resolve(supabase.from("mesa").update({ estado: "Libre" }).eq("id_mesa", idMesa)));
         }
-
         if (idMesa && datos.idVenta) {
-            await this.registrarHistorialPago(idMesa, datos.idVenta, idUsuario, factura.id, totalPagar);
+            tareasFinales.push(this.registrarHistorialPago(idMesa, datos.idVenta, idUsuario, factura.id, totalPagar));
+        }
+        if (tareasFinales.length > 0) {
+            await Promise.all(tareasFinales);
         }
 
         return factura;
@@ -235,9 +241,14 @@ export class FacturaServicio {
             for (const row of data || []) ids.add(row.id_comanda);
         }
 
-        if (cerrarComandas) {
-            for (const id of ids) {
-                await this.comandaRepo.actualizarComanda(id, { estado: "Cerrado" as any });
+        if (cerrarComandas && ids.size > 0) {
+            const idsArray = Array.from(ids);
+            const { error: errCerrar } = await supabase
+                .from("comanda")
+                .update({ estado: "Cerrado", fecha_despachada: new Date().toISOString() })
+                .in("id_comanda", idsArray);
+            if (errCerrar) {
+                console.warn("Aviso al cerrar comandas en lote:", errCerrar.message);
             }
         }
 

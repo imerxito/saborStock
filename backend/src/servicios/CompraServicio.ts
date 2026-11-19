@@ -24,7 +24,7 @@ export class CompraServicio {
     }
 
     async generarSiguienteFactura(): Promise<string> {
-        const compras = await this.compraRepositorio.listar();
+        const compras = await this.compraRepositorio.listar(50);
         let maxNum = 0;
         for (const c of compras) {
             if (!c.factura) continue;
@@ -120,8 +120,15 @@ export class CompraServicio {
             if (!Number.isFinite(detalle.precio_aplicado) || detalle.precio_aplicado < 0) {
                 throw new Error("El precio aplicado debe ser mayor o igual a cero");
             }
+        }
 
-            const ingrediente = await this.ingredienteRepositorio.obtenerPorId(detalle.id_ingrediente);
+        // Obtener todos los ingredientes involucrados en una sola consulta
+        const idsIngredientes = Array.from(new Set(detallesValidos.map((d) => d.id_ingrediente)));
+        const ingredientesEncontrados = await this.ingredienteRepositorio.obtenerPorIds(idsIngredientes);
+        const mapaIngredientes = new Map(ingredientesEncontrados.map((ing) => [ing.id_ingrediente, ing]));
+
+        for (const detalle of detallesValidos) {
+            const ingrediente = mapaIngredientes.get(detalle.id_ingrediente);
             if (!ingrediente) {
                 throw new Error(`El ingrediente ${detalle.id_ingrediente} no existe`);
             }
@@ -145,7 +152,7 @@ export class CompraServicio {
 
         // detalle_compra tiene PK compuesta (id_compra, id_ingrediente):
         // consolidar ingredientes repetidos para no violar la llave.
-        const consolidados = new Map<number, { id_ingrediente: number; cantidad: number; precio_aplicado: number }>();
+        const consolidados = new Map<number, { id_compra?: number; id_ingrediente: number; cantidad: number; precio_aplicado: number }>();
         for (const d of detallesCompra) {
             const prev = consolidados.get(d.id_ingrediente);
             if (prev) prev.cantidad += d.cantidad;
@@ -167,13 +174,15 @@ export class CompraServicio {
             estado: datos.estado === "ANULADA" ? "ANULADA" : "REGISTRADA"
         });
 
-        for (const detalle of detallesFinales) {
-            await this.detalleRepositorio.crear({
-                id_compra: compra.id_compra,
-                id_ingrediente: detalle.id_ingrediente,
-                cantidad: detalle.cantidad,
-                precio_aplicado: detalle.precio_aplicado
-            });
+        if (detallesFinales.length > 0) {
+            await this.detalleRepositorio.crearMuchos(
+                detallesFinales.map((detalle) => ({
+                    id_compra: compra.id_compra,
+                    id_ingrediente: detalle.id_ingrediente,
+                    cantidad: detalle.cantidad,
+                    precio_aplicado: detalle.precio_aplicado
+                }))
+            );
         }
 
         if (datos.estado === "RECIBIDA") {

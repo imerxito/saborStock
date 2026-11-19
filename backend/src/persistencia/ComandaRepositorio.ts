@@ -34,11 +34,17 @@ function mapearComandaCompleta(row: any): Comanda {
 }
 
 export class ComandaRepositorio {
-  async listar(): Promise<Comanda[]> {
-    const { data, error } = await supabase
+  async listar(limite: number = 300): Promise<Comanda[]> {
+    let query = supabase
       .from("comanda")
       .select("*, venta:id_venta(id_venta, id_mesa, cliente, personas, mesa:id_mesa(id_mesa, numero, estado)), usuario:id_usuario(id_usuario, nombre), detalle_comanda(*, producto:id_producto(*))")
       .order("fecha_creacion", { ascending: false });
+
+    if (limite > 0) {
+      query = query.limit(limite);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw new Error(`Error al listar comandas: ${error.message}`);
     return (data || []).map(mapearComandaCompleta);
@@ -247,7 +253,7 @@ export class ComandaRepositorio {
     if (cambios.observacion !== undefined) campos.observacion = cambios.observacion;
     if (cambios.fechaDespachada !== undefined) {
       campos.fecha_despachada = cambios.fechaDespachada ? cambios.fechaDespachada.toISOString() : null;
-    } else if (cambios.estado === 'Lista' || cambios.estado === 'Entregada') {
+    } else if (cambios.estado === 'Lista' || cambios.estado === 'Entregada' || cambios.estado === 'Cerrado') {
       campos.fecha_despachada = new Date().toISOString();
     }
     if (cambios.idUsuario !== undefined) campos.id_usuario = cambios.idUsuario;

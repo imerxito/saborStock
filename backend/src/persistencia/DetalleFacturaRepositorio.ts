@@ -100,6 +100,29 @@ export class DetalleFacturaRepositorio {
     return mapearDetalleFacturaRow(data as DetalleFacturaRow);
   }
 
+  async crearMuchos(detalles: DatosCrearDetalleFactura[]): Promise<DetalleFactura[]> {
+    if (detalles.length === 0) return [];
+    const payload = detalles.map((datos) => ({
+      id_factura: datos.idFactura,
+      id_producto: datos.idProducto,
+      cantidad: datos.cantidad,
+      precio_unitario: datos.precioUnitario,
+      subtotal: datos.subtotal,
+    }));
+
+    const { data, error } = await supabase
+      .from("detalle_factura")
+      .insert(payload)
+      .select();
+
+    if (error) {
+      if (error.code === "23503") throw new Error("La factura o el producto indicado no existe");
+      if (error.code === "23514") throw new Error("Cantidad, precio y subtotal deben ser valores validos");
+      throw new Error(`Error al crear detalles de factura en lote: ${error.message}`);
+    }
+    return (data as DetalleFacturaRow[]).map(mapearDetalleFacturaRow);
+  }
+
   async actualizarDetalleFactura(id: number, cambios: DatosActualizarDetalleFactura): Promise<void> {
     const campos: Record<string, unknown> = {};
     if (cambios.idProducto !== undefined) campos.id_producto = cambios.idProducto;

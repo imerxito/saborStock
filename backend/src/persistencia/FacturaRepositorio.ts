@@ -36,11 +36,23 @@ export interface DatosActualizarFactura {
 }
 
 export class FacturaRepositorio {
-    async listar(): Promise<Factura[]> {
-        const { data, error } = await supabase
+    async listar(limite: number = 200): Promise<Factura[]> {
+        let query = supabase
             .from("factura")
-            .select("*")
+            .select(`
+                *,
+                usuario:id_usuario(nombre),
+                mesa:id_mesa(id_mesa, numero, id_seccion, seccion:id_seccion(nombre)),
+                venta:id_venta(id_mesa, cliente, mesa:id_mesa(numero, id_seccion, seccion:id_seccion(nombre))),
+                detalle_factura(*, producto:id_producto(nombre, precio_venta))
+            `)
             .order("fecha_emision", { ascending: false });
+
+        if (limite > 0) {
+            query = query.limit(limite);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw new Error(`Error al listar facturas: ${error.message}`);
         return (data as FacturaRow[]).map(mapFacturaFromRow);
@@ -49,7 +61,13 @@ export class FacturaRepositorio {
     async obtenerPorId(id: number): Promise<Factura | null> {
         const { data, error } = await supabase
             .from("factura")
-            .select("*")
+            .select(`
+                *,
+                usuario:id_usuario(nombre),
+                mesa:id_mesa(id_mesa, numero, id_seccion, seccion:id_seccion(nombre)),
+                venta:id_venta(id_mesa, cliente, mesa:id_mesa(numero, id_seccion, seccion:id_seccion(nombre))),
+                detalle_factura(*, producto:id_producto(nombre, precio_venta))
+            `)
             .eq("id_factura", id)
             .maybeSingle();
 

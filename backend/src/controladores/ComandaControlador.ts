@@ -6,7 +6,8 @@ const comandaServicio = new ComandaServicio();
 export class ComandaControlador {
     async listar(req: Request, res: Response): Promise<void> {
         try {
-            const comandas = await comandaServicio.listar();
+            const limite = req.query.limite ? Number(req.query.limite) : 300;
+            const comandas = await comandaServicio.listar(Number.isNaN(limite) ? 300 : limite);
             res.status(200).json(comandas);
         } catch (error: any) {
             res.status(500).json({ mensaje: error.message });

@@ -19,11 +19,17 @@ function mapearCompraRow(row: CompraRow): Compra {
 
 export class CompraRepositorio {
 
-    async listar(): Promise<Compra[]> {
-        const { data, error } = await supabase
+    async listar(limite?: number): Promise<Compra[]> {
+        let query = supabase
             .from("compra")
             .select("*")
-            .order("id_compra", { ascending: true });
+            .order("id_compra", { ascending: limite ? false : true });
+
+        if (limite) {
+            query = query.limit(limite);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
             throw new Error(`Error al listar compras: ${error.message}`);

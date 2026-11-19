@@ -46,6 +46,17 @@ export class TurnoCajaRepositorio {
         return data ? filaTurnoCaja(data) : null;
     }
 
+    async obtenerAbiertoPorUsuario(idUsuario: number): Promise<TurnoCaja | null> {
+        const { data, error } = await supabase
+            .from("turno_caja")
+            .select("*")
+            .eq("id_usuario_apertura", idUsuario)
+            .eq("estado", EstadoTurno.Abierto)
+            .maybeSingle();
+        if (error) throw new Error(`Error al buscar el turno abierto del usuario: ${error.message}`);
+        return data ? filaTurnoCaja(data) : null;
+    }
+
     async abrir(datos: AbrirTurno): Promise<TurnoCaja> {
         const { data, error } = await supabase
             .from("turno_caja")

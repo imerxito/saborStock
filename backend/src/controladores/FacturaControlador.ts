@@ -6,7 +6,8 @@ const facturaServicio = new FacturaServicio();
 export class FacturaControlador {
     async listar(req: Request, res: Response): Promise<void> {
         try {
-            const facturas = await facturaServicio.listar();
+            const limite = req.query.limite ? Number(req.query.limite) : 200;
+            const facturas = await facturaServicio.listar(Number.isNaN(limite) ? 200 : limite);
             res.status(200).json(facturas);
         } catch (error: any) {
             res.status(500).json({ mensaje: error.message });

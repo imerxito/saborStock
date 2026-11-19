@@ -83,6 +83,26 @@ export class DetalleCompraRepositorio {
         );
     }
 
+    async crearMuchos(
+        datos: CrearDetalleCompra[]
+    ): Promise<DetalleCompra[]> {
+        if (datos.length === 0) return [];
+        const { data, error } = await supabase
+            .from("detalle_compra")
+            .insert(datos)
+            .select();
+
+        if (error) {
+            throw new Error(
+                `Error al crear detalles de compra en lote: ${error.message}`
+            );
+        }
+
+        return (data as DetalleCompraRow[]).map(
+            mapearDetalleCompraRow
+        );
+    }
+
     async crear(
         datos: CrearDetalleCompra
     ): Promise<DetalleCompra> {

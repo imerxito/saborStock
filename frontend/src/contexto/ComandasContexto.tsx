@@ -43,19 +43,37 @@ export function ComandasProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    // Polling silencioso en segundo plano cada 6 segundos
+    // Polling silencioso en segundo plano cada 5 segundos (solo cuando la pestaña está visible)
     useEffect(() => {
         void recargar();
 
         pollingRef.current = window.setInterval(async () => {
+            if (document.hidden) return;
             try {
                 const data = await ComandaServicio.obtenerComandas();
-                setComandas(data);
+                setComandas((prev) => {
+                    if (prev.length === data.length) {
+                        let igual = true;
+                        for (let i = 0; i < prev.length; i++) {
+                            if (
+                                prev[i].id !== data[i].id ||
+                                prev[i].estado !== data[i].estado ||
+                                prev[i].despachadaEn !== data[i].despachadaEn ||
+                                prev[i].items.length !== data[i].items.length
+                            ) {
+                                igual = false;
+                                break;
+                            }
+                        }
+                        if (igual) return prev;
+                    }
+                    return data;
+                });
                 setConectadoBackend(true);
             } catch {
                 setConectadoBackend(false);
             }
-        }, 6000);
+        }, 5000);
 
         return () => {
             if (pollingRef.current) clearInterval(pollingRef.current);
@@ -72,17 +90,19 @@ export function ComandasProvider({ children }: { children: ReactNode }) {
 
     const cambiarEstado = useCallback(async (id: number, nuevoEstado: EstadoComanda) => {
         await ComandaServicio.cambiarEstado(id, nuevoEstado);
+        const ahora = Date.now();
         setComandas((prev) =>
             prev.map((c) => {
                 if (c.id !== id) return c;
                 const despachadaEn =
-                    nuevoEstado === "Lista" || nuevoEstado === "Entregada"
-                        ? Date.now()
+                    nuevoEstado === "Lista" || nuevoEstado === "Entregada" || nuevoEstado === "Cerrado"
+                        ? ahora
                         : c.despachadaEn;
                 return { ...c, estado: nuevoEstado, despachadaEn };
             })
         );
-    }, []);
+        void recargar();
+    }, [recargar]);
 
     const anular = useCallback(async (id: number) => {
         await ComandaServicio.anularComanda(id);

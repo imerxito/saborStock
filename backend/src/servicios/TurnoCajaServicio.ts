@@ -57,6 +57,12 @@ export class TurnoCajaServicio {
         const abierto = await this.TurnoRepo.obtenerAbiertoPorCaja(datos.idCaja);
         if (abierto) throw new Error("Esa caja ya tiene un turno abierto");
 
+        // Solo se puede operar una caja a la vez por usuario
+        const turnoUsuario = await this.TurnoRepo.obtenerAbiertoPorUsuario(idUsuarioApertura);
+        if (turnoUsuario && turnoUsuario.idCaja !== datos.idCaja) {
+            throw new Error(`Solo puedes estar en una caja a la vez. Ya tienes un turno abierto en la Caja #${turnoUsuario.idCaja}. Debes cerrarlo antes de operar otra caja.`);
+        }
+
         return this.TurnoRepo.abrir({
             idCaja: datos.idCaja,
             idUsuarioApertura,
