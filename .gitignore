@@ -17,4 +17,4 @@ backend/dist/
 
 # Archivos del sistema
 .DS_Store
-Thumbs.db
+Thumbs.db.env
