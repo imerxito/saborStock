@@ -223,7 +223,6 @@ export default function ProveedoresCompras() {
             });
           }
         } else {
-          // Gasto operativo sin inventario de ingredientes
           listaCompras.push({
             id: `compra-${c.id_compra}`,
             id_compra: c.id_compra,
@@ -323,21 +322,21 @@ export default function ProveedoresCompras() {
 
     try {
       const sigFactura = await ProveedoresServicio.obtenerSiguienteFactura();
-      setFormCompra((prev) => ({
+      setFormCompra({
         ...FORM_COMPRA_VACIO,
         id_proveedor: proveedores[0]?.id ? String(proveedores[0].id) : "1",
         id_categoria: categorias[0]?.id ? String(categorias[0].id) : "1",
         id_insumo: insumos[0]?.id ? String(insumos[0].id) : "1",
         factura: sigFactura || "FAC-001",
-      }));
+      });
     } catch {
-      setFormCompra((prev) => ({
+      setFormCompra({
         ...FORM_COMPRA_VACIO,
         id_proveedor: proveedores[0]?.id ? String(proveedores[0].id) : "1",
         id_categoria: categorias[0]?.id ? String(categorias[0].id) : "1",
         id_insumo: insumos[0]?.id ? String(insumos[0].id) : "1",
         factura: "FAC-001",
-      }));
+      });
     } finally {
       setCargandoFactura(false);
     }
@@ -420,7 +419,6 @@ export default function ProveedoresCompras() {
         setErrorCompra(err?.message || "No se pudo registrar la compra en el backend.");
       }
     } else {
-      // Mantenimiento, Servicios, u Otros Gastos Operativos
       const concepto = formCompra.concepto.trim();
       if (!concepto) {
         return setErrorCompra("Ingresa la descripción o concepto del gasto (ej. Mantenimiento freidora, Pago recibo energía).");
@@ -458,26 +456,27 @@ export default function ProveedoresCompras() {
     }
   };
 
-  // Identificación cromática sobria y profesional sin emojis
+  // ─── Estilos temáticos para Badges y Filtros ─────────────────────────────────
+
   const renderBadgeTipo = (tipo: TipoGasto) => {
     switch (tipo) {
       case "Insumo":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+          <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/50 font-semibold whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
             Insumo
           </span>
         );
       case "Mantenimiento":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+          <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/50 font-semibold whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
             Mantenimiento
           </span>
         );
       case "Servicios":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/30">
+          <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-sky-950/80 text-sky-300 border border-sky-800/50 font-semibold whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0"></span>
             Servicios
           </span>
@@ -485,7 +484,7 @@ export default function ProveedoresCompras() {
       case "Otros":
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/30">
+          <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-800/50 font-semibold whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0"></span>
             Otros Gastos
           </span>
@@ -543,7 +542,7 @@ export default function ProveedoresCompras() {
           </div>
         </header>
 
-        {/* Barra de Búsqueda y Filtros */}
+        {/* Barra de Búsqueda y Filtros Temáticos */}
         <div className="bg-[#1C2541] px-3 sm:px-4 lg:px-6 py-2.5 border-b border-[#3A506B] space-y-2.5">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row gap-2.5 items-center justify-between">
             <div className="relative flex-1 w-full">
@@ -567,7 +566,7 @@ export default function ProveedoresCompras() {
             </div>
           </div>
 
-          {/* Filtro horizontal de Categorías y Tipos de Gasto con colores */}
+          {/* Filtro horizontal de Tipos y Categorías */}
           <div className="max-w-7xl mx-auto relative group">
             <div
               ref={categoriasScroll.ref}
@@ -580,21 +579,21 @@ export default function ProveedoresCompras() {
               <button
                 type="button"
                 onClick={() => setSelectedFiltro("todas")}
-                className={`px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold whitespace-nowrap transition-all border shrink-0 ${
+                className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all border shrink-0 ${
                   selectedFiltro === "todas"
-                    ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow"
+                    ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow-sm"
                     : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]"
                 }`}
               >
                 Todos ({compras.length})
               </button>
 
-              {/* Botones por Tipo de Gasto con indicadores de color */}
+              {/* Botones por Tipo con Temática de Colores */}
               {[
-                { id: "tipo:Insumo", label: "Insumos", tipo: "Insumo", dotColor: "bg-emerald-400", activeColor: "border-emerald-400/60" },
-                { id: "tipo:Mantenimiento", label: "Mantenimiento", tipo: "Mantenimiento", dotColor: "bg-amber-400", activeColor: "border-amber-400/60" },
-                { id: "tipo:Servicios", label: "Servicios Públicos", tipo: "Servicios", dotColor: "bg-sky-400", activeColor: "border-sky-400/60" },
-                { id: "tipo:Otros", label: "Otros Gastos", tipo: "Otros", dotColor: "bg-purple-400", activeColor: "border-purple-400/60" },
+                { id: "tipo:Insumo", label: "Insumos", tipo: "Insumo", activeBg: "bg-emerald-600 border-emerald-500 text-white shadow-md", inactive: "text-emerald-400 bg-[#0B132B] border-[#3A506B] hover:border-emerald-500/50" },
+                { id: "tipo:Mantenimiento", label: "Mantenimiento", tipo: "Mantenimiento", activeBg: "bg-amber-600 border-amber-500 text-white shadow-md", inactive: "text-amber-400 bg-[#0B132B] border-[#3A506B] hover:border-amber-500/50" },
+                { id: "tipo:Servicios", label: "Servicios", tipo: "Servicios", activeBg: "bg-sky-600 border-sky-500 text-white shadow-md", inactive: "text-sky-400 bg-[#0B132B] border-[#3A506B] hover:border-sky-500/50" },
+                { id: "tipo:Otros", label: "Otros Gastos", tipo: "Otros", activeBg: "bg-purple-600 border-purple-500 text-white shadow-md", inactive: "text-purple-400 bg-[#0B132B] border-[#3A506B] hover:border-purple-500/50" },
               ].map((f) => {
                 const count = compras.filter((c) => c.tipoGasto === f.tipo).length;
                 const isSelected = selectedFiltro === f.id;
@@ -603,22 +602,19 @@ export default function ProveedoresCompras() {
                     key={f.id}
                     type="button"
                     onClick={() => setSelectedFiltro(f.id)}
-                    className={`px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5 shrink-0 ${
-                      isSelected
-                        ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow"
-                        : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]"
+                    className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 shrink-0 ${
+                      isSelected ? f.activeBg : f.inactive
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${f.dotColor}`}></span>
                     <span>{f.label}</span>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-[#1C2541] text-[#5BC0DE]" : "bg-[#1C2541] text-[#5BC0DE]/70"}`}>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? "bg-white/20 text-white" : "bg-[#1C2541] text-inherit"}`}>
                       {count}
                     </span>
                   </button>
                 );
               })}
 
-              <span className="text-[#3A506B] mx-1">|</span>
+              <span className="text-[#3A506B] mx-1 hidden sm:inline">|</span>
 
               {/* Categorías de Insumos */}
               {categorias.map((cat) => {
@@ -632,14 +628,14 @@ export default function ProveedoresCompras() {
                     key={cat.id}
                     type="button"
                     onClick={() => setSelectedFiltro(`cat:${cat.id}`)}
-                    className={`px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5 shrink-0 ${
+                    className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all border flex items-center gap-1.5 shrink-0 ${
                       isSelected
-                        ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow"
+                        ? "bg-[#5BC0DE] text-[#0B132B] border-[#5BC0DE] shadow-sm"
                         : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]"
                     }`}
                   >
                     <span>{cat.nombre}</span>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-[#1C2541] text-[#5BC0DE]" : "bg-[#1C2541] text-[#5BC0DE]/70"}`}>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isSelected ? "bg-[#1C2541] text-[#5BC0DE]" : "bg-[#1C2541] text-[#5BC0DE]/70"}`}>
                       {count}
                     </span>
                   </button>
@@ -650,20 +646,21 @@ export default function ProveedoresCompras() {
         </div>
       </div>
 
-      {/* Contenido Principal con Scroll */}
-      <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] flex flex-col">
-        <section className="bg-[#1C2541] border border-[#3A506B] rounded-xl sm:rounded-2xl shadow-xl flex-1 flex flex-col">
-          {/* VISTA ESCRITORIO: TABLA SUAVIZADA (FILAS FLOTANTES) */}
+      {/* Contenido Principal */}
+      <main className="flex-1 w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] flex flex-col [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/50 [&::-webkit-scrollbar-thumb]:rounded-full">
+        <section className="bg-[#1C2541] border border-[#3A506B] rounded-2xl shadow-sm flex-1 flex flex-col">
+          
+          {/* VISTA ESCRITORIO: TABLA */}
           <div className="hidden md:block overflow-x-auto w-full p-2">
             <table className="w-full text-left border-separate border-spacing-y-2">
               <thead className="sticky top-0 z-30 bg-[#1C2541]">
-                <tr className="text-[#5BC0DE] text-[11px] font-semibold uppercase tracking-wider">
+                <tr className="text-[#5BC0DE] text-[11px] font-bold uppercase tracking-wider">
                   <th className="py-3 px-4 bg-[#1C2541] first:rounded-l-xl">Fecha / Factura</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Tipo</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Proveedor</th>
-                  <th className="py-3 px-4 bg-[#1C2541]">Insumo o Concepto de Gasto</th>
+                  <th className="py-3 px-4 bg-[#1C2541]">Insumo o Concepto</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Categoría</th>
-                  <th className="py-3 px-4 bg-[#1C2541]">Cantidad</th>
+                  <th className="py-3 px-4 bg-[#1C2541]">Cant.</th>
                   <th className="py-3 px-4 bg-[#1C2541]">Costo Total</th>
                   <th className="py-3 px-4 bg-[#1C2541] text-right last:rounded-r-xl">Acciones</th>
                 </tr>
@@ -675,7 +672,7 @@ export default function ProveedoresCompras() {
                       <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
-                      {busqueda || selectedFiltro !== "todas" ? "Ningún gasto o compra coincide con los filtros." : "Aún no hay compras ni gastos registrados."}
+                      {busqueda || selectedFiltro !== "todas" ? "Ningún registro coincide con los filtros." : "Aún no hay compras ni gastos registrados."}
                     </td>
                   </tr>
                 ) : (
@@ -719,9 +716,7 @@ export default function ProveedoresCompras() {
                         <td className="py-3 px-4 bg-[#0B132B] border-y border-[#3A506B]/60 group-hover:bg-[#152036] transition-all">
                           <div className="font-mono text-xs text-[#F4D6B0] font-bold">
                             {c.tipoGasto === "Insumo" ? (
-                              <>
-                                {c.cantidad} <span className="lowercase text-[#5BC0DE] font-normal">{uni ? uni.abreviatura : "ud"}</span>
-                              </>
+                              <>{c.cantidad} <span className="lowercase text-[#5BC0DE] font-normal">{uni ? uni.abreviatura : "ud"}</span></>
                             ) : (
                               <span className="text-[#5BC0DE] font-normal text-[11px]">1 servicio</span>
                             )}
@@ -752,8 +747,8 @@ export default function ProveedoresCompras() {
             </table>
           </div>
 
-          {/* VISTA MÓVIL: TARJETAS */}
-          <div className="md:hidden p-2 space-y-2">
+          {/* VISTA MÓVIL: TARJETAS MEJORADAS */}
+          <div className="md:hidden p-3 space-y-3">
             {comprasFiltradas.length === 0 ? (
               <div className="py-10 text-center text-xs text-[#5BC0DE]/60">
                 <svg className="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -769,11 +764,11 @@ export default function ProveedoresCompras() {
                 const cat = ins ? categorias.find((catId) => catId.id === ins.id_categoria) : null;
 
                 return (
-                  <div key={c.id} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1.5 shadow-sm active:scale-[0.99] transition-transform">
+                  <div key={c.id} className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-sm">
                     {/* Cabecera: Factura, Tipo y Monto */}
                     <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0 pr-1 flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono font-bold text-xs text-[#5BC0DE] truncate">{c.factura}</span>
                           {renderBadgeTipo(c.tipoGasto)}
                         </div>
@@ -785,28 +780,33 @@ export default function ProveedoresCompras() {
                     </div>
 
                     {/* Proveedor e Insumo / Concepto */}
-                    <div className="mt-1 border-t border-[#3A506B]/50 pt-1.5">
-                      <p className="text-[10px] text-[#5BC0DE] font-semibold">Proveedor:</p>
-                      <p className="text-[11px] text-[#F4D6B0] font-medium truncate">{prov ? prov.nombre : "Proveedor #" + c.id_proveedor}</p>
-
-                      <p className="text-[10px] text-[#5BC0DE] font-semibold mt-1">
-                        {c.tipoGasto === "Insumo" ? "Insumo Adquirido:" : "Concepto del Gasto:"}
-                      </p>
-                      <p className="text-[11px] text-[#F4D6B0] font-medium truncate">
-                        {c.tipoGasto === "Insumo"
-                          ? `${ins ? ins.nombre : "Insumo #" + c.id_insumo} (${c.cantidad} ${uni?.abreviatura || "ud"})`
-                          : c.concepto || "Gasto Operativo"}
-                      </p>
+                    <div className="flex flex-col gap-1.5 text-[11px] mt-1 border-t border-[#3A506B]/50 pt-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-[#5BC0DE] font-semibold shrink-0">Proveedor:</span>
+                        <span className="text-[#F4D6B0] font-medium text-right truncate">
+                          {prov ? prov.nombre : "Prov #" + c.id_proveedor}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-[#5BC0DE] font-semibold shrink-0">
+                          {c.tipoGasto === "Insumo" ? "Insumo:" : "Concepto:"}
+                        </span>
+                        <span className="text-[#F4D6B0] font-medium text-right truncate">
+                          {c.tipoGasto === "Insumo"
+                            ? `${ins ? ins.nombre : "Insumo #" + c.id_insumo} (${c.cantidad} ${uni?.abreviatura || "ud"})`
+                            : c.concepto || "Gasto Operativo"}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Categoría y Acciones */}
-                    <div className="flex items-center justify-between border-t border-[#3A506B]/50 pt-2 mt-1">
-                      <span className="text-[9px] px-2 py-0.5 bg-[#1C2541] rounded-md text-[#5BC0DE] border border-[#3A506B]">
+                    <div className="flex items-center justify-between border-t border-[#3A506B]/50 pt-2.5 mt-1">
+                      <span className="text-[10px] px-2 py-0.5 bg-[#1C2541] rounded-md text-[#5BC0DE] border border-[#3A506B] font-semibold truncate max-w-[75%]">
                         {cat ? cat.nombre : c.tipoGasto === "Mantenimiento" ? "Mantenimiento" : c.tipoGasto === "Servicios" ? "Servicios" : "General"}
                       </span>
                       <button
                         type="button"
-                        className="bg-[#D97706]/10 text-[#D97706] p-1.5 rounded-lg active:scale-95 transition"
+                        className="bg-[#D97706]/10 hover:bg-[#D97706]/20 text-[#D97706] p-1.5 rounded-lg active:scale-95 transition-colors shrink-0"
                         onClick={() => eliminarCompra(c.id_compra)}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -824,12 +824,12 @@ export default function ProveedoresCompras() {
 
       {/* MODAL: Nuevo Proveedor */}
       {mostrarModalProveedor && (
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 pointer-events-auto">
-          <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl h-[100dvh] sm:h-auto sm:max-h-[85dvh] flex flex-col overflow-hidden">
-            <div className="bg-[#0B132B] px-4 sm:px-6 py-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-3 border-b border-[#3A506B] flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-[#F4D6B0] flex items-center gap-2 text-sm sm:text-base">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-5 animate-in fade-in duration-200">
+          <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-full overflow-hidden">
+            <div className="bg-[#0B132B] p-3 sm:p-5 border-b border-[#3A506B] flex justify-between items-center shrink-0">
+              <h3 className="font-extrabold text-[#F4D6B0] flex items-center gap-2 text-sm sm:text-base">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#5BC0DE]"></span>
-                Registrar Nuevo Proveedor
+                Nuevo Proveedor
               </h3>
               <button
                 type="button"
@@ -838,51 +838,51 @@ export default function ProveedoresCompras() {
                   setErrorProveedor("");
                   setFormProveedor(FORM_PROVEEDOR_VACIO);
                 }}
-                className="text-[#5BC0DE] hover:text-[#F4D6B0] transition text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center bg-[#0B132B] border border-[#3A506B]"
+                className="p-2 shrink-0 rounded-xl text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B] transition-colors"
               >
                 ✕
               </button>
             </div>
 
             <form onSubmit={guardarProveedor} className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 [scrollbar-width:thin] [scrollbar-color:#5BC0DE_#0B132B]">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/50">
                 {errorProveedor && (
-                  <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl font-medium">
+                  <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl font-semibold">
                     {errorProveedor}
                   </div>
                 )}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Nombre del Proveedor *</label>
+                  <label className="text-[11px] font-bold text-[#5BC0DE]">Nombre del Proveedor *</label>
                   <input
-                    placeholder="Ej. Distribuidora Cárnica o Técnico Electrodomésticos"
-                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                    placeholder="Ej. Distribuidora Cárnica"
+                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
                     value={formProveedor.nombre}
                     onChange={(e) => setFormProveedor({ ...formProveedor, nombre: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Persona de Contacto</label>
+                  <label className="text-[11px] font-bold text-[#5BC0DE]">Persona de Contacto</label>
                   <input
                     placeholder="Ej. Juan Pérez"
-                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
                     value={formProveedor.contacto}
                     onChange={(e) => setFormProveedor({ ...formProveedor, contacto: e.target.value })}
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Teléfono</label>
+                    <label className="text-[11px] font-bold text-[#5BC0DE]">Teléfono</label>
                     <input
-                      placeholder="Ej. 3001234567"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
+                      placeholder="3001234567"
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors"
                       value={formProveedor.telefono}
                       onChange={(e) => setFormProveedor({ ...formProveedor, telefono: e.target.value })}
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Categoría de Suministro</label>
+                    <label className="text-[11px] font-bold text-[#5BC0DE]">Categoría Suministro</label>
                     <select
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
                       value={formProveedor.categoriaSuministro}
                       onChange={(e) => setFormProveedor({ ...formProveedor, categoriaSuministro: e.target.value })}
                     >
@@ -895,21 +895,21 @@ export default function ProveedoresCompras() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Correo Electrónico</label>
+                  <label className="text-[11px] font-bold text-[#5BC0DE]">Correo Electrónico</label>
                   <input
                     type="email"
                     placeholder="contacto@proveedor.com"
-                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
                     value={formProveedor.email}
                     onChange={(e) => setFormProveedor({ ...formProveedor, email: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="shrink-0 px-4 sm:px-6 py-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-[#1C2541] border-t border-[#3A506B] flex justify-end gap-3">
+              <div className="shrink-0 p-3 sm:p-5 bg-[#0B132B] border-t border-[#3A506B] flex justify-end gap-2 sm:gap-3">
                 <button
                   type="button"
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#0B132B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs font-medium border border-[#3A506B]"
+                  className="flex-1 sm:flex-none px-4 h-[42px] rounded-xl bg-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B]/80 text-xs font-bold transition-colors"
                   onClick={() => {
                     setMostrarModalProveedor(false);
                     setErrorProveedor("");
@@ -920,7 +920,7 @@ export default function ProveedoresCompras() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-semibold text-xs transition shadow-lg"
+                  className="flex-1 sm:flex-none px-4 h-[42px] rounded-xl bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold text-xs shadow-md transition-colors"
                 >
                   Guardar Proveedor
                 </button>
@@ -930,14 +930,14 @@ export default function ProveedoresCompras() {
         </div>
       )}
 
-      {/* MODAL: Registrar Compra / Gasto (Identificado con colores, sin emojis) */}
+      {/* MODAL: Registrar Compra / Gasto */}
       {mostrarModalCompra && (
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:p-4 pointer-events-auto">
-          <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl h-[100dvh] sm:h-auto sm:max-h-[90dvh] flex flex-col overflow-hidden">
-            <div className="bg-[#0B132B] px-4 sm:px-6 py-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-3 border-b border-[#3A506B] flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-[#F4D6B0] flex items-center gap-2 text-sm sm:text-base">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-5 animate-in fade-in duration-200">
+          <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-full overflow-hidden">
+            <div className="bg-[#0B132B] p-3 sm:p-5 border-b border-[#3A506B] flex justify-between items-center shrink-0">
+              <h3 className="font-extrabold text-[#F4D6B0] flex items-center gap-2 text-sm sm:text-base">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#5BC0DE]"></span>
-                Registrar Compra o Gasto Operativo
+                Registrar Compra o Gasto
               </h3>
               <button
                 type="button"
@@ -946,137 +946,126 @@ export default function ProveedoresCompras() {
                   setErrorCompra("");
                   setFormCompra(FORM_COMPRA_VACIO);
                 }}
-                className="text-[#5BC0DE] hover:text-[#F4D6B0] transition text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center bg-[#0B132B] border border-[#3A506B]"
+                className="p-2 shrink-0 rounded-xl text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B] transition-colors"
               >
                 ✕
               </button>
             </div>
 
             <form onSubmit={guardarCompra} className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5 [scrollbar-width:thin] [scrollbar-color:#5BC0DE_#0B132B]">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/50">
                 {errorCompra && (
-                  <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl font-medium">
+                  <div className="bg-red-950/80 border border-red-800 text-red-300 text-xs p-3 rounded-xl font-semibold">
                     {errorCompra}
                   </div>
                 )}
 
-                {/* Selector Tipo de Registro / Gasto con Colores Sobrios */}
+                {/* Selector Tipo de Registro / Gasto con Colores */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Tipo de Registro *</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <label className="text-[11px] font-bold text-[#5BC0DE]">Tipo de Registro *</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     {[
-                      { id: "Insumo", label: "Insumo", desc: "Inventario", dotColor: "bg-emerald-400", activeBg: "bg-emerald-500/15 border-emerald-400 text-emerald-300" },
-                      { id: "Mantenimiento", label: "Mantenimiento", desc: "Equipos", dotColor: "bg-amber-400", activeBg: "bg-amber-500/15 border-amber-400 text-amber-300" },
-                      { id: "Servicios", label: "Servicios", desc: "Públicos", dotColor: "bg-sky-400", activeBg: "bg-sky-500/15 border-sky-400 text-sky-300" },
-                      { id: "Otros", label: "Otros Gastos", desc: "Operativos", dotColor: "bg-purple-400", activeBg: "bg-purple-500/15 border-purple-400 text-purple-300" },
+                      { id: "Insumo", label: "Insumo", icon: "text-emerald-400", active: "bg-emerald-600 border-emerald-500 text-white shadow-md" },
+                      { id: "Mantenimiento", label: "Mantenimiento", icon: "text-amber-400", active: "bg-amber-600 border-amber-500 text-white shadow-md" },
+                      { id: "Servicios", label: "Servicios", icon: "text-sky-400", active: "bg-sky-600 border-sky-500 text-white shadow-md" },
+                      { id: "Otros", label: "Otros", icon: "text-purple-400", active: "bg-purple-600 border-purple-500 text-white shadow-md" },
                     ].map((t) => (
                       <button
                         key={t.id}
                         type="button"
                         onClick={() => setFormCompra({ ...formCompra, tipoGasto: t.id as TipoGasto })}
-                        className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                        className={`py-2 px-1 text-[10px] sm:text-xs font-bold rounded-xl border flex flex-col items-center justify-center gap-1 transition-all ${
                           formCompra.tipoGasto === t.id
-                            ? `${t.activeBg} font-bold shadow-md ring-1 ring-white/10`
-                            : "bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:border-[#5BC0DE]/60"
+                            ? t.active
+                            : `bg-[#0B132B] border-[#3A506B] ${t.icon} hover:bg-[#1C2541]`
                         }`}
                       >
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full ${t.dotColor}`}></span>
-                          <span className="text-xs font-semibold">{t.label}</span>
-                        </div>
-                        <div className="text-[9px] opacity-75 font-medium">{t.desc}</div>
+                        <span>{t.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Proveedor / Prestador */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">
-                    {formCompra.tipoGasto === "Insumo" ? "Proveedor del Insumo *" : "Proveedor / Prestador del Servicio *"}
-                  </label>
-                  <select
-                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
-                    value={formCompra.id_proveedor}
-                    onChange={(e) => setFormCompra({ ...formCompra, id_proveedor: e.target.value })}
-                  >
-                    {proveedores.map((p) => (
-                      <option key={p.id} value={p.id} className="bg-[#0B132B] text-[#F4D6B0]">
-                        {p.nombre} {p.categoriaSuministro ? `(${p.categoriaSuministro})` : ""}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold text-[#5BC0DE]">Proveedor *</label>
+                    <select
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
+                      value={formCompra.id_proveedor}
+                      onChange={(e) => setFormCompra({ ...formCompra, id_proveedor: e.target.value })}
+                    >
+                      {proveedores.map((p) => (
+                        <option key={p.id} value={p.id} className="bg-[#0B132B] text-[#F4D6B0]">
+                          {p.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold text-[#5BC0DE]">Fecha *</label>
+                    <input
+                      type="date"
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors"
+                      value={formCompra.fecha}
+                      onChange={(e) => setFormCompra({ ...formCompra, fecha: e.target.value })}
+                    />
+                  </div>
                 </div>
 
-                {/* Campos para INSUMO (Stock) */}
                 {formCompra.tipoGasto === "Insumo" ? (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Categoría de Insumo *</label>
+                        <label className="text-[11px] font-bold text-[#5BC0DE]">Categoría</label>
                         <select
-                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
                           value={formCompra.id_categoria}
-                          onChange={(e) => {
-                            const newCatId = e.target.value;
-                            const firstIns = insumos.find((i) => i.id_categoria === Number(newCatId));
-                            setFormCompra({
-                              ...formCompra,
-                              id_categoria: newCatId,
-                              id_insumo: firstIns ? String(firstIns.id) : "",
-                            });
-                          }}
+                          onChange={(e) => setFormCompra({ ...formCompra, id_categoria: e.target.value })}
                         >
-                          {categorias.map((cat) => (
-                            <option key={cat.id} value={cat.id} className="bg-[#0B132B] text-[#F4D6B0]">
-                              {cat.nombre}
+                          {categorias.map((c) => (
+                            <option key={c.id} value={c.id} className="bg-[#0B132B] text-[#F4D6B0]">
+                              {c.nombre}
                             </option>
                           ))}
                         </select>
                       </div>
-
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Insumo Adquirido *</label>
+                        <label className="text-[11px] font-bold text-[#5BC0DE]">Insumo *</label>
                         <select
-                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
                           value={formCompra.id_insumo}
                           onChange={(e) => setFormCompra({ ...formCompra, id_insumo: e.target.value })}
                         >
-                          {insumosFormFiltrados.length === 0 ? (
-                            <option value="" disabled className="bg-[#0B132B] text-[#F4D6B0]/50">
-                              No hay insumos en esta categoría
+                          {insumosFormFiltrados.map((i) => (
+                            <option key={i.id} value={i.id} className="bg-[#0B132B] text-[#F4D6B0]">
+                              {i.nombre}
                             </option>
-                          ) : (
-                            insumosFormFiltrados.map((i) => (
-                              <option key={i.id} value={i.id} className="bg-[#0B132B] text-[#F4D6B0]">
-                                {i.nombre} {i.codigo ? `(${i.codigo})` : ""}
-                              </option>
-                            ))
-                          )}
+                          ))}
                         </select>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Cantidad *</label>
+                        <label className="text-[11px] font-bold text-[#5BC0DE]">Cantidad *</label>
                         <input
                           type="number"
-                          step="any"
-                          min="0"
-                          placeholder="Ej. 15"
-                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
+                          min="0.01"
+                          step="0.01"
+                          placeholder="0"
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors"
                           value={formCompra.cantidad}
                           onChange={(e) => setFormCompra({ ...formCompra, cantidad: e.target.value })}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Costo Total ($) *</label>
+                        <label className="text-[11px] font-bold text-[#5BC0DE]">Costo Total ($) *</label>
                         <input
                           type="number"
-                          min="0"
-                          placeholder="Ej. 120000"
-                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono text-emerald-400 font-bold"
+                          min="1"
+                          placeholder="0"
+                          className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono text-emerald-400 font-bold transition-colors"
                           value={formCompra.costoTotal}
                           onChange={(e) => setFormCompra({ ...formCompra, costoTotal: e.target.value })}
                         />
@@ -1084,86 +1073,44 @@ export default function ProveedoresCompras() {
                     </div>
                   </>
                 ) : (
-                  /* Campos para MANTENIMIENTO / SERVICIOS / OTROS GASTOS */
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">
-                        Concepto / Descripción del Gasto *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder={
-                          formCompra.tipoGasto === "Mantenimiento"
-                            ? "Ej. Mantenimiento preventivo freidora industrial y campana"
-                            : formCompra.tipoGasto === "Servicios"
-                              ? "Ej. Factura servicio de energía eléctrica mes de mayo"
-                              : "Ej. Suministros generales de limpieza y papelería"
-                        }
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
-                        value={formCompra.concepto}
-                        onChange={(e) => setFormCompra({ ...formCompra, concepto: e.target.value })}
-                      />
-                      <span className="text-[10px] text-[#5BC0DE]/70">
-                        Describe brevemente la labor, reparación o servicio cancelado.
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Valor Total Pagado ($) *</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold text-[#5BC0DE]">Concepto / Descripción del Gasto *</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Mantenimiento freidora, Pago recibo energía..."
+                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
+                      value={formCompra.concepto}
+                      onChange={(e) => setFormCompra({ ...formCompra, concepto: e.target.value })}
+                    />
+                    <div className="flex flex-col gap-1.5 mt-2">
+                      <label className="text-[11px] font-bold text-[#5BC0DE]">Costo Total ($) *</label>
                       <input
                         type="number"
-                        min="0"
-                        placeholder="Ej. 250000"
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono text-emerald-400 font-bold"
+                        min="1"
+                        placeholder="0"
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono text-emerald-400 font-bold transition-colors"
                         value={formCompra.costoTotal}
                         onChange={(e) => setFormCompra({ ...formCompra, costoTotal: e.target.value })}
                       />
                     </div>
-
-                    <div className="p-2.5 rounded-xl bg-[#0B132B]/60 border border-[#3A506B]/50 text-[11px] text-[#5BC0DE]/90 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#5BC0DE] shrink-0"></span>
-                      <span>
-                        Este gasto se asentará en el historial financiero y reportes de gastos sin afectar las existencias del inventario culinario.
-                      </span>
-                    </div>
-                  </>
+                  </div>
                 )}
 
-                {/* Fecha y Factura Automática */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Fecha de Compra / Pago *</label>
-                    <input
-                      type="date"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono"
-                      value={formCompra.fecha}
-                      onChange={(e) => setFormCompra({ ...formCompra, fecha: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] sm:text-xs font-semibold text-[#5BC0DE]">Factura / Recibo *</label>
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#5BC0DE]/20 text-[#5BC0DE] border border-[#5BC0DE]/40 font-mono font-bold">
-                        {cargandoFactura ? "Generando..." : "Consecutivo Automático"}
-                      </span>
-                    </div>
-                    <input
-                      placeholder="Ej. FAC-027"
-                      className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono font-semibold"
-                      value={formCompra.factura}
-                      onChange={(e) => setFormCompra({ ...formCompra, factura: e.target.value })}
-                    />
-                    <span className="text-[9px] text-[#5BC0DE]/60">
-                      Puedes conservar este número automático o cambiarlo por el de tu factura física.
-                    </span>
-                  </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-bold text-[#5BC0DE]">N° Factura / Comprobante (Opcional)</label>
+                  <input
+                    placeholder="FAC-001"
+                    className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors"
+                    value={formCompra.factura}
+                    onChange={(e) => setFormCompra({ ...formCompra, factura: e.target.value })}
+                  />
                 </div>
               </div>
 
-              <div className="shrink-0 px-4 sm:px-6 py-3 pb-[max(1rem,env(safe-area-inset-bottom))] bg-[#1C2541] border-t border-[#3A506B] flex justify-end gap-3">
+              <div className="shrink-0 p-3 sm:p-5 bg-[#0B132B] border-t border-[#3A506B] flex justify-end gap-2 sm:gap-3">
                 <button
                   type="button"
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#0B132B] text-[#5BC0DE] hover:text-[#F4D6B0] text-xs font-medium border border-[#3A506B]"
+                  className="flex-1 sm:flex-none px-4 h-[42px] rounded-xl bg-[#3A506B] text-[#F4D6B0] hover:bg-[#3A506B]/80 text-xs font-bold transition-colors"
                   onClick={() => {
                     setMostrarModalCompra(false);
                     setErrorCompra("");
@@ -1174,9 +1121,10 @@ export default function ProveedoresCompras() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] font-semibold text-xs transition shadow-lg"
+                  disabled={cargandoFactura}
+                  className="flex-1 sm:flex-none px-4 h-[42px] rounded-xl bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold text-xs shadow-md transition-colors disabled:opacity-50"
                 >
-                  {formCompra.tipoGasto === "Insumo" ? "Guardar Compra de Insumo" : "Registrar Gasto Operativo"}
+                  {cargandoFactura ? "Cargando..." : "Guardar Registro"}
                 </button>
               </div>
             </form>

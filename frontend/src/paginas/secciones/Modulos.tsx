@@ -50,7 +50,7 @@ export const MODULOS: Modulo[] = [
         titulo: "Mesas",
         descripcion: "Estado y asignación de las mesas del salón.",
         icono: LayoutGrid,
-        roles: [...GERENCIA, "Mesero"],
+        roles: [...GERENCIA, "Mesero", "Caja"],
         componente: Mesas,
     },
     {
@@ -58,7 +58,7 @@ export const MODULOS: Modulo[] = [
         titulo: "Cocina",
         descripcion: "Pantalla de preparación: despacha las comandas pendientes.",
         icono: ChefHat,
-        roles: [...GERENCIA, "Cocinero"],
+        roles: [...GERENCIA, "Cocinero","Mesero","Caja"],
         componente: Cocina,
     },
     {
@@ -74,7 +74,7 @@ export const MODULOS: Modulo[] = [
         titulo: "Productos",
         descripcion: "Carta, platos y precios.",
         icono: UtensilsCrossed,
-        roles: [...GERENCIA, "Caja"],
+        roles: [...GERENCIA, "Cocinero","Caja"],
         componente: Productos,
     },
     {

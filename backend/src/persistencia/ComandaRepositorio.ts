@@ -255,6 +255,13 @@ export class ComandaRepositorio {
       campos.fecha_despachada = cambios.fechaDespachada ? cambios.fechaDespachada.toISOString() : null;
     } else if (cambios.estado === 'Lista' || cambios.estado === 'Entregada' || cambios.estado === 'Cerrado') {
       campos.fecha_despachada = new Date().toISOString();
+    } else if (
+      cambios.estado === 'Pendiente' ||
+      cambios.estado === 'En preparación' ||
+      cambios.estado === 'Abierto' ||
+      cambios.estado === 'Enviado'
+    ) {
+      campos.fecha_despachada = null;
     }
     if (cambios.idUsuario !== undefined) campos.id_usuario = cambios.idUsuario;
 
@@ -342,6 +349,38 @@ export class ComandaRepositorio {
             );
           }
         }
+      }
+    } else if (
+      cambios.estado === "Pendiente" ||
+      cambios.estado === "En preparación" ||
+      cambios.estado === "Abierto" ||
+      cambios.estado === "Enviado" ||
+      (cambios.estado as any) === EstadoComanda.Pendiente ||
+      (cambios.estado as any) === EstadoComanda.EnPreparacion ||
+      (cambios.estado as any) === EstadoComanda.Abierto ||
+      (cambios.estado as any) === EstadoComanda.Enviado
+    ) {
+      // Si la comanda es restaurada a cocina o preparación:
+      const comandaActual = await this.obtenerPorId(id);
+      if (comandaActual?.idMesa) {
+        await supabase
+          .from("mesa")
+          .update({ estado: "Ocupada" })
+          .eq("id_mesa", comandaActual.idMesa);
+
+        await this.registrarHistorialMesa(
+          comandaActual.idMesa,
+          comandaActual.idVenta,
+          comandaActual.idUsuario ?? null,
+          "Ocupada",
+          `Comanda #${id} restaurada a cocina`
+        );
+      }
+      if (comandaActual?.idVenta) {
+        await supabase
+          .from("venta")
+          .update({ estado: "Abierta", fecha_cierre: null })
+          .eq("id_venta", comandaActual.idVenta);
       }
     }
   }

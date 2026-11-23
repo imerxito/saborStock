@@ -91,14 +91,15 @@ export function ComandasProvider({ children }: { children: ReactNode }) {
     const cambiarEstado = useCallback(async (id: number, nuevoEstado: EstadoComanda) => {
         await ComandaServicio.cambiarEstado(id, nuevoEstado);
         const ahora = Date.now();
+        const estaDespachada = nuevoEstado === "Lista" || nuevoEstado === "Entregada" || nuevoEstado === "Cerrado";
         setComandas((prev) =>
             prev.map((c) => {
                 if (c.id !== id) return c;
-                const despachadaEn =
-                    nuevoEstado === "Lista" || nuevoEstado === "Entregada" || nuevoEstado === "Cerrado"
-                        ? ahora
-                        : c.despachadaEn;
-                return { ...c, estado: nuevoEstado, despachadaEn };
+                return {
+                    ...c,
+                    estado: nuevoEstado,
+                    despachadaEn: estaDespachada ? (c.despachadaEn ?? ahora) : undefined,
+                };
             })
         );
         void recargar();

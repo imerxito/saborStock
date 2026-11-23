@@ -51,9 +51,9 @@ export function Login() {
             </div>
 
             {mensajeExito && (
-                <div className="flex items-center gap-2.5 p-3 mb-3 text-xs font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded-xl">
-                    <CheckCircle2 size={17} className="shrink-0 text-emerald-400" />
-                    <span>{mensajeExito}</span>
+                <div className="flex items-start gap-2.5 p-3 mb-3 text-xs font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded-xl">
+                    <CheckCircle2 size={17} className="shrink-0 text-emerald-400 mt-0.5" />
+                    <span className="break-words leading-relaxed">{mensajeExito}</span>
                 </div>
             )}
 
@@ -108,9 +108,9 @@ export function Login() {
                 </div>
 
                 {error && (
-                    <div className="flex items-center gap-2.5 p-2.5 text-xs font-semibold text-[#E57373] bg-[#E57373]/10 border border-[#E57373]/30 rounded-xl">
-                        <AlertCircle size={16} className="shrink-0" />
-                        <span>{error}</span>
+                    <div className="flex items-start gap-2.5 p-2.5 text-xs font-semibold text-[#E57373] bg-[#E57373]/10 border border-[#E57373]/30 rounded-xl">
+                        <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                        <span className="break-words leading-relaxed">{error}</span>
                     </div>
                 )}
 

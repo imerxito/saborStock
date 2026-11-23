@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useRef } from 'react';
 import {
   UtensilsCrossed,
   Package,
@@ -19,10 +19,13 @@ import {
   FolderPlus,
   ChevronDown,
   ChevronUp,
-  Boxes
+  Boxes,
+  Eye,
+  Lock,
 } from 'lucide-react';
-import { ProductoServicio } from '../../servicios/ProductoServicio';
+import { useProductos, UNIDADES_MAP } from './hooks/useProductos';
 
+// ── Tipos públicos exportados (el hook los importa desde aquí) ───────────────
 export type TipoProducto = 'cocina' | 'directo' | 'paquete';
 
 export interface Producto {
@@ -70,96 +73,7 @@ export interface CategoriaIngrediente {
   nombre: string;
 }
 
-interface RecetaFormItem {
-  id_ingrediente: number;
-  cantidad: number;
-}
-
-interface ComboFormItem {
-  id_producto_hijo: number;
-  cantidad: number;
-}
-
-interface Toast {
-  id: string;
-  message: string;
-  type: 'success' | 'warning' | 'danger';
-}
-
-const UNIDADES_MAP: Record<number, string> = {
-  1: 'Kg',
-  2: 'Gramos',
-  3: 'Litros',
-  4: 'Unidad',
-  5: 'Mililitros'
-};
-
-const CATEGORIAS_INGREDIENTES: CategoriaIngrediente[] = [
-  { id_cat_ing: 1, nombre: 'Carnes & Proteínas' },
-  { id_cat_ing: 2, nombre: 'Lácteos & Quesos' },
-  { id_cat_ing: 3, nombre: 'Verduras & Vegetales' },
-  { id_cat_ing: 4, nombre: 'Bebidas & Embotellados' },
-  { id_cat_ing: 5, nombre: 'Salsas & Aliños' },
-  { id_cat_ing: 6, nombre: 'Panadería' }
-];
-
-const INITIAL_CATEGORIAS_PRODUCTO: Categoria[] = [
-  { id_categoria: 1, nombre: 'Platos Fuertes' },
-  { id_categoria: 2, nombre: 'Entradas & Arepas' },
-  { id_categoria: 3, nombre: 'Bebidas Individuales' },
-  { id_categoria: 4, nombre: 'Sixpacks & Packs' },
-  { id_categoria: 5, nombre: 'Postres & Dulces' },
-  { id_categoria: 6, nombre: 'Combos Especiales' },
-  { id_categoria: 7, nombre: 'Acompañamientos' },
-  { id_categoria: 8, nombre: 'Cafetería' }
-];
-
-const LISTA_INSUMOS_BASE: Ingrediente[] = [
-  { id_ingrediente: 1, codigo: 'ING-CAR-01', nombre: 'Carne Molida Premium (Kg)', id_unidad: 1, id_categoria_ingrediente: 1, stock: 15.5, stock_minimo: 5.0, precio_referencia: 28000, activo: true },
-  { id_ingrediente: 2, codigo: 'ING-CAR-02', nombre: 'Pechuga de Pollo Fileteada (Kg)', id_unidad: 1, id_categoria_ingrediente: 1, stock: 22.0, stock_minimo: 8.0, precio_referencia: 22000, activo: true },
-  { id_ingrediente: 3, codigo: 'ING-PAN-01', nombre: 'Pan Brioche Hamburguesa (Und)', id_unidad: 4, id_categoria_ingrediente: 6, stock: 48.0, stock_minimo: 20.0, precio_referencia: 2000, activo: true },
-  { id_ingrediente: 4, codigo: 'ING-PAN-02', nombre: 'Pan Arabe para Wrap (Und)', id_unidad: 4, id_categoria_ingrediente: 6, stock: 30.0, stock_minimo: 10.0, precio_referencia: 1500, activo: true },
-  { id_ingrediente: 5, codigo: 'ING-QSO-01', nombre: 'Queso Cheddar Laminado (Und)', id_unidad: 4, id_categoria_ingrediente: 2, stock: 12.0, stock_minimo: 15.0, precio_referencia: 1200, activo: true },
-  { id_ingrediente: 6, codigo: 'ING-QSO-02', nombre: 'Queso Mozzarella Rallado (Kg)', id_unidad: 1, id_categoria_ingrediente: 2, stock: 10.0, stock_minimo: 4.0, precio_referencia: 24000, activo: true },
-  { id_ingrediente: 7, codigo: 'ING-VER-01', nombre: 'Tomate Orgánico (Kg)', id_unidad: 1, id_categoria_ingrediente: 3, stock: 3.2, stock_minimo: 4.0, precio_referencia: 4500, activo: true },
-  { id_ingrediente: 8, codigo: 'ING-VER-02', nombre: 'Lechuga Crespa Fresca (Kg)', id_unidad: 1, id_categoria_ingrediente: 3, stock: 5.0, stock_minimo: 2.0, precio_referencia: 3800, activo: true },
-  { id_ingrediente: 9, codigo: 'ING-BEB-01', nombre: 'Cerveza Club Colombia 330ml', id_unidad: 4, id_categoria_ingrediente: 4, stock: 72.0, stock_minimo: 24.0, precio_referencia: 3800, activo: true },
-  { id_ingrediente: 10, codigo: 'ING-BEB-02', nombre: 'Coca-Cola 400ml Botella', id_unidad: 4, id_categoria_ingrediente: 4, stock: 36.0, stock_minimo: 12.0, precio_referencia: 2500, activo: true },
-  { id_ingrediente: 11, codigo: 'ING-SAL-01', nombre: 'Salsa Especial de la Casa (Ml)', id_unidad: 5, id_categoria_ingrediente: 5, stock: 1500.0, stock_minimo: 300.0, precio_referencia: 20, activo: true },
-  { id_ingrediente: 12, codigo: 'ING-SAL-02', nombre: 'Aliño de Ajo y Finas Hierbas (Ml)', id_unidad: 5, id_categoria_ingrediente: 5, stock: 800.0, stock_minimo: 200.0, precio_referencia: 25, activo: true }
-];
-
-const INITIAL_PRODUCTOS: Producto[] = [
-  { id_producto: 1, codigo: 'PRD-COC-001', nombre: 'Hamburguesa Clásica Especial', id_categoria: 1, precio_venta: 24500, descripcion: 'Hamburguesa artesanal con carne molida, queso cheddar y salsa especial', activo: true, tipo: 'cocina' },
-  { id_producto: 2, codigo: 'PRD-DIR-002', nombre: 'Coca-Cola 400ml Personal', id_categoria: 3, precio_venta: 5000, descripcion: 'Gaseosa embotellada de 400ml', activo: true, tipo: 'directo' },
-  { id_producto: 3, codigo: 'PRD-PAK-003', nombre: 'Sixpack Cerveza Club Colombia', id_categoria: 4, precio_venta: 36000, descripcion: 'Pack promocional de 6 cervezas de 330ml', activo: true, tipo: 'paquete' },
-  { id_producto: 4, codigo: 'PRD-PAK-004', nombre: 'Combo Pareja (2 Hamburguesas + 2 Gaseosas)', id_categoria: 6, precio_venta: 48000, descripcion: 'Combo especial que incluye 2 Hamburguesas Clásicas y 2 Coca-Colas', activo: true, tipo: 'paquete' },
-  { id_producto: 5, codigo: 'PRD-COC-005', nombre: 'Wrap de Pollo Crujiente', id_categoria: 1, precio_venta: 21000, descripcion: 'Tortilla de trigo con pollo apanado, lechuga y aliño especial', activo: true, tipo: 'cocina' },
-  { id_producto: 6, codigo: 'PRD-COC-006', nombre: 'Arepa Rellena con Pollo y Queso', id_categoria: 2, precio_venta: 16000, descripcion: 'Arepa asada de maíz con pollo desmenuzado y queso mozzarella', activo: true, tipo: 'cocina' },
-  { id_producto: 7, codigo: 'PRD-DIR-007', nombre: 'Jugo Natural de Maracuyá', id_categoria: 3, precio_venta: 7000, descripcion: 'Jugo fresco preparado en agua o leche', activo: true, tipo: 'directo' }
-];
-
-const INITIAL_RECETAS: Receta[] = [
-  { id_producto: 1, id_ingrediente: 1, cantidad: 0.200 },
-  { id_producto: 1, id_ingrediente: 3, cantidad: 1.0 },
-  { id_producto: 1, id_ingrediente: 5, cantidad: 2.0 },
-  { id_producto: 1, id_ingrediente: 7, cantidad: 0.050 },
-  { id_producto: 1, id_ingrediente: 11, cantidad: 30.0 },
-  { id_producto: 2, id_ingrediente: 10, cantidad: 1.0 },
-  { id_producto: 3, id_ingrediente: 9, cantidad: 6.0 },
-  { id_producto: 5, id_ingrediente: 2, cantidad: 0.180 },
-  { id_producto: 5, id_ingrediente: 4, cantidad: 1.0 },
-  { id_producto: 5, id_ingrediente: 8, cantidad: 0.040 },
-  { id_producto: 5, id_ingrediente: 12, cantidad: 25.0 },
-  { id_producto: 6, id_ingrediente: 2, cantidad: 0.150 },
-  { id_producto: 6, id_ingrediente: 6, cantidad: 0.080 }
-];
-
-const INITIAL_COMBOS: ComponenteCombo[] = [
-  { id_combo: 4, id_producto_hijo: 1, cantidad: 2 },
-  { id_combo: 4, id_producto_hijo: 2, cantidad: 2 }
-];
-
+// ── Hook local: drag-scroll para contenedores horizontales ───────────────────
 function useDragScroll() {
   const ref = useRef<HTMLDivElement>(null);
   const isDown = useRef(false);
@@ -186,369 +100,85 @@ function useDragScroll() {
   return { ref, props: { onMouseDown, onMouseLeave, onMouseUp, onMouseMove } };
 }
 
+// ── Componente principal ──────────────────────────────────────────────────────
 export default function Productos() {
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [categoriasProducto, setCategoriasProducto] = useState<Categoria[]>([]);
-  const [recetas, setRecetas] = useState<Receta[]>([]);
-  const [componentesCombo, setComponentesCombo] = useState<ComponenteCombo[]>([]);
-  const [insumosBase, setInsumosBase] = useState<Ingrediente[]>([]);
-  const [categoriasIngrediente, setCategoriasIngrediente] = useState<CategoriaIngrediente[]>([]);
+  const {
+    // Data
+    productos,
+    categoriasProducto,
+    insumosBase,
+    categoriasIngrediente,
+    // Filtered / derived
+    filteredProductos,
+    stats,
+    modalActive,
+    puedeGestionar,
+    // UI state
+    expandedRows,
+    searchQuery,
+    setSearchQuery,
+    selectedCategoria,
+    setSelectedCategoria,
+    filterTipo,
+    setFilterTipo,
+    toasts,
+    // Modal state
+    activeTabIngrediente,
+    setActiveTabIngrediente,
+    activeTabCategoriaProducto,
+    setActiveTabCategoriaProducto,
+    isProductoModalOpen,
+    setIsProductoModalOpen,
+    editingProductoId,
+    isCategoriaModalOpen,
+    setIsCategoriaModalOpen,
+    editingCatId,
+    setEditingCatId,
+    formCatNombre,
+    setFormCatNombre,
+    // Product form
+    formProdNombre,
+    setFormProdNombre,
+    formProdCategoria,
+    setFormProdCategoria,
+    formProdPrecio,
+    setFormProdPrecio,
+    formProdDescripcion,
+    setFormProdDescripcion,
+    formProdActivo,
+    setFormProdActivo,
+    formTipo,
+    setFormTipo,
+    formProdCodigoAuto,
+    // Recipe / combo form
+    formRecetaItems,
+    setFormRecetaItems,
+    formComboItems,
+    setFormComboItems,
+    // Handlers
+    toggleRow,
+    handleToggleActivo,
+    openProductoModal,
+    handleSaveProducto,
+    handleDeleteProducto,
+    handleSaveCategoria,
+    handleDeleteCategoria,
+    handleAddInsumo,
+    handleRemoveInsumo,
+    updateRecetaCantidad,
+    handleAddProductoCombo,
+    handleRemoveProductoCombo,
+    updateComboCantidad,
+    formatCurrency,
+    getDetalle,
+  } = useProductos();
 
-  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState<number | 'todas'>('todas');
-  const [filterTipo, setFilterTipo] = useState<'todos' | TipoProducto>('todos');
-  const [toasts, setToasts] = useState<Toast[]>([]);
-
-  const cargarDatos = useCallback(async () => {
-    try {
-      const [prodsData, catsData, insumosData, recetasData, combosData, catsIngData] = await Promise.all([
-        ProductoServicio.listar(),
-        ProductoServicio.listarCategorias(),
-        ProductoServicio.listarInsumos(),
-        ProductoServicio.listarRecetas(),
-        ProductoServicio.listarComponentesCombo().catch(() => []),
-        ProductoServicio.listarCategoriasIngrediente().catch(() => [])
-      ]);
-
-      setProductos(prodsData.map(p => ({
-          id_producto: p.id_producto,
-          codigo: p.codigo,
-          nombre: p.nombre,
-          id_categoria: p.id_categoria,
-          precio_venta: p.precio_venta,
-          descripcion: p.descripcion || '',
-          activo: p.activo ?? true,
-          tipo: (p.tipo as TipoProducto) || 'cocina'
-        })));
-
-      if (catsData) {
-        setCategoriasProducto(catsData.map(c => ({
-          id_categoria: c.id_categoria,
-          nombre: c.nombre
-        })));
-      }
-
-      setInsumosBase((insumosData || []) as Ingrediente[]);
-      setRecetas(recetasData || []);
-      setComponentesCombo(
-        (combosData || []).map((c) => ({
-          id_combo: c.idCombo,
-          id_producto_hijo: c.idProductoHijo,
-          cantidad: c.cantidad
-        }))
-      );
-      setCategoriasIngrediente(
-        (catsIngData || []).map((c) => ({ id_cat_ing: c.id, nombre: c.nombre }))
-      );
-    } catch (e) {
-      console.warn('Error al sincronizar productos con backend:', e);
-    }
-  }, []);
-
-  useEffect(() => {
-    void cargarDatos();
-  }, [cargarDatos]);
-
+  // ── Drag-scroll refs ────────────────────────────────────────────────────────
   const categoriasScroll = useDragScroll();
   const insumosTabsScroll = useDragScroll();
   const productosComboScroll = useDragScroll();
 
-  const [activeTabIngrediente, setActiveTabIngrediente] = useState<number>(1);
-  const [activeTabCategoriaProducto, setActiveTabCategoriaProducto] = useState<number>(1);
-
-  const [isProductoModalOpen, setIsProductoModalOpen] = useState(false);
-  const [editingProductoId, setEditingProductoId] = useState<number | null>(null);
-
-  const [isCategoriaModalOpen, setIsCategoriaModalOpen] = useState(false);
-  const [editingCatId, setEditingCatId] = useState<number | null>(null);
-  const [formCatNombre, setFormCatNombre] = useState('');
-
-  const [formProdNombre, setFormProdNombre] = useState('');
-  const [formProdCategoria, setFormProdCategoria] = useState(1);
-  const [formProdPrecio, setFormProdPrecio] = useState<number | ''>('');
-  const [formProdDescripcion, setFormProdDescripcion] = useState('');
-  const [formProdActivo, setFormProdActivo] = useState(true);
-  const [formTipo, setFormTipo] = useState<TipoProducto>('cocina');
-
-  const [formRecetaItems, setFormRecetaItems] = useState<RecetaFormItem[]>([]);
-  const [formComboItems, setFormComboItems] = useState<ComboFormItem[]>([]);
-
-  const formProdCodigoAuto = useMemo(() => {
-    const prefijo = formTipo === 'cocina' ? 'PRD-COC' : formTipo === 'directo' ? 'PRD-DIR' : 'PRD-PAK';
-    const idSiguiente = editingProductoId ?? (productos.length ? Math.max(...productos.map(p => p.id_producto)) + 1 : 1);
-    const num = String(idSiguiente).padStart(3, '0');
-    return `${prefijo}-${num}`;
-  }, [formTipo, editingProductoId, productos]);
-
-  const addToast = (message: string, type: 'success' | 'warning' | 'danger' = 'success') => {
-    const id = Date.now().toString();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3200);
-  };
-
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
-
-  const stats = useMemo(() => ({
-    totalProductos: productos.length,
-    recetasCocina: productos.filter(p => p.tipo === 'cocina').length,
-    productosDirectos: productos.filter(p => p.tipo === 'directo').length,
-    paquetes: productos.filter(p => p.tipo === 'paquete').length
-  }), [productos]);
-
-  const filteredProductos = useMemo(() => {
-    return productos.filter(p => {
-      const matchSearch = p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.codigo.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchCat = selectedCategoria === 'todas' || p.id_categoria === selectedCategoria;
-      const matchTipo = filterTipo === 'todos' || p.tipo === filterTipo;
-      return matchSearch && matchCat && matchTipo;
-    });
-  }, [productos, searchQuery, selectedCategoria, filterTipo]);
-
-  const toggleRow = (id: number) => {
-    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const handleToggleActivo = async (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const prodActual = productos.find(p => p.id_producto === id);
-    if (!prodActual) return;
-    const nuevoActivo = !prodActual.activo;
-    setProductos(prev => prev.map(p => {
-      if (p.id_producto === id) {
-        return { ...p, activo: nuevoActivo };
-      }
-      return p;
-    }));
-    try {
-      await ProductoServicio.actualizar(id, { activo: nuevoActivo });
-    } catch (err) {
-      console.warn('Error al actualizar estado del producto:', err);
-    }
-  };
-
-  const openProductoModal = (prod?: Producto) => {
-    if (prod) {
-      setEditingProductoId(prod.id_producto);
-      setFormProdNombre(prod.nombre);
-      setFormProdCategoria(prod.id_categoria);
-      setFormProdPrecio(prod.precio_venta);
-      setFormProdDescripcion(prod.descripcion || '');
-      setFormProdActivo(prod.activo);
-      setFormTipo(prod.tipo || 'cocina');
-
-      const itemsIng = recetas
-        .filter(r => r.id_producto === prod.id_producto)
-        .map(r => ({ id_ingrediente: r.id_ingrediente, cantidad: r.cantidad }));
-      setFormRecetaItems(itemsIng);
-
-      const itemsCombo = componentesCombo
-        .filter(c => c.id_combo === prod.id_producto)
-        .map(c => ({ id_producto_hijo: c.id_producto_hijo, cantidad: c.cantidad }));
-      setFormComboItems(itemsCombo);
-    } else {
-      setEditingProductoId(null);
-      setFormProdNombre('');
-      setFormProdCategoria(categoriasProducto[0]?.id_categoria || 1);
-      setFormProdPrecio('');
-      setFormProdDescripcion('');
-      setFormProdActivo(true);
-      setFormTipo('cocina');
-      setFormRecetaItems([]);
-      setFormComboItems([]);
-    }
-    setActiveTabIngrediente(1);
-    setActiveTabCategoriaProducto(categoriasProducto[0]?.id_categoria || 1);
-    setIsProductoModalOpen(true);
-  };
-
-  const handleSaveProducto = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (formProdPrecio === '' || !formProdNombre.trim()) return;
-
-    try {
-      let prodId = editingProductoId;
-
-      if (editingProductoId) {
-        await ProductoServicio.actualizar(editingProductoId, {
-          codigo: formProdCodigoAuto,
-          nombre: formProdNombre.trim(),
-          id_categoria: Number(formProdCategoria),
-          precio_venta: Number(formProdPrecio),
-          descripcion: formProdDescripcion.trim(),
-          activo: formProdActivo,
-          tipo: formTipo
-        });
-      } else {
-        const creado = await ProductoServicio.crear({
-          codigo: formProdCodigoAuto,
-          nombre: formProdNombre.trim(),
-          id_categoria: Number(formProdCategoria),
-          precio_venta: Number(formProdPrecio),
-          descripcion: formProdDescripcion.trim(),
-          activo: formProdActivo,
-          tipo: formTipo
-        });
-        prodId = creado.id_producto;
-      }
-
-      if (prodId) {
-        const recetasValidas = formRecetaItems.filter(i => Number(i.cantidad) > 0);
-        const recetasActuales = recetas.filter(r => r.id_producto === prodId);
-
-        for (const r of recetasActuales) {
-          if (!recetasValidas.some(i => i.id_ingrediente === r.id_ingrediente)) {
-            await ProductoServicio.eliminarReceta(prodId, r.id_ingrediente);
-          }
-        }
-        for (const item of recetasValidas) {
-          await ProductoServicio.guardarReceta(prodId, item.id_ingrediente, Number(item.cantidad));
-        }
-
-        const combosValidos = formTipo === 'paquete'
-          ? formComboItems.filter(i => Number(i.cantidad) > 0 && i.id_producto_hijo !== prodId)
-          : [];
-        await ProductoServicio.eliminarComponentesCombo(prodId);
-        for (const item of combosValidos) {
-          await ProductoServicio.crearComponenteCombo(prodId, item.id_producto_hijo, Number(item.cantidad));
-        }
-      }
-
-      await cargarDatos();
-      setIsProductoModalOpen(false);
-      addToast(editingProductoId ? 'Producto actualizado' : 'Producto creado con éxito');
-    } catch (err: any) {
-      addToast(err?.message || 'Error al guardar producto', 'danger');
-    }
-  };
-
-  const handleDeleteProducto = async (id: number) => {
-    if (window.confirm('¿Desea eliminar este producto del sistema?')) {
-      try {
-        await ProductoServicio.eliminar(id);
-        setProductos(prev => prev.filter(p => p.id_producto !== id));
-        setRecetas(prev => prev.filter(r => r.id_producto !== id));
-        setComponentesCombo(prev => prev.filter(c => c.id_combo !== id && c.id_producto_hijo !== id));
-        addToast('Producto eliminado', 'danger');
-      } catch (err: any) {
-        addToast(err?.message || 'Error al eliminar producto', 'danger');
-      }
-    }
-  };
-
-  const handleSaveCategoria = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formCatNombre.trim()) return;
-
-    try {
-      if (editingCatId) {
-        await ProductoServicio.actualizarCategoria(editingCatId, formCatNombre.trim());
-        addToast('Categoría actualizada');
-      } else {
-        await ProductoServicio.crearCategoria(formCatNombre.trim());
-        addToast('Categoría agregada');
-      }
-      setFormCatNombre('');
-      setEditingCatId(null);
-      await cargarDatos();
-    } catch (err: any) {
-      addToast(err?.message || 'Error al guardar categoría', 'danger');
-    }
-  };
-
-  const handleDeleteCategoria = async (id: number) => {
-    if (productos.some(p => p.id_categoria === id)) {
-      addToast('No se puede eliminar: tiene productos asignados', 'warning');
-      return;
-    }
-    if (window.confirm('¿Eliminar categoría?')) {
-      try {
-        await ProductoServicio.eliminarCategoria(id);
-        setCategoriasProducto(prev => prev.filter(c => c.id_categoria !== id));
-        if (selectedCategoria === id) setSelectedCategoria('todas');
-        addToast('Categoría eliminada', 'danger');
-      } catch (err: any) {
-        addToast(err?.message || 'Error al eliminar categoría', 'danger');
-      }
-    }
-  };
-
-  const handleAddInsumo = (ingrediente: Ingrediente) => {
-    setFormRecetaItems(prev => {
-      const existente = prev.find(i => i.id_ingrediente === ingrediente.id_ingrediente);
-      if (existente) {
-        return prev.map(i => i.id_ingrediente === ingrediente.id_ingrediente ? { ...i, cantidad: Number((i.cantidad + 1).toFixed(3)) } : i);
-      } else {
-        return [...prev, { id_ingrediente: ingrediente.id_ingrediente, cantidad: 1 }];
-      }
-    });
-  };
-
-  const handleRemoveInsumo = (idIngrediente: number) => {
-    setFormRecetaItems(prev => {
-      const existente = prev.find(i => i.id_ingrediente === idIngrediente);
-      if (!existente) return prev;
-      if (existente.cantidad > 1) {
-        return prev.map(i => i.id_ingrediente === idIngrediente ? { ...i, cantidad: Number((i.cantidad - 1).toFixed(3)) } : i);
-      } else {
-        return prev.filter(i => i.id_ingrediente !== idIngrediente);
-      }
-    });
-  };
-
-  const updateRecetaCantidad = (idIngrediente: number, cantidad: number) => {
-    setFormRecetaItems(prev => prev.map(item => item.id_ingrediente === idIngrediente ? { ...item, cantidad: Math.max(0, cantidad) } : item));
-  };
-
-  const handleAddProductoCombo = (productoHijo: Producto) => {
-    setFormComboItems(prev => {
-      const existente = prev.find(i => i.id_producto_hijo === productoHijo.id_producto);
-      if (existente) {
-        return prev.map(i => i.id_producto_hijo === productoHijo.id_producto ? { ...i, cantidad: i.cantidad + 1 } : i);
-      } else {
-        return [...prev, { id_producto_hijo: productoHijo.id_producto, cantidad: 1 }];
-      }
-    });
-  };
-
-  const handleRemoveProductoCombo = (idProductoHijo: number) => {
-    setFormComboItems(prev => {
-      const existente = prev.find(i => i.id_producto_hijo === idProductoHijo);
-      if (!existente) return prev;
-      if (existente.cantidad > 1) {
-        return prev.map(i => i.id_producto_hijo === idProductoHijo ? { ...i, cantidad: i.cantidad - 1 } : i);
-      } else {
-        return prev.filter(i => i.id_producto_hijo !== idProductoHijo);
-      }
-    });
-  };
-
-  const updateComboCantidad = (idProductoHijo: number, cantidad: number) => {
-    setFormComboItems(prev => prev.map(item => item.id_producto_hijo === idProductoHijo ? { ...item, cantidad: Math.max(0, cantidad) } : item));
-  };
-
-  const modalActive = isProductoModalOpen || isCategoriaModalOpen;
-
-  const getDetalle = (p: Producto) => {
-    const recItems = recetas.filter(r => r.id_producto === p.id_producto);
-    const comboItems = componentesCombo.filter(c => c.id_combo === p.id_producto);
-    const catObj = categoriasProducto.find(c => c.id_categoria === p.id_categoria);
-
-    let costoEstimado = 0;
-    recItems.forEach(r => {
-      const ing = insumosBase.find(i => i.id_ingrediente === r.id_ingrediente);
-      if (ing) costoEstimado += r.cantidad * ing.precio_referencia;
-    });
-    comboItems.forEach(c => {
-      const prodHijo = productos.find(ph => ph.id_producto === c.id_producto_hijo);
-      if (prodHijo) costoEstimado += c.cantidad * (prodHijo.precio_venta * 0.6);
-    });
-
-    return { recItems, comboItems, catObj, costoEstimado };
-  };
-
+  // ── Helpers de renderizado visual (puro JSX) ────────────────────────────────
   const renderTipoBadge = (tipo: TipoProducto) => {
     if (tipo === 'cocina') {
       return (
@@ -574,35 +204,39 @@ export default function Productos() {
   const renderEstadoBtn = (p: Producto) => (
     <button
       onClick={(e) => handleToggleActivo(p.id_producto, e)}
-      className={`w-20 h-8 sm:h-7 inline-flex items-center justify-center rounded-full text-[10px] sm:text-xs font-semibold transition-all border ${
+      className={`w-20 h-8 sm:h-7 inline-flex items-center justify-center rounded-full text-[10px] sm:text-xs font-semibold transition-all border cursor-pointer ${
         p.activo
           ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60 hover:bg-emerald-900/80'
           : 'bg-amber-950/80 text-amber-300 border-amber-700/60 hover:bg-amber-900/80'
       }`}
-      title="Haga clic para cambiar estado"
+      title="Haga clic para activar o desactivar este producto"
     >
       {p.activo ? '● Activo' : '○ Inactivo'}
     </button>
   );
 
-  const renderAcciones = (p: Producto) => (
-    <div className="flex items-center justify-center gap-1.5">
-      <button
-        onClick={() => openProductoModal(p)}
-        className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 text-[#5BC0DE] hover:text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-lg"
-        title="Editar producto"
-      >
-        <Edit3 size={14} />
-      </button>
-      <button
-        onClick={() => handleDeleteProducto(p.id_producto)}
-        className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 text-[#D97706] hover:bg-[#D97706]/20 rounded-lg"
-        title="Eliminar"
-      >
-        <Trash2 size={14} />
-      </button>
-    </div>
-  );
+  const renderAcciones = (p: Producto) => {
+    if (!puedeGestionar) return null;
+
+    return (
+      <div className="flex items-center justify-center gap-1.5">
+        <button
+          onClick={() => openProductoModal(p)}
+          className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 text-[#5BC0DE] hover:text-[#F4D6B0] bg-[#0B132B] border border-[#3A506B] rounded-lg transition-colors"
+          title="Editar producto"
+        >
+          <Edit3 size={14} />
+        </button>
+        <button
+          onClick={() => handleDeleteProducto(p.id_producto)}
+          className="flex items-center justify-center w-8 h-8 sm:w-7 sm:h-7 text-[#D97706] hover:bg-[#D97706]/20 rounded-lg transition-colors"
+          title="Eliminar"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    );
+  };
 
   const renderDetalle = (p: Producto) => {
     const { recItems, comboItems, costoEstimado } = getDetalle(p);
@@ -667,6 +301,7 @@ export default function Productos() {
     );
   };
 
+  // ── JSX principal ───────────────────────────────────────────────────────────
   return (
     <div className={`h-[100dvh] w-full bg-[#0B132B] text-[#F4D6B0] font-sans antialiased flex flex-col overflow-hidden ${modalActive ? 'pointer-events-none select-none' : ''}`}>
 
@@ -680,12 +315,17 @@ export default function Productos() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h2 className="text-base sm:text-lg font-bold tracking-tight text-[#F4D6B0] truncate">
-                    <span className="sm:hidden">Productos & Fichas</span>
-                    <span className="hidden sm:inline">Gestión de Productos & Fichas</span>
+                    <span className="sm:hidden">Productos &amp; Fichas</span>
+                    <span className="hidden sm:inline">Gestión de Productos &amp; Fichas</span>
                   </h2>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#3A506B]/40 text-[#5BC0DE] border border-[#5BC0DE]/30 font-mono font-medium shrink-0 hidden sm:inline-block">
                     Catálogo
                   </span>
+                  {!puedeGestionar && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-medium shrink-0 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" /> Solo Lectura
+                    </span>
+                  )}
                 </div>
                 <p className="hidden sm:block text-[11px] text-[#5BC0DE]/80">Configuración de platos, insumos por receta y productos de venta directa</p>
               </div>
@@ -773,23 +413,30 @@ export default function Productos() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 md:flex items-center gap-2 shrink-0 w-full md:w-auto md:justify-end">
-                <button
-                  onClick={() => { setEditingCatId(null); setFormCatNombre(''); setIsCategoriaModalOpen(true); }}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0B132B] hover:bg-[#3A506B]/50 text-[#5BC0DE] hover:text-[#F4D6B0] border border-[#3A506B] text-xs font-semibold transition-all"
-                >
-                  <FolderPlus className="w-3.5 h-3.5 text-[#5BC0DE]" />
-                  <span>Categorías</span>
-                </button>
+              {puedeGestionar ? (
+                <div className="grid grid-cols-2 md:flex items-center gap-2 shrink-0 w-full md:w-auto md:justify-end">
+                  <button
+                    onClick={() => { setEditingCatId(null); setFormCatNombre(''); setIsCategoriaModalOpen(true); }}
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0B132B] hover:bg-[#3A506B]/50 text-[#5BC0DE] hover:text-[#F4D6B0] border border-[#3A506B] text-xs font-semibold transition-all"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5 text-[#5BC0DE]" />
+                    <span>Categorías</span>
+                  </button>
 
-                <button
-                  onClick={() => openProductoModal()}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] text-xs font-semibold shadow-md transition-all whitespace-nowrap"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Nuevo Producto</span>
-                </button>
-              </div>
+                  <button
+                    onClick={() => openProductoModal()}
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] text-xs font-semibold shadow-md transition-all whitespace-nowrap"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Nuevo Producto</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0B132B] border border-[#3A506B] text-[#5BC0DE] text-xs font-semibold shrink-0">
+                  <Eye className="w-3.5 h-3.5 text-[#5BC0DE]" />
+                  <span>Modo Consulta</span>
+                </div>
+              )}
             </div>
 
             <div
@@ -848,14 +495,16 @@ export default function Productos() {
                 <th className="py-2.5 px-3 text-[#5BC0DE] bg-[#1C2541]">Categoría</th>
                 <th className="py-2.5 px-3 text-right text-[#5BC0DE] bg-[#1C2541]">Precio Venta</th>
                 <th className="py-2.5 px-3 text-center text-[#5BC0DE] bg-[#1C2541]">Estado</th>
-                <th className="py-2.5 px-3 text-center text-[#5BC0DE] bg-[#1C2541]">Acciones</th>
+                {puedeGestionar && (
+                  <th className="py-2.5 px-3 text-center text-[#5BC0DE] bg-[#1C2541]">Acciones</th>
+                )}
               </tr>
             </thead>
 
             <tbody className="divide-y divide-[#3A506B]/50 text-xs">
               {filteredProductos.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-[#5BC0DE]/60">
+                  <td colSpan={puedeGestionar ? 8 : 7} className="py-10 text-center text-[#5BC0DE]/60">
                     <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     No se encontraron productos.
                   </td>
@@ -896,14 +545,16 @@ export default function Productos() {
                           {renderEstadoBtn(p)}
                         </td>
 
-                        <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
-                          {renderAcciones(p)}
-                        </td>
+                        {puedeGestionar && (
+                          <td className="py-2.5 px-3 text-center" onClick={e => e.stopPropagation()}>
+                            {renderAcciones(p)}
+                          </td>
+                        )}
                       </tr>
 
                       {isExpanded && (
                         <tr className="bg-[#0B132B]">
-                          <td colSpan={8} className="p-3 border-b border-[#3A506B]">
+                          <td colSpan={puedeGestionar ? 8 : 7} className="p-3 border-b border-[#3A506B]">
                             {renderDetalle(p)}
                           </td>
                         </tr>
@@ -1259,7 +910,7 @@ export default function Productos() {
                     {...insumosTabsScroll.props}
                     className="flex gap-1.5 overflow-x-auto pb-1.5 touch-pan-x cursor-grab active:cursor-grabbing select-none [scrollbar-width:thin] [scrollbar-color:#5BC0DE_#0B132B]"
                   >
-                    {CATEGORIAS_INGREDIENTES.map(catIng => (
+                    {categoriasIngrediente.map(catIng => (
                       <button
                         key={catIng.id_cat_ing}
                         type="button"
@@ -1357,7 +1008,7 @@ export default function Productos() {
                             </div>
                           </div>
                         );
-                      })}
+      })}
                       {formRecetaItems.length === 0 && (
                         <p className="text-[10px] text-[#5BC0DE]/60 italic py-1 text-center bg-[#0B132B]/40 rounded-lg border border-dashed border-[#3A506B]">
                           Selecciona insumos de las pestañas superiores.
@@ -1394,7 +1045,7 @@ export default function Productos() {
       {isCategoriaModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1000] flex items-top sm:items-center justify-center sm:p-4 pointer-events-auto">
           <div className="bg-[#1C2541] border border-[#3A506B] w-full max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl h-[85dvh] sm:h-auto sm:max-h-[85dvh] flex flex-col overflow-hidden">
-            
+
             {/* HEADER MODAL CATEGORIAS */}
             <div className="px-4 sm:px-6 py-3 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-3 border-b border-[#3A506B] flex items-center justify-between gap-2 bg-[#0B132B] shrink-0">
               <div className="flex items-center gap-2 min-w-0">
@@ -1412,27 +1063,29 @@ export default function Productos() {
 
             {/* LISTA CON SCROLL */}
             <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 [scrollbar-width:thin] [scrollbar-color:#5BC0DE_#0B132B]">
-              <form onSubmit={handleSaveCategoria} className="bg-[#0B132B] p-3 sm:p-4 rounded-xl border border-[#3A506B] space-y-3">
-                <h4 className="text-[10px] sm:text-xs font-semibold uppercase text-[#5BC0DE]">
-                  {editingCatId ? 'Editar Categoría' : 'Nueva Categoría'}
-                </h4>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    required
-                    value={formCatNombre}
-                    onChange={e => setFormCatNombre(e.target.value)}
-                    placeholder="Nombre de la categoría..."
-                    className="flex-1 min-w-0 bg-[#1C2541] border border-[#3A506B] rounded-lg px-3 py-2.5 text-base sm:text-sm text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE]"
-                  />
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] text-xs font-semibold rounded-lg transition-all shadow shrink-0"
-                  >
-                    {editingCatId ? 'Actualizar' : 'Guardar'}
-                  </button>
-                </div>
-              </form>
+              {puedeGestionar && (
+                <form onSubmit={handleSaveCategoria} className="bg-[#0B132B] p-3 sm:p-4 rounded-xl border border-[#3A506B] space-y-3">
+                  <h4 className="text-[10px] sm:text-xs font-semibold uppercase text-[#5BC0DE]">
+                    {editingCatId ? 'Editar Categoría' : 'Nueva Categoría'}
+                  </h4>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={formCatNombre}
+                      onChange={e => setFormCatNombre(e.target.value)}
+                      placeholder="Nombre de la categoría..."
+                      className="flex-1 min-w-0 bg-[#1C2541] border border-[#3A506B] rounded-lg px-3 py-2.5 text-base sm:text-sm text-[#F4D6B0] focus:outline-none focus:border-[#5BC0DE]"
+                    />
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-[#5BC0DE] hover:bg-[#5BC0DE]/90 text-[#0B132B] text-xs font-semibold rounded-lg transition-all shadow shrink-0"
+                    >
+                      {editingCatId ? 'Actualizar' : 'Guardar'}
+                    </button>
+                  </div>
+                </form>
+              )}
 
               <div className="space-y-2">
                 <h4 className="text-[10px] sm:text-xs font-semibold uppercase text-[#5BC0DE]">Categorías ({categoriasProducto.length})</h4>
@@ -1445,20 +1098,24 @@ export default function Productos() {
                           <span className="text-sm font-bold text-[#F4D6B0] block break-words">{cat.nombre}</span>
                           <span className="text-[10px] text-[#5BC0DE]">{cantProductos} productos</span>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => { setEditingCatId(cat.id_categoria); setFormCatNombre(cat.nombre); }}
-                            className="flex items-center justify-center w-8 h-8 bg-[#1C2541] text-[#5BC0DE] hover:text-[#F4D6B0] border border-[#3A506B] rounded-lg"
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCategoria(cat.id_categoria)}
-                            className="flex items-center justify-center w-8 h-8 text-[#D97706] hover:bg-[#D97706]/20 rounded-lg"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                        {puedeGestionar && (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => { setEditingCatId(cat.id_categoria); setFormCatNombre(cat.nombre); }}
+                              className="flex items-center justify-center w-8 h-8 bg-[#1C2541] text-[#5BC0DE] hover:text-[#F4D6B0] border border-[#3A506B] rounded-lg transition-colors"
+                              title="Editar categoría"
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategoria(cat.id_categoria)}
+                              className="flex items-center justify-center w-8 h-8 text-[#D97706] hover:bg-[#D97706]/20 rounded-lg transition-colors"
+                              title="Eliminar categoría"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

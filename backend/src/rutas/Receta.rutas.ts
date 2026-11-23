@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { RecetaControlador } from "../controladores/RecetaControlador.js";
+import { autorizarGerencia } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 const recetaControlador = new RecetaControlador();
@@ -16,15 +17,15 @@ router.get("/:idProducto/:idIngrediente", (req, res) =>
     recetaControlador.obtenerPorId(req, res)
 );
 
-router.post("/", (req, res) =>
+router.post("/", autorizarGerencia, (req, res) =>
     recetaControlador.crear(req, res)
 );
 
-router.put("/:idProducto/:idIngrediente", (req, res) =>
+router.put("/:idProducto/:idIngrediente", autorizarGerencia, (req: any, res) =>
     recetaControlador.actualizar(req, res)
 );
 
-router.delete("/:idProducto/:idIngrediente", (req, res) =>
+router.delete("/:idProducto/:idIngrediente", autorizarGerencia, (req: any, res) =>
     recetaControlador.eliminar(req, res)
 );
 

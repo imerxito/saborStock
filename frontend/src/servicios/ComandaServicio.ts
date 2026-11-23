@@ -69,6 +69,15 @@ function mapearComandaBackend(c: any): Comanda {
     const idMesa = c.idMesa != null ? Number(c.idMesa) : null;
     const mesaNumero = c.mesaNumero != null ? Number(c.mesaNumero) : null;
 
+    const estaDespachada = estado === "Lista" || estado === "Entregada" || estado === "Cerrado";
+    const despachadaEn = estaDespachada
+        ? (c.fechaDespachada
+            ? new Date(c.fechaDespachada).getTime()
+            : c.fechaCreacion
+                ? new Date(c.fechaCreacion).getTime()
+                : Date.now())
+        : undefined;
+
     return {
         id: Number(c.id),
         idVenta: c.idVenta ? Number(c.idVenta) : undefined,
@@ -84,13 +93,7 @@ function mapearComandaBackend(c: any): Comanda {
             : undefined),
         personas: c.personas ?? undefined,
         total: totalCalculado,
-        despachadaEn: c.fechaDespachada
-            ? new Date(c.fechaDespachada).getTime()
-            : estado === "Lista" || estado === "Entregada" || estado === "Cerrado"
-                ? c.fechaCreacion
-                    ? new Date(c.fechaCreacion).getTime()
-                    : Date.now()
-                : undefined,
+        despachadaEn,
     };
 }
 

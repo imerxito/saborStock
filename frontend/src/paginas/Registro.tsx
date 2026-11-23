@@ -73,7 +73,9 @@ export function Registro() {
             </div>
 
             <form onSubmit={manejarSubmit} className="flex flex-col gap-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {/* @sm:grid-cols-2 responde al ancho real del panel (container query),
+                    no al viewport → en paneles angostos del split quedan 1 columna. */}
+                <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
                     <div className="flex flex-col gap-1">
                         <label htmlFor="reg-nombre" className="text-[11px] font-bold text-[#F4D6B0]">
                             Nombre completo
@@ -154,7 +156,7 @@ export function Registro() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-1 sm:col-span-2">
+                    <div className="flex flex-col gap-1 @sm:col-span-2">
                         <label htmlFor="reg-contrasena" className="text-[11px] font-bold text-[#F4D6B0]">
                             Contraseña segura
                         </label>
@@ -185,9 +187,9 @@ export function Registro() {
                 </div>
 
                 {error && (
-                    <div className="flex items-center gap-2 p-2.5 text-xs font-semibold text-[#E57373] bg-[#E57373]/10 border border-[#E57373]/30 rounded-xl">
-                        <AlertCircle size={16} className="shrink-0" />
-                        <span>{error}</span>
+                    <div className="flex items-start gap-2 p-2.5 text-xs font-semibold text-[#E57373] bg-[#E57373]/10 border border-[#E57373]/30 rounded-xl">
+                        <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                        <span className="break-words leading-relaxed">{error}</span>
                     </div>
                 )}
 

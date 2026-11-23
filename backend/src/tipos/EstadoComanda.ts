@@ -1,1 +1,1 @@
-export type EstadoComanda = 'Pendiente' | 'En preparación' | 'Lista' | 'Entregada' | 'Cerrado';
+export type EstadoComanda = 'Pendiente' | 'En preparación' | 'Lista' | 'Entregada' | 'Cerrado' | 'Abierto' | 'Enviado';

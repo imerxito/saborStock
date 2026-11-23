@@ -529,7 +529,7 @@ export default function Configuracion() {
       </div>
 
       {/* CONTENIDO SCROLLABLE */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-5xl mx-auto p-3 sm:p-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-5xl mx-auto p-3 sm:p-5 pb-[calc(6rem+env(safe-area-inset-bottom))] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/50 [&::-webkit-scrollbar-thumb]:rounded-full">
         
         {cargando ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-[#5BC0DE]">
@@ -543,7 +543,7 @@ export default function Configuracion() {
               <div className="space-y-4 animate-in fade-in duration-300">
                 
                 {/* Toggle Impresión Automática */}
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex items-center justify-between">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 flex items-center justify-between shadow-sm">
                   <div>
                     <h3 className="text-sm font-bold text-[#F4D6B0]">Impresión Automática</h3>
                     <p className="text-[11px] text-[#5BC0DE] mt-0.5">Disparar comandas automáticamente a las impresoras según categoría y sección</p>
@@ -552,8 +552,8 @@ export default function Configuracion() {
                 </div>
 
                 {/* Lista de Impresoras */}
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl overflow-hidden">
-                  <div className="p-3.5 border-b border-[#3A506B] flex flex-wrap justify-between items-center gap-2 bg-[#0B132B]/50">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl overflow-hidden shadow-sm">
+                  <div className="p-3.5 sm:p-4 border-b border-[#3A506B] flex flex-wrap justify-between items-center gap-2 bg-[#0B132B]/50">
                     <div>
                       <h3 className="text-xs font-bold text-[#F4D6B0] uppercase tracking-wider">
                         Dispositivos de Impresión ({impresoras.length})
@@ -582,7 +582,7 @@ export default function Configuracion() {
 
                   {/* Panel de impresoras detectadas en Windows */}
                   {impresorasSistema.length > 0 && (
-                    <div className="bg-[#0B132B]/70 p-3 border-b border-[#3A506B]/50">
+                    <div className="bg-[#0B132B]/70 p-3 sm:p-4 border-b border-[#3A506B]/50">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-bold text-[#F4D6B0] flex items-center gap-1.5">
                           <CheckCircle size={13} className="text-[#4ADE80]" />
@@ -642,9 +642,10 @@ export default function Configuracion() {
                     </div>
                   )}
 
-                  <div className="divide-y divide-[#3A506B]/50">
+                  {/* Tarjetas de Impresoras */}
+                  <div className="p-3 sm:p-4 space-y-3 bg-[#1C2541]">
                     {impresoras.length === 0 ? (
-                      <div className="p-8 text-center text-xs text-[#5BC0DE]/60 space-y-2">
+                      <div className="py-8 text-center text-xs text-[#5BC0DE]/60 space-y-2">
                         <Printer className="w-8 h-8 mx-auto text-[#3A506B]" />
                         <p>No hay impresoras configuradas aún.</p>
                         <button 
@@ -656,29 +657,27 @@ export default function Configuracion() {
                       </div>
                     ) : (
                       impresoras.map(imp => {
-                        // Nombres de categorías asignadas
                         const catsNombres = (imp.categoriasIds || []).map(idCat => {
                           const c = categoriasMenu.find(item => Number(item.id_categoria) === Number(idCat));
                           return c ? c.nombre : `Cat #${idCat}`;
                         });
 
-                        // Nombres de secciones asignadas
                         const secsNombres = (imp.seccionesIds || []).map(idSec => {
                           const s = seccionesRestaurante.find(item => Number(item.id) === Number(idSec));
                           return s ? s.nombre : `Sec #${idSec}`;
                         });
 
                         return (
-                          <div key={imp.id} className="p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-[#0B132B]/30 transition-colors">
+                          <div key={imp.id} className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-[#5BC0DE]/50 transition-colors shadow-sm">
                             <div className="flex items-start gap-3 min-w-0">
-                              <div className="w-10 h-10 rounded-xl bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0 mt-0.5">
+                              <div className="w-10 h-10 rounded-xl bg-[#1C2541] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0 mt-0.5">
                                 <Printer size={18} />
                               </div>
-                              <div className="min-w-0 space-y-1">
+                              <div className="min-w-0 space-y-1.5">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <p className="text-xs sm:text-sm font-bold text-[#F4D6B0]">{imp.nombre}</p>
-                                  <span className={`text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
-                                    imp.activa ? 'bg-[#4ADE80]/15 text-[#4ADE80] border border-[#4ADE80]/30' : 'bg-[#E57373]/15 text-[#E57373] border border-[#E57373]/30'
+                                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+                                    imp.activa ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                                   }`}>
                                     {imp.activa ? 'Online' : 'Offline'}
                                   </span>
@@ -693,12 +692,12 @@ export default function Configuracion() {
                                     <Utensils size={11} className="text-[#5BC0DE]" /> Categorías:
                                   </span>
                                   {catsNombres.length === 0 ? (
-                                    <span className="text-[9px] bg-[#5BC0DE]/10 text-[#5BC0DE] px-2 py-0.5 rounded-md border border-[#5BC0DE]/20 font-medium">
-                                      Todas las categorías
+                                    <span className="text-[9px] bg-[#1C2541] text-[#5BC0DE] px-2 py-0.5 rounded-md border border-[#3A506B] font-medium">
+                                      Todas
                                     </span>
                                   ) : (
                                     catsNombres.map((nom, idx) => (
-                                      <span key={idx} className="text-[9px] bg-[#3A506B]/50 text-[#F4D6B0] px-2 py-0.5 rounded-md border border-[#3A506B] font-medium">
+                                      <span key={idx} className="text-[9px] bg-[#1C2541] text-[#F4D6B0] px-2 py-0.5 rounded-md border border-[#3A506B] font-medium">
                                         {nom}
                                       </span>
                                     ))
@@ -711,12 +710,12 @@ export default function Configuracion() {
                                     <Layers size={11} className="text-[#F4D6B0]" /> Secciones:
                                   </span>
                                   {secsNombres.length === 0 ? (
-                                    <span className="text-[9px] bg-[#F4D6B0]/10 text-[#F4D6B0] px-2 py-0.5 rounded-md border border-[#F4D6B0]/20 font-medium">
-                                      Todas las secciones (Salón, Terraza, etc.)
+                                    <span className="text-[9px] bg-[#1C2541] text-[#F4D6B0] px-2 py-0.5 rounded-md border border-[#3A506B] font-medium">
+                                      Todas
                                     </span>
                                   ) : (
                                     secsNombres.map((nom, idx) => (
-                                      <span key={idx} className="text-[9px] bg-[#1C2541] text-[#5BC0DE] px-2 py-0.5 rounded-md border border-[#5BC0DE]/40 font-medium">
+                                      <span key={idx} className="text-[9px] bg-[#1C2541] text-[#5BC0DE] px-2 py-0.5 rounded-md border border-[#3A506B] font-medium">
                                         {nom}
                                       </span>
                                     ))
@@ -725,33 +724,33 @@ export default function Configuracion() {
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-end gap-2 shrink-0 border-t md:border-t-0 border-[#3A506B]/30 pt-2 md:pt-0">
+                            <div className="flex items-center justify-end gap-2 shrink-0 border-t md:border-t-0 border-[#3A506B]/30 pt-3 md:pt-0">
                               <button
                                 type="button"
                                 onClick={() => probarImpresion(imp)}
-                                className="px-2.5 py-1.5 text-[#5BC0DE] bg-[#0B132B] hover:bg-[#5BC0DE]/10 rounded-lg transition-colors border border-[#5BC0DE]/40 text-[10px] font-bold flex items-center gap-1.5 shadow-sm"
+                                className="px-2.5 h-[34px] text-[#5BC0DE] bg-[#1C2541] hover:bg-[#5BC0DE]/10 rounded-lg transition-colors border border-[#5BC0DE]/40 text-[10px] font-bold flex items-center gap-1.5 shadow-sm"
                                 title="Imprimir ticket de prueba en esta impresora"
                               >
                                 <Printer size={13} /> Probar
                               </button>
                               <button 
                                 onClick={() => toggleActiva(imp)} 
-                                className={`text-[10px] font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
-                                  imp.activa ? 'bg-[#0B132B] text-[#5BC0DE] border-[#3A506B] hover:bg-[#3A506B]/40' : 'bg-[#4ADE80]/15 text-[#4ADE80] border-[#4ADE80]/40'
+                                className={`text-[10px] font-bold px-2.5 h-[34px] rounded-lg border transition-colors flex items-center justify-center ${
+                                  imp.activa ? 'bg-[#1C2541] text-[#5BC0DE] border-[#3A506B] hover:bg-[#3A506B]/40' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/20'
                                 }`}
                               >
                                 {imp.activa ? 'Desactivar' : 'Activar'}
                               </button>
                               <button 
                                 onClick={() => abrirModalEditar(imp)} 
-                                className="p-2 text-[#5BC0DE] hover:bg-[#5BC0DE]/10 rounded-lg transition-colors border border-[#3A506B]/50"
+                                className="p-2 h-[34px] w-[34px] text-[#5BC0DE] bg-[#1C2541] hover:bg-[#3A506B] rounded-lg transition-colors border border-[#3A506B] flex items-center justify-center"
                                 title="Editar impresora, categorías y secciones"
                               >
                                 <Edit size={14} />
                               </button>
                               <button 
                                 onClick={() => eliminarImpresora(imp.id)} 
-                                className="p-2 text-[#E57373] hover:bg-[#E57373]/10 rounded-lg transition-colors border border-[#3A506B]/50"
+                                className="p-2 h-[34px] w-[34px] text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/30 flex items-center justify-center"
                                 title="Eliminar impresora"
                               >
                                 <Trash2 size={14} />
@@ -765,8 +764,8 @@ export default function Configuracion() {
                 </div>
 
                 {/* Rutas por Categoría */}
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl overflow-hidden">
-                  <div className="p-3.5 border-b border-[#3A506B] bg-[#0B132B]/50">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl overflow-hidden shadow-sm">
+                  <div className="p-3.5 sm:p-4 border-b border-[#3A506B] bg-[#0B132B]/50">
                     <h3 className="text-xs font-bold text-[#F4D6B0] uppercase tracking-wider">
                       Asignación Rápida de Rutas por Categoría
                     </h3>
@@ -774,7 +773,7 @@ export default function Configuracion() {
                       Indica a qué impresora debe enviarse cada tipo de plato, bebida o servicio.
                     </p>
                   </div>
-                  <div className="p-3.5 space-y-3">
+                  <div className="p-3.5 sm:p-4 space-y-3">
                     {categoriasMenu.map(cat => {
                       const idCatNum = Number(cat.id_categoria);
                       const impAsignada = impresoras.find(i => (i.categoriasIds || []).includes(idCatNum));
@@ -795,7 +794,7 @@ export default function Configuracion() {
                               const nuevoId = e.target.value ? Number(e.target.value) : null;
                               cambiarRutaCategoria(idCatNum, nuevoId);
                             }}
-                            className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-2.5 py-1.5 text-base sm:text-xs focus:outline-none focus:border-[#5BC0DE] w-full sm:w-64"
+                            className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-2.5 py-1.5 text-base sm:text-xs focus:outline-none focus:border-[#5BC0DE] w-full sm:w-64 h-[34px]"
                           >
                             <option value="">(Impresión general / Sin asignar)</option>
                             {impresoras.filter(i => i.activa).map(i => (
@@ -809,7 +808,7 @@ export default function Configuracion() {
                 </div>
 
                 {/* Nota Aclaratoria */}
-                <div className="bg-[#D97706]/10 border border-[#D97706]/30 rounded-xl p-3.5 flex gap-2.5 items-start">
+                <div className="bg-[#D97706]/10 border border-[#D97706]/30 rounded-2xl p-3.5 flex gap-2.5 items-start">
                   <span className="text-[#D97706] shrink-0 mt-0.5 text-base">ℹ️</span>
                   <div>
                     <p className="text-[11px] font-bold text-[#D97706]">Configuración de Impresión ESC/POS y Comandas</p>
@@ -824,19 +823,19 @@ export default function Configuracion() {
             {/* ================= TAB: CAJAS REGISTRADORAS ================= */}
             {activeTab === 'cajas' && (
               <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                   <div>
                     <h3 className="text-base font-bold text-[#F4D6B0] flex items-center gap-2">
                       <Store className="w-5 h-5 text-[#5BC0DE]" />
-                      Cajas Registradoras y Puntos de Cobro
+                      Cajas Registradoras
                     </h3>
                     <p className="text-xs text-[#5BC0DE]/80 mt-1">
-                      Gestiona los puntos de venta de tu restaurante. Cada caja mantiene turnos, aperturas y arqueos independientes.
+                      Gestiona los puntos de venta. Cada caja mantiene turnos, aperturas y arqueos independientes.
                     </p>
                   </div>
                   <button
                     onClick={abrirModalCrearCaja}
-                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#5BC0DE] text-[#0B132B] font-bold rounded-xl text-xs hover:bg-[#4CA8C4] transition-all shadow-md shrink-0"
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#5BC0DE] text-[#0B132B] font-bold rounded-xl text-xs hover:bg-[#4CA8C4] transition-all shadow-md shrink-0 h-[42px]"
                   >
                     <Plus className="w-4 h-4" /> Nueva Caja
                   </button>
@@ -860,19 +859,19 @@ export default function Configuracion() {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     {cajas.map((caja) => (
                       <div
                         key={caja.id}
-                        className={`bg-[#1C2541] border rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all hover:shadow-lg ${
-                          caja.activo ? 'border-[#3A506B] hover:border-[#5BC0DE]/50' : 'border-[#3A506B]/50 opacity-70 bg-[#1C2541]/40'
+                        className={`bg-[#0B132B] border rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all hover:shadow-lg ${
+                          caja.activo ? 'border-[#3A506B] hover:border-[#5BC0DE]/50' : 'border-[#3A506B]/50 opacity-70 bg-[#0B132B]/40'
                         }`}
                       >
                         <div className="space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2.5">
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
-                                caja.activo ? 'bg-[#5BC0DE]/10 text-[#5BC0DE] border-[#5BC0DE]/30' : 'bg-[#0B132B] text-slate-400 border-[#3A506B]'
+                                caja.activo ? 'bg-[#1C2541] text-[#5BC0DE] border-[#3A506B]' : 'bg-[#1C2541] text-slate-400 border-[#3A506B]/50'
                               }`}>
                                 <Store className="w-5 h-5" />
                               </div>
@@ -902,9 +901,9 @@ export default function Configuracion() {
                             type="button"
                             onClick={() => alternarEstadoCaja(caja)}
                             title={caja.activo ? 'Desactivar caja' : 'Activar caja'}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                            className={`flex items-center gap-1.5 px-2.5 h-[34px] rounded-lg text-[11px] font-bold border transition-all ${
                               caja.activo
-                                ? 'bg-[#0B132B] text-slate-300 border-[#3A506B] hover:text-amber-400 hover:border-amber-400/40'
+                                ? 'bg-[#1C2541] text-slate-300 border-[#3A506B] hover:text-amber-400 hover:border-amber-400/40'
                                 : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
                             }`}
                           >
@@ -917,7 +916,7 @@ export default function Configuracion() {
                               type="button"
                               onClick={() => abrirModalEditarCaja(caja)}
                               title="Editar nombre"
-                              className="p-1.5 rounded-lg bg-[#0B132B] text-[#5BC0DE] border border-[#3A506B] hover:text-[#F4D6B0] hover:border-[#5BC0DE] transition-all"
+                              className="p-1.5 h-[34px] w-[34px] rounded-lg bg-[#1C2541] text-[#5BC0DE] border border-[#3A506B] hover:text-[#F4D6B0] hover:border-[#5BC0DE] transition-all flex items-center justify-center"
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
@@ -925,7 +924,7 @@ export default function Configuracion() {
                               type="button"
                               onClick={() => eliminarCaja(caja)}
                               title="Eliminar caja"
-                              className="p-1.5 rounded-lg bg-[#0B132B] text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-500 transition-all"
+                              className="p-1.5 h-[34px] w-[34px] rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-500 transition-all flex items-center justify-center"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -950,7 +949,7 @@ export default function Configuracion() {
             {/* ================= TAB 2: FACTURACIÓN ================= */}
             {activeTab === 'facturacion' && (
               <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-[#4ADE80]/10 flex items-center justify-center text-[#4ADE80]">
                       <ShieldCheck size={24} />
@@ -966,9 +965,9 @@ export default function Configuracion() {
                   />
                 </div>
 
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm">
                   <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Entorno Fiscal</h3>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <button
                       type="button"
                       onClick={() => setFacturacion({ ...facturacion, entorno: 'pruebas' })}
@@ -998,85 +997,85 @@ export default function Configuracion() {
                   </div>
                 </div>
 
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm">
                   <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Resolución y Rangos Autorizados</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="flex flex-col gap-1 sm:col-span-2">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Número de Resolución DIAN</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Número de Resolución DIAN</label>
                       <input 
                         type="text" 
                         value={facturacion.resolucion || ''} 
                         onChange={e => setFacturacion({ ...facturacion, resolucion: e.target.value })} 
                         placeholder="Ej: 18764000001" 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Prefijo Autorizado</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Prefijo Autorizado</label>
                       <input 
                         type="text" 
                         value={facturacion.prefijo || ''} 
                         onChange={e => setFacturacion({ ...facturacion, prefijo: e.target.value })} 
                         placeholder="Ej: FAC o POS" 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] uppercase font-mono" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] uppercase font-mono transition-colors" 
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Rango Inicial</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Rango Inicial</label>
                       <input 
                         type="number" 
                         value={facturacion.rangoInicial || ''} 
                         onChange={e => setFacturacion({ ...facturacion, rangoInicial: Number(e.target.value) })} 
                         placeholder="1" 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Rango Final</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Rango Final</label>
                       <input 
                         type="number" 
                         value={facturacion.rangoFinal || ''} 
                         onChange={e => setFacturacion({ ...facturacion, rangoFinal: Number(e.target.value) })} 
                         placeholder="5000" 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Vigencia Desde</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Vigencia Desde</label>
                       <input 
                         type="date" 
                         value={facturacion.fechaInicio || ''} 
                         onChange={e => setFacturacion({ ...facturacion, fechaInicio: e.target.value })} 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors" 
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Vigencia Hasta</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Vigencia Hasta</label>
                       <input 
                         type="date" 
                         value={facturacion.fechaFin || ''} 
                         onChange={e => setFacturacion({ ...facturacion, fechaFin: e.target.value })} 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors" 
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 space-y-4">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm">
                   <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider">Credenciales de Proveedor Tecnológico</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Software ID</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Software ID</label>
                       <input 
                         type="text" 
                         value={facturacion.softwareId || ''} 
                         onChange={e => setFacturacion({ ...facturacion, softwareId: e.target.value })} 
                         placeholder="Ej: SW-12345" 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">PIN / Clave Técnica</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">PIN / Clave Técnica</label>
                       <div className="relative">
                         <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
                         <input 
@@ -1084,28 +1083,28 @@ export default function Configuracion() {
                           value={facturacion.claveTecnica || ''} 
                           onChange={e => setFacturacion({ ...facturacion, claveTecnica: e.target.value })} 
                           placeholder="••••••••••••" 
-                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl pl-9 pr-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                         />
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 sm:col-span-2">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">API Key / Token de Servicio</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">API Key / Token de Servicio</label>
                       <input 
                         type="password" 
                         value={facturacion.apiKey || ''} 
                         onChange={e => setFacturacion({ ...facturacion, apiKey: e.target.value })} 
                         placeholder="sk_live_..." 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                       />
                     </div>
                   </div>
-                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[#3A506B]/50">
+                  <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-[#3A506B]/50">
                     <span className="text-[10px] text-[#5BC0DE]">Verifica la conexión con el servidor de la DIAN</span>
                     <button 
                       type="button"
                       onClick={probarConexion}
                       disabled={testStatus === 'loading' || testStatus === 'success'}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                      className={`px-4 h-[42px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                         testStatus === 'success' ? 'bg-[#4ADE80] text-[#0B132B]' : 
                         'bg-[#0B132B] border border-[#5BC0DE] text-[#5BC0DE] hover:bg-[#5BC0DE]/10'
                       }`}
@@ -1120,11 +1119,11 @@ export default function Configuracion() {
                   </div>
                 </div>
 
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex justify-end">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 flex justify-end shadow-sm">
                   <button 
                     onClick={guardarFacturacion}
                     disabled={guardando}
-                    className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2.5 px-6 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+                    className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2.5 px-6 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all h-[42px]"
                   >
                     <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar Configuración de Facturación'}
                   </button>
@@ -1142,7 +1141,7 @@ export default function Configuracion() {
                   </div>
                   <button 
                     onClick={() => setModalPago(true)} 
-                    className="text-[10px] bg-[#5BC0DE] text-[#0B132B] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-[#4CA8C4] shadow-sm"
+                    className="text-[10px] bg-[#5BC0DE] text-[#0B132B] px-3 py-2 rounded-xl font-bold flex items-center gap-1 hover:bg-[#4CA8C4] shadow-sm transition-colors h-[38px]"
                   >
                     <Plus size={13} /> Añadir Método
                   </button>
@@ -1150,9 +1149,9 @@ export default function Configuracion() {
 
                 <div className="space-y-2">
                   {pagos.map((pago) => (
-                    <div key={pago.id} className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div key={pago.id} className="bg-[#0B132B] border border-[#3A506B] rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-[#5BC0DE]/50 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-[#1C2541] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE] shrink-0">
                           {getIconoPago(pago.icono)}
                         </div>
                         <div className="min-w-0">
@@ -1164,9 +1163,9 @@ export default function Configuracion() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 sm:gap-6 shrink-0 border-t sm:border-t-0 border-[#3A506B]/50 pt-2 sm:pt-0">
+                      <div className="flex items-center gap-4 sm:gap-6 shrink-0 border-t sm:border-t-0 border-[#3A506B]/50 pt-3 sm:pt-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-[#5BC0DE] font-medium hidden sm:inline">Requiere Ref.</span>
+                          <span className="text-[10px] text-[#5BC0DE] font-bold hidden sm:inline">Requiere Ref.</span>
                           <Toggle 
                             checked={pago.requiereReferencia} 
                             onChange={() => {
@@ -1177,7 +1176,7 @@ export default function Configuracion() {
                         </div>
                         <div className="h-6 w-px bg-[#3A506B] hidden sm:block"></div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-[#5BC0DE] font-medium">Activo</span>
+                          <span className="text-[10px] text-[#5BC0DE] font-bold">Activo</span>
                           <Toggle 
                             checked={pago.activo} 
                             onChange={() => {
@@ -1196,46 +1195,46 @@ export default function Configuracion() {
             {/* ================= TAB 4: MI NEGOCIO ================= */}
             {activeTab === 'negocio' && (
               <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 flex flex-col items-center justify-center text-center gap-2 border-dashed border-2">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-3 border-dashed border-2 shadow-sm">
                   <div className="w-16 h-16 rounded-full bg-[#0B132B] border border-[#3A506B] flex items-center justify-center text-[#5BC0DE]">
                     <Building2 size={28} />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-[#F4D6B0]">{negocio.nombre || 'Mi Restaurante'}</p>
-                    <p className="text-[10px] text-[#5BC0DE]">Estos datos se imprimirán en los encabezados de tickets, comandas y facturas de venta.</p>
+                    <p className="text-sm font-bold text-[#F4D6B0]">{negocio.nombre || 'Mi Restaurante'}</p>
+                    <p className="text-[11px] text-[#5BC0DE] mt-1 max-w-xs mx-auto">Estos datos se imprimirán en los encabezados de tickets, comandas y facturas de venta.</p>
                   </div>
                 </div>
 
-                <div className="bg-[#1C2541] border border-[#3A506B] rounded-xl p-4 sm:p-5 space-y-4">
+                <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl p-4 sm:p-6 space-y-4 shadow-sm">
                   <h3 className="text-xs font-bold text-[#5BC0DE] uppercase tracking-wider flex items-center gap-2">
                     <Building2 size={14} /> Información Comercial y Facturación
                   </h3>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                     <div className="flex flex-col gap-1 sm:col-span-2">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Nombre del Establecimiento *</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Nombre del Establecimiento *</label>
                       <input 
                         type="text" 
                         value={negocio.nombre} 
                         onChange={e => setNegocio({ ...negocio, nombre: e.target.value })} 
                         placeholder="Ej: Sabor & Stock Restaurante" 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-semibold" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-bold transition-colors" 
                       />
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">NIT / RUT del Negocio</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">NIT / RUT del Negocio</label>
                       <input 
                         type="text" 
                         value={negocio.nit || ''} 
                         onChange={e => setNegocio({ ...negocio, nit: e.target.value })} 
                         placeholder="Ej: 900.123.456-7" 
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                       />
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Teléfono / WhatsApp</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Teléfono / WhatsApp</label>
                       <div className="relative">
                         <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
                         <input 
@@ -1243,13 +1242,13 @@ export default function Configuracion() {
                           value={negocio.telefono || ''} 
                           onChange={e => setNegocio({ ...negocio, telefono: e.target.value })} 
                           placeholder="Ej: 601 123 4567 / 300 000 0000" 
-                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl pl-9 pr-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
                         />
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-1 sm:col-span-2">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Dirección Física</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Dirección Física</label>
                       <div className="relative">
                         <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
                         <input 
@@ -1257,13 +1256,13 @@ export default function Configuracion() {
                           value={negocio.direccion || ''} 
                           onChange={e => setNegocio({ ...negocio, direccion: e.target.value })} 
                           placeholder="Ej: Carrera 15 # 85-30, Bogotá" 
-                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl pl-9 pr-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors" 
                         />
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Correo Electrónico de Contacto</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Correo Electrónico de Contacto</label>
                       <div className="relative">
                         <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5BC0DE]" />
                         <input 
@@ -1271,17 +1270,17 @@ export default function Configuracion() {
                           value={negocio.email || ''} 
                           onChange={e => setNegocio({ ...negocio, email: e.target.value })} 
                           placeholder="contacto@mirestaurante.com" 
-                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg pl-9 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+                          className="w-full bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl pl-9 pr-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors" 
                         />
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[#5BC0DE] font-semibold">Moneda Principal</label>
+                      <label className="text-[11px] text-[#5BC0DE] font-bold">Moneda Principal</label>
                       <select 
                         value={negocio.moneda || 'COP'} 
                         onChange={e => setNegocio({ ...negocio, moneda: e.target.value })}
-                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                        className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
                       >
                         <option value="COP">COP ($) - Peso Colombiano</option>
                         <option value="USD">USD ($) - Dólar Estadounidense</option>
@@ -1298,7 +1297,7 @@ export default function Configuracion() {
                     <button 
                       onClick={guardarNegocio}
                       disabled={guardando}
-                      className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2.5 px-6 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+                      className="w-full sm:w-auto bg-[#5BC0DE] hover:bg-[#4CA8C4] text-[#0B132B] font-bold py-2.5 px-6 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all h-[42px]"
                     >
                       <Save size={16} /> {guardando ? 'Guardando...' : 'Guardar Datos de Mi Negocio'}
                     </button>
@@ -1318,7 +1317,7 @@ export default function Configuracion() {
       >
         <div className="space-y-4 text-sm">
           {errorImpresora && (
-            <div className="bg-[#E57373]/15 border border-[#E57373]/40 text-[#E57373] text-xs p-3 rounded-xl font-medium flex items-center gap-2">
+            <div className="bg-[#E57373]/15 border border-[#E57373]/40 text-[#E57373] text-xs p-3 rounded-xl font-semibold flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
               <span>{errorImpresora}</span>
             </div>
@@ -1346,7 +1345,7 @@ export default function Configuracion() {
                   }
                 }}
                 defaultValue=""
-                className="w-full bg-[#1C2541] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#5BC0DE]"
+                className="w-full bg-[#1C2541] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-2.5 h-[42px] text-xs focus:outline-none focus:border-[#5BC0DE] transition-colors"
               >
                 <option value="">-- Seleccionar impresora conectada en este PC --</option>
                 {impresorasSistema.map((s) => (
@@ -1358,32 +1357,32 @@ export default function Configuracion() {
             </div>
           )}
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#5BC0DE] font-semibold">Nombre de la Impresora *</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] text-[#5BC0DE] font-bold">Nombre de la Impresora *</label>
             <input 
               type="text" 
               value={formImpresora.nombre}
               onChange={(e) => setFormImpresora({ ...formImpresora, nombre: e.target.value })}
               placeholder="Ej: Impresora Cocina Caliente, Barra, Caja..." 
-              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors" 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-[#5BC0DE] font-semibold">Tipo de Conexión</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] text-[#5BC0DE] font-bold">Tipo de Conexión</label>
               <select 
                 value={formImpresora.tipo}
                 onChange={(e) => setFormImpresora({ ...formImpresora, tipo: e.target.value as ImpresoraFrontend['tipo'] })}
-                className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+                className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
               >
                 <option value="Red (IP)">Red (IP / Ethernet)</option>
                 <option value="USB">USB Directo</option>
                 <option value="Bluetooth">Bluetooth / Inalámbrico</option>
               </select>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-[#5BC0DE] font-semibold">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] text-[#5BC0DE] font-bold">
                 {formImpresora.tipo === 'Red (IP)' ? 'Dirección IP *' : formImpresora.tipo === 'USB' ? 'Puerto (COM/USB) *' : 'Dirección MAC *'}
               </label>
               <input 
@@ -1391,7 +1390,7 @@ export default function Configuracion() {
                 value={formImpresora.direccion}
                 onChange={(e) => setFormImpresora({ ...formImpresora, direccion: e.target.value })}
                 placeholder={formImpresora.tipo === 'Red (IP)' ? '192.168.1.100' : formImpresora.tipo === 'USB' ? 'COM3' : '00:11:22:33:44:55'}
-                className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono" 
+                className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] font-mono transition-colors" 
               />
             </div>
           </div>
@@ -1444,7 +1443,7 @@ export default function Configuracion() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/50">
               {categoriasMenu.map(cat => {
                 const idCatNum = Number(cat.id_categoria);
                 const seleccionada = formImpresora.categoriasIds.includes(idCatNum);
@@ -1507,7 +1506,7 @@ export default function Configuracion() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/50">
               {seccionesRestaurante.map(sec => {
                 const idSecNum = Number(sec.id);
                 const seleccionada = formImpresora.seccionesIds.includes(idSecNum);
@@ -1543,7 +1542,7 @@ export default function Configuracion() {
                 const impActual = impresoras.find(i => i.id === editandoId);
                 if (impActual) probarImpresion({ ...impActual, ...formImpresora, id: editandoId });
               }}
-              className="px-3 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-bold border border-[#5BC0DE]/40 hover:bg-[#5BC0DE]/10 flex items-center gap-1.5 transition-all"
+              className="px-3 h-[42px] rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-bold border border-[#5BC0DE]/40 hover:bg-[#5BC0DE]/10 flex items-center gap-1.5 transition-all"
               title="Imprimir ticket de prueba con los datos actuales"
             >
               <Printer size={14} /> Imprimir Prueba
@@ -1556,7 +1555,7 @@ export default function Configuracion() {
             <button 
               type="button"
               onClick={() => setModalImpresora(false)} 
-              className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B] hover:bg-[#3A506B]/30"
+              className="px-4 h-[42px] rounded-xl bg-[#3A506B] text-[#F4D6B0] text-xs font-bold hover:bg-[#3A506B]/80 transition-colors"
             >
               Cancelar
             </button>
@@ -1564,7 +1563,7 @@ export default function Configuracion() {
               type="button"
               onClick={guardarImpresora}
               disabled={guardando}
-              className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold hover:bg-[#4CA8C4] flex items-center gap-1.5 shadow-md"
+              className="px-4 h-[42px] rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold hover:bg-[#4CA8C4] flex items-center gap-1.5 shadow-md transition-colors"
             >
               <Save size={14} />
               {guardando ? 'Guardando...' : (editandoId ? 'Guardar Cambios' : 'Crear Impresora')}
@@ -1575,23 +1574,23 @@ export default function Configuracion() {
 
       {/* ================= MODAL PAGO ================= */}
       <FixedModal isOpen={modalPago} onClose={() => setModalPago(false)} title="Añadir Método de Pago">
-        <div className="space-y-3 text-sm">
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#5BC0DE] font-semibold">Nombre del Método *</label>
+        <div className="space-y-4 text-sm">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] text-[#5BC0DE] font-bold">Nombre del Método *</label>
             <input 
               type="text" 
               value={formPago.nombre}
               onChange={e => setFormPago({ ...formPago, nombre: e.target.value })}
               placeholder="Ej: Daviplata, Bold, Sodexo..." 
-              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors" 
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#5BC0DE] font-semibold">Tipo / Icono</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] text-[#5BC0DE] font-bold">Tipo / Icono</label>
             <select 
               value={formPago.icono}
               onChange={e => setFormPago({ ...formPago, icono: e.target.value as MetodoPagoConfig['icono'] })}
-              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]"
+              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors"
             >
               <option value="efectivo">Efectivo</option>
               <option value="tarjeta">Tarjeta (Débito/Crédito)</option>
@@ -1599,14 +1598,14 @@ export default function Configuracion() {
               <option value="qr">Código QR / Billetera Digital</option>
             </select>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#5BC0DE] font-semibold">Cuenta o Dispositivo Destino (Opcional)</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] text-[#5BC0DE] font-bold">Cuenta o Dispositivo Destino (Opcional)</label>
             <input 
               type="text" 
               value={formPago.cuentaDestino}
               onChange={e => setFormPago({ ...formPago, cuentaDestino: e.target.value })}
               placeholder="Ej: Ahorros # 1234, Datáfono Barra..." 
-              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-lg px-3 py-2 text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE]" 
+              className="bg-[#0B132B] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 h-[42px] text-base sm:text-sm focus:outline-none focus:border-[#5BC0DE] transition-colors" 
             />
           </div>
         </div>
@@ -1614,14 +1613,14 @@ export default function Configuracion() {
           <button 
             type="button"
             onClick={() => setModalPago(false)} 
-            className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B]"
+            className="px-4 h-[42px] rounded-xl bg-[#3A506B] text-[#F4D6B0] text-xs font-bold hover:bg-[#3A506B]/80 transition-colors"
           >
             Cancelar
           </button>
           <button 
             type="button"
             onClick={agregarNuevoPago} 
-            className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold"
+            className="px-4 h-[42px] rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold shadow-md hover:bg-[#4CA8C4] transition-colors"
           >
             Guardar
           </button>
@@ -1636,7 +1635,7 @@ export default function Configuracion() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#5BC0DE] mb-1.5">
+            <label className="block text-[11px] font-bold text-[#5BC0DE] mb-1.5">
               Nombre o Identificador del Punto de Venta *
             </label>
             <input
@@ -1644,7 +1643,7 @@ export default function Configuracion() {
               value={nombreNuevaCaja}
               onChange={(e) => setNombreNuevaCaja(e.target.value)}
               placeholder="Ej: Caja Principal, Caja Terraza, Barra, Kiosko 1..."
-              className="w-full px-3.5 py-2.5 bg-[#0B132B] border border-[#3A506B] rounded-xl text-sm text-[#F4D6B0] placeholder-slate-500 focus:outline-none focus:border-[#5BC0DE]"
+              className="w-full px-3 h-[42px] bg-[#0B132B] border border-[#3A506B] rounded-xl text-sm text-[#F4D6B0] placeholder-slate-500 focus:outline-none focus:border-[#5BC0DE] transition-colors"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1664,7 +1663,7 @@ export default function Configuracion() {
           <button
             type="button"
             onClick={() => setModalCaja(false)}
-            className="px-4 py-2 rounded-xl bg-[#0B132B] text-[#5BC0DE] text-xs font-medium border border-[#3A506B] hover:bg-[#3A506B]/30"
+            className="px-4 h-[42px] rounded-xl bg-[#3A506B] text-[#F4D6B0] text-xs font-bold hover:bg-[#3A506B]/80 transition-colors"
           >
             Cancelar
           </button>
@@ -1672,7 +1671,7 @@ export default function Configuracion() {
             type="button"
             onClick={guardarCaja}
             disabled={guardandoCaja}
-            className="px-4 py-2 rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold hover:bg-[#4CA8C4] flex items-center gap-1.5 shadow-md"
+            className="px-4 h-[42px] rounded-xl bg-[#5BC0DE] text-[#0B132B] text-xs font-bold hover:bg-[#4CA8C4] flex items-center gap-1.5 shadow-md transition-colors"
           >
             <Save size={14} />
             {guardandoCaja ? 'Guardando...' : (cajaEditando ? 'Guardar Cambios' : 'Crear Caja')}

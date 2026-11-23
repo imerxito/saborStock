@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
     AlertCircle,
@@ -22,347 +22,267 @@ import {
     RefreshCw,
     Printer,
 } from "lucide-react";
-import { useComandas } from "../../contexto/ComandasContexto";
-import { useAuth } from "../../contexto/AuthContexto";
-import { CATEGORIAS, type CategoriaPlato, type Comanda } from "../../tipos/Comanda";
-import { formatoHora, minutosDesde } from "../../utilidades/Fechas";
+import { CATEGORIAS, type Comanda } from "../../tipos/Comanda";
 import FormatoTicketTermico from "../../componentes/FormatoTicketTermico";
-import { ConfiguracionServicio, type ConfiguracionNegocio } from "../../servicios/ConfiguracionServicio";
+import {
+    useCocina,
+    type FiltroCategoria,
+} from "./hooks/useCocina";
 
-type Sonido = "rasgar" | "click" | "restaurar";
-type FiltroCategoria = "TODOS" | CategoriaPlato;
+// ============================================================
+// TICKET DE COCINA (visual, sin lógica propia)
+// ============================================================
+function TicketCocina({
+    comanda,
+    ahora,
+    puedeOperar,
+    onEmpezar,
+    onDespachar,
+    onImprimir,
+    formatoHora,
+    minutosDesde,
+}: {
+    comanda: Comanda;
+    ahora: number;
+    puedeOperar: boolean;
+    onEmpezar: () => void;
+    onDespachar: () => void;
+    onImprimir?: () => void;
+    formatoHora: (ts: number | null | undefined, corto?: boolean) => string;
+    minutosDesde: (ts: number | null | undefined, ahora: number) => number;
+}) {
+    const [rasgando, setRasgando] = useState(false);
+    const minutos = minutosDesde(comanda.creada, ahora);
 
-interface Bloque {
-    inicio: number;
-    comandas: Comanda[];
-}
+    const insignia =
+        minutos > 20
+            ? "bg-[#E57373] text-white animate-pulse"
+            : minutos > 10
+              ? "bg-[#FBBF24] text-[#0B132B]"
+              : "bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B]";
 
-const LS_ELIMINADAS = "cocina_eliminadas_ids";
+    const rasgar = () => {
+        if (rasgando || !puedeOperar) return;
+        setRasgando(true);
+        window.setTimeout(onDespachar, 450);
+    };
 
-function useAhora(cadaMs = 30_000) {
-    const [ahora, setAhora] = useState(() => Date.now());
-    useEffect(() => {
-        const t = window.setInterval(() => setAhora(Date.now()), cadaMs);
-        return () => window.clearInterval(t);
-    }, [cadaMs]);
-    return ahora;
-}
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={
+                rasgando
+                    ? { y: 180, rotate: 12, opacity: 0, scale: 0.9 }
+                    : { y: 0, rotate: 0, opacity: 1, scale: 1 }
+            }
+            transition={{ duration: rasgando ? 0.45 : 0.25, ease: "easeIn" }}
+            className="relative flex select-none flex-col rounded-t-md border-t-4 border-[#5BC0DE] bg-[#FFF8E7] p-3 font-mono text-xs text-[#0B132B] shadow-xl h-full max-h-[calc(100dvh-220px)]"
+        >
+            <AnimatePresence>
+                {rasgando && (
+                    <motion.div
+                        initial={{ scale: 2, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="absolute inset-0 z-30 flex items-center justify-center rounded-t-md bg-[#0B132B]/20 backdrop-blur-[1px]"
+                    >
+                        <span className="-rotate-12 rounded-lg border-4 border-[#5BC0DE] bg-[#FFF8E7] px-4 py-1.5 text-xl font-black uppercase tracking-wider text-[#5BC0DE] shadow-2xl">
+                            Despachado
+                        </span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
-function useSonido(activo: boolean) {
-    const ctxRef = useRef<AudioContext | null>(null);
-    return useCallback(
-        (tipo: Sonido) => {
-            if (!activo) return;
-            try {
-                const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-                if (!ctxRef.current) ctxRef.current = new Ctx();
-                const ctx = ctxRef.current;
-                if (ctx.state === "suspended") void ctx.resume();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                const t = ctx.currentTime;
-                if (tipo === "rasgar") {
-                    osc.type = "sawtooth";
-                    osc.frequency.setValueAtTime(340, t);
-                    osc.frequency.exponentialRampToValueAtTime(80, t + 0.16);
-                    gain.gain.setValueAtTime(0.3, t);
-                    gain.gain.linearRampToValueAtTime(0.01, t + 0.16);
-                    osc.start();
-                    osc.stop(t + 0.16);
-                } else if (tipo === "click") {
-                    osc.type = "sine";
-                    osc.frequency.setValueAtTime(600, t);
-                    gain.gain.setValueAtTime(0.1, t);
-                    gain.gain.linearRampToValueAtTime(0.01, t + 0.05);
-                    osc.start();
-                    osc.stop(t + 0.05);
-                } else {
-                    osc.type = "triangle";
-                    osc.frequency.setValueAtTime(240, t);
-                    osc.frequency.exponentialRampToValueAtTime(540, t + 0.2);
-                    gain.gain.setValueAtTime(0.2, t);
-                    gain.gain.linearRampToValueAtTime(0.01, t + 0.2);
-                    osc.start();
-                    osc.stop(t + 0.2);
-                }
-            } catch { /* sin audio */ }
-        },
-        [activo]
+            {/* Contenido scrolleable si hay muchos items */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin] [scrollbar-color:#C5BFA9_transparent]">
+                <div className="mb-2 border-b border-dashed border-[#C5BFA9] pb-2">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-2">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-[#5BC0DE] bg-[#0B132B]">
+                                <div className="flex flex-col items-center leading-none">
+                                    <span className="text-[6px] font-bold uppercase text-[#5BC0DE] tracking-wider">{comanda.mesa > 0 ? "Mesa" : "Caja"}</span>
+                                    <span className="text-base font-black text-[#F4D6B0]">{comanda.mesa > 0 ? comanda.mesa : "Venta"}</span>
+                                </div>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="flex items-center gap-1 text-[10px] font-bold text-[#0B132B] truncate">
+                                    <Users className="h-3 w-3 shrink-0 text-[#3A506B]" />
+                                    <span className="truncate">{comanda.mesero}</span>
+                                </p>
+                                <p className="text-[10px] font-mono text-[#3A506B] mt-0.5">
+                                    <Clock className="inline h-2.5 w-2.5 mr-0.5" />
+                                    {formatoHora(comanda.creada)}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${insignia}`}>
+                                {minutos} min
+                            </span>
+                            {comanda.estado === "En preparación" && (
+                                <span className="whitespace-nowrap rounded-full bg-[#5BC0DE] px-2 py-0.5 font-sans text-[9px] font-bold text-[#0B132B]">
+                                    En prep.
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                        <p className="text-[9px] font-mono text-[#3A506B]">
+                            CMD #{comanda.id}
+                        </p>
+                        {onImprimir && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onImprimir(); }}
+                                className="flex items-center gap-1 text-[9px] font-bold text-[#0B132B] bg-[#C5BFA9]/30 hover:bg-[#C5BFA9]/60 px-1.5 py-0.5 rounded transition"
+                                title="Imprimir comanda térmica"
+                            >
+                                <Printer className="h-2.5 w-2.5 text-[#0B132B]" />
+                                Imprimir
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {comanda.nota && (
+                    <div className="mb-2.5 flex items-start gap-1 rounded border-l-2 border-[#FBBF24] bg-[#EAE4D2] p-1.5 font-sans text-[10px] font-semibold">
+                        <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-[#FBBF24]" />
+                        <span className="min-w-0 break-words text-[#0B132B]">{comanda.nota}</span>
+                    </div>
+                )}
+
+                <div className="mb-3 space-y-1.5">
+                    {comanda.items.map((it) => (
+                        <div
+                            key={`${it.producto}-${it.nota ?? ""}`}
+                            className="border-b border-[#EAE4D2] pb-1 last:border-none"
+                        >
+                            <div className="flex items-start justify-between font-sans gap-2">
+                                <span className="min-w-0 flex-1 break-words text-xs font-bold leading-tight text-[#0B132B]">
+                                    {it.producto}
+                                </span>
+                                <span className="shrink-0 rounded bg-[#0B132B] px-1.5 py-0.5 text-[10px] font-black text-[#FFF8E7]">
+                                    x{it.cantidad}
+                                </span>
+                            </div>
+                            {it.nota && (
+                                <p className="mt-0.5 break-words pl-1 font-sans text-[10px] font-bold text-[#E57373]">
+                                    * {it.nota}
+                                </p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Botones fijos al fondo del ticket */}
+            <div className="shrink-0 flex flex-col gap-1.5 border-t border-dashed border-[#C5BFA9] pt-2">
+                {puedeOperar ? (
+                    <>
+                        {comanda.estado === "Pendiente" && (
+                            <button
+                                type="button"
+                                onClick={onEmpezar}
+                                disabled={rasgando}
+                                className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-[#5BC0DE] px-3 py-2 font-sans text-xs font-bold text-[#0B132B] transition hover:bg-[#5BC0DE]/10 disabled:opacity-50"
+                            >
+                                <Play className="h-3.5 w-3.5 text-[#5BC0DE]" />
+                                Empezar a preparar
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={rasgar}
+                            disabled={rasgando}
+                            className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg bg-[#0B132B] px-3 py-2 font-sans text-xs font-bold text-[#F4D6B0] shadow transition hover:bg-[#1C2541] active:scale-95 disabled:opacity-70"
+                        >
+                            <CheckCircle2 className="h-4 w-4 text-[#4ADE80]" />
+                            Rasgar / Despachar
+                        </button>
+                    </>
+                ) : (
+                    <div className="flex items-center justify-center gap-1 rounded-lg border border-[#3A506B]/30 bg-[#EAE4D2] px-3 py-2 font-sans text-[10px] font-bold uppercase tracking-wider text-[#3A506B]">
+                        <Users className="h-3 w-3" />
+                        Solo lectura
+                    </div>
+                )}
+            </div>
+
+            <div className="pointer-events-none absolute -bottom-3 left-0 right-0 h-3 overflow-hidden">
+                <svg
+                    className="h-full w-full fill-current text-[#FFF8E7]"
+                    preserveAspectRatio="none"
+                    viewBox="0 0 100 10"
+                    aria-hidden="true"
+                >
+                    <polygon points="0,0 5,10 10,0 15,10 20,0 25,10 30,0 35,10 40,0 45,10 50,0 55,10 60,0 65,10 70,0 75,10 80,0 85,10 90,0 95,10 100,0" />
+                </svg>
+            </div>
+        </motion.div>
     );
 }
 
-function calcularBloques(cola: Comanda[], intervaloMin: number): Bloque[] {
-    const blockMs = Math.max(1, intervaloMin) * 60 * 1000;
-    const mapa = new Map<number, Comanda[]>();
-    cola.forEach((c) => {
-        const t = typeof c.creada === "number" && !isNaN(c.creada) && c.creada > 0 ? c.creada : Date.now();
-        const inicio = Math.floor(t / blockMs) * blockMs;
-        const lista = mapa.get(inicio) ?? [];
-        lista.push({ ...c, creada: t });
-        mapa.set(inicio, lista);
-    });
-    return [...mapa.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([inicio, lista]) => ({
-            inicio,
-            comandas: lista.sort((a, b) => (a.creada || 0) - (b.creada || 0)),
-        }));
-}
-
-function leerEliminadas(): Set<number> {
-    try {
-        const raw = localStorage.getItem(LS_ELIMINADAS);
-        if (!raw) return new Set();
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? new Set(arr as number[]) : new Set();
-    } catch {
-        return new Set();
-    }
-}
-
+// ============================================================
+// COCINA — solo JSX, toda la lógica viene de useCocina
+// ============================================================
 function Cocina() {
-    const { comandas, cambiarEstado, conectadoBackend, recargar, eliminar } = useComandas();
-    const { usuario } = useAuth();
-    const ahora = useAhora();
-
-    const rol = String(usuario?.rol ?? "").toLowerCase();
-    const esGerente = rol.includes("due") || rol.includes("admin");
-    const esCocina = rol.includes("coc") || rol.includes("chef");
-    const esCaja = rol.includes("caja");
-    const puedeOperar = esGerente || esCocina || esCaja;
-    const puedeConfigurar = esGerente;
-
-    const [configAbierta, setConfigAbierta] = useState(false);
-    const [intervaloMin, setIntervaloMin] = useState(60);
-    const [corteCola, setCorteCola] = useState(0);
-    const [corteHistorial, setCorteHistorial] = useState(0);
-
-    // 🔹 IDs eliminados permanentemente (persisten en localStorage)
-    const [eliminadas, setEliminadas] = useState<Set<number>>(() => leerEliminadas());
-
-    useEffect(() => {
-        try {
-            localStorage.setItem(LS_ELIMINADAS, JSON.stringify([...eliminadas]));
-        } catch { /* storage lleno o bloqueado */ }
-    }, [eliminadas]);
-
-    const [bloqueSel, setBloqueSel] = useState<number | "TODOS">("TODOS");
-    const [sonido, setSonido] = useState(true);
-    const [resumenAbierto, setResumenAbierto] = useState(false);
-    const [historialAbierto, setHistorialAbierto] = useState(false);
-    const [busquedaHistorial, setBusquedaHistorial] = useState("");
-    const [comandaAImprimir, setComandaAImprimir] = useState<Comanda | null>(null);
-    const [negocioConfig, setNegocioConfig] = useState<ConfiguracionNegocio | null>(null);
-    const [categoria, setCategoria] = useState<FiltroCategoria>("TODOS");
-    const sonar = useSonido(sonido);
-
-    useEffect(() => {
-        ConfiguracionServicio.obtenerNegocio().then(setNegocioConfig).catch(() => {});
-    }, []);
-
-    useEffect(() => {
-        if (comandaAImprimir) {
-            const timer = setTimeout(() => {
-                window.print();
-                setComandaAImprimir(null);
-            }, 150);
-            return () => clearTimeout(timer);
-        }
-    }, [comandaAImprimir]);
-
-    const despacharImpresionFisica = async (c: Comanda) => {
-        try {
-            const imps = await ConfiguracionServicio.listarImpresoras();
-            const activas = (imps || []).filter((i) => i.activa);
-            let enviadaDirecta = false;
-            for (const imp of activas) {
-                const res = await ConfiguracionServicio.imprimirComandaDirecta(imp.id, {
-                    mesa: c.mesa > 0 ? c.mesa : "Venta Directa",
-                    cliente: c.cliente,
-                    mesero: c.mesero,
-                    items: c.items.map((it) => ({
-                        nombre: it.producto,
-                        cantidad: it.cantidad,
-                        nota: it.nota,
-                    })),
-                });
-                if (res.success) {
-                    enviadaDirecta = true;
-                }
-            }
-            if (enviadaDirecta) {
-                alert("✓ Comanda enviada exitosamente a la impresora física conectada.");
-                return;
-            }
-        } catch {}
-
-        setComandaAImprimir(c);
-    };
-
-    const cola = useMemo(
-        () =>
-            comandas
-                .filter(
-                    (c) =>
-                        c.estado === "Pendiente" ||
-                        c.estado === "En preparación" ||
-                        c.estado === "Abierto" ||
-                        c.estado === "Enviado"
-                )
-                .filter((c) => !eliminadas.has(c.id) || c.estado === "Pendiente")
-                .filter((c) => !corteCola || (c.creada || 0) >= corteCola)
-                .sort((a, b) => (a.creada || 0) - (b.creada || 0)),
-        [comandas, corteCola, eliminadas]
-    );
-
-    const historial = useMemo(
-        () =>
-            comandas
-                .filter((c) => !eliminadas.has(c.id))
-                .filter(
-                    (c) =>
-                        (c.estado === "Lista" || c.estado === "Entregada" || c.estado === "Cerrado" || Boolean(c.despachadaEn)) &&
-                        (!corteHistorial || (c.despachadaEn ?? c.creada ?? 0) >= corteHistorial)
-                )
-                .sort((a, b) => (b.despachadaEn ?? b.creada ?? 0) - (a.despachadaEn ?? a.creada ?? 0)),
-        [comandas, corteHistorial, eliminadas]
-    );
-
-    const historialFiltrado = useMemo(() => {
-        const q = busquedaHistorial.trim().toLowerCase();
-        if (!q) return historial;
-        return historial.filter((c) =>
-            (c.mesa > 0 ? `mesa ${c.mesa}` : "caja").includes(q) ||
-            (c.mesero || "").toLowerCase().includes(q) ||
-            c.items.some((it) => it.producto.toLowerCase().includes(q) || (it.nota || "").toLowerCase().includes(q))
-        );
-    }, [historial, busquedaHistorial]);
-
-    const bloques = useMemo(() => calcularBloques(cola, intervaloMin), [cola, intervaloMin]);
-
-    const seleccion =
-        bloqueSel !== "TODOS" && bloques.some((b) => b.inicio === bloqueSel) ? bloqueSel : "TODOS";
-
-    const visibles = useMemo(
-        () => (seleccion === "TODOS" ? bloques : bloques.filter((b) => b.inicio === seleccion)),
-        [bloques, seleccion]
-    );
-
-    const itemsVisibles = useMemo(
-        () => visibles.flatMap((b) => b.comandas).flatMap((c) => c.items),
-        [visibles]
-    );
-
-    const totalPlatos = itemsVisibles.reduce((t, i) => t + i.cantidad, 0);
-    const totalMesas = useMemo(
-        () => new Set(visibles.flatMap((b) => b.comandas.map((c) => c.mesa))).size,
-        [visibles]
-    );
-
-    const resumen = useMemo(() => {
-        const mapa = new Map<string, { cantidad: number; categoria: CategoriaPlato; notas: string[] }>();
-        itemsVisibles.forEach((it) => {
-            if (categoria !== "TODOS" && it.categoria !== categoria) return;
-            const cat: CategoriaPlato = (it.categoria ?? "Cocina") as CategoriaPlato;
-            const actual = mapa.get(it.producto) ?? { cantidad: 0, categoria: cat, notas: [] as string[] };
-            actual.cantidad += it.cantidad;
-            if (it.nota && !actual.notas.includes(it.nota)) actual.notas.push(it.nota);
-            mapa.set(it.producto, actual);
-        });
-        return [...mapa.entries()];
-    }, [itemsVisibles, categoria]);
-
-    const ejecutarCambioEstado = async (id: number, estado: "En preparación" | "Lista" | "Pendiente", sonidoTipo: Sonido) => {
-        if (!puedeOperar) return;
-        sonar(sonidoTipo);
-        try {
-            setEliminadas((prev) => {
-                if (prev.has(id)) {
-                    const next = new Set(prev);
-                    next.delete(id);
-                    return next;
-                }
-                return prev;
-            });
-            await cambiarEstado(id, estado);
-        } catch (err) {
-            alert('Error al actualizar la comanda: ' + (err instanceof Error ? err.message : 'Error desconocido'));
-        }
-    };
-    const empezar = (id: number) => { void ejecutarCambioEstado(id, "En preparación", "click"); };
-    const despachar = (id: number) => { void ejecutarCambioEstado(id, "Lista", "rasgar"); };
-    const restaurar = async (id: number) => {
-        setEliminadas((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
-        await ejecutarCambioEstado(id, "Pendiente", "restaurar");
-    };
-
-    // 🔹 Elimina una comanda del historial (definitivo en backend y local)
-    const eliminarComandaHistorial = async (id: number) => {
-        if (!puedeOperar) return;
-        if (!window.confirm("¿Eliminar esta comanda del historial?\n\nSe eliminará definitivamente."))
-            return;
-        sonar("click");
-        setEliminadas((prev) => {
-            const next = new Set(prev);
-            next.add(id);
-            return next;
-        });
-        try {
-            await eliminar(id);
-        } catch (e) {
-            console.warn("No se pudo eliminar en backend:", e);
-        }
-    };
-
-    // 🔹 Elimina TODO el historial actual (definitivo en backend y local)
-    const eliminarHistorialCompleto = async () => {
-        if (!puedeOperar || historial.length === 0) return;
-        if (
-            !window.confirm(
-                `¿Eliminar definitivamente las ${historial.length} comandas del historial?\n\nNo volverán a aparecer.`
-            )
-        )
-            return;
-        sonar("restaurar");
-        const ids = historial.map((c) => c.id);
-        setEliminadas((prev) => {
-            const next = new Set(prev);
-            ids.forEach((id) => next.add(id));
-            return next;
-        });
-        try {
-            await Promise.all(ids.map((id) => eliminar(id)));
-        } catch (e) {
-            console.warn("Fallo parcial al eliminar historial en backend:", e);
-        }
-    };
-
-    const resetearVista = () => {
-        if (
-            !window.confirm(
-                "¿Reiniciar la vista de cocina?\n\nTodas las comandas actuales dejarán de mostrarse. Cuando el backend esté listo, se eliminarán definitivamente."
-            )
-        )
-            return;
-        setCorteCola(Date.now());
-        setCorteHistorial(Date.now());
-        setBloqueSel("TODOS");
-        setConfigAbierta(false);
-    };
-
-    // "Limpiar Historial" en el modal → ahora elimina permanentemente
-    const limpiarHistorial = () => {
-        eliminarHistorialCompleto();
-        setConfigAbierta(false);
-    };
-
-    const hayCorteActivo = corteCola > 0 || corteHistorial > 0;
+    const {
+        // Estado
+        ahora,
+        cola,
+        historial,
+        historialFiltrado,
+        bloques,
+        visibles,
+        seleccion,
+        resumen,
+        totalPlatos,
+        totalMesas,
+        configAbierta,
+        intervaloMin,
+        sonido,
+        resumenAbierto,
+        historialAbierto,
+        busquedaHistorial,
+        filtroEstadoHistorial,
+        restaurandoId,
+        mensajeFeedback,
+        comandaAImprimir,
+        negocioConfig,
+        categoria,
+        hayCorteActivo,
+        corteCola,
+        corteHistorial,
+        // Permisos
+        puedeOperar,
+        puedeConfigurar,
+        conectadoBackend,
+        // Setters
+        setConfigAbierta,
+        setIntervaloMin,
+        setSonido,
+        setResumenAbierto,
+        setHistorialAbierto,
+        setBusquedaHistorial,
+        setFiltroEstadoHistorial,
+        setMensajeFeedback,
+        setCategoria,
+        setBloqueSel,
+        // Handlers
+        empezar,
+        despachar,
+        restaurar,
+        eliminarComandaHistorial,
+        eliminarHistorialCompleto,
+        resetearVista,
+        limpiarHistorial,
+        limpiarFiltroEliminadas,
+        despacharImpresionFisica,
+        recargar,
+        sonar,
+        // Utilidades
+        formatoHora,
+        minutosDesde,
+    } = useCocina();
 
     return (
         <div className="flex h-full flex-col font-sans text-[#F4D6B0] bg-[#0B132B] overflow-hidden">
@@ -528,6 +448,8 @@ function Cocina() {
                                                 onEmpezar={() => empezar(c.id)}
                                                 onDespachar={() => despachar(c.id)}
                                                 onImprimir={() => despacharImpresionFisica(c)}
+                                                formatoHora={formatoHora}
+                                                minutosDesde={minutosDesde}
                                             />
                                         </div>
                                     ))}
@@ -652,11 +574,24 @@ function Cocina() {
                             <div className="flex shrink-0 items-center justify-between border-b border-[#3A506B] pb-3">
                                 <div className="flex items-center gap-2 min-w-0">
                                     <History className="h-5 w-5 shrink-0 text-[#5BC0DE]" />
-                                    <h3 className="text-base font-bold text-[#F4D6B0] truncate">
-                                        Historial de comandas {historial.length > 0 && `(${historial.length})`}
-                                    </h3>
+                                    <div>
+                                        <h3 className="text-base font-bold text-[#F4D6B0] leading-tight truncate">
+                                            Historial de comandas
+                                        </h3>
+                                        <p className="text-[10px] text-[#5BC0DE]/70">
+                                            {historial.length} {historial.length === 1 ? "comanda registrada" : "comandas registradas"}
+                                        </p>
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => void recargar()}
+                                        className="rounded-lg border border-[#3A506B] bg-[#0B132B] p-1.5 text-[#5BC0DE] transition hover:bg-[#3A506B] hover:text-[#F4D6B0]"
+                                        title="Actualizar historial"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                    </button>
                                     {puedeOperar && historial.length > 0 && (
                                         <button
                                             type="button"
@@ -677,94 +612,198 @@ function Cocina() {
                                 </div>
                             </div>
 
+                            {/* Banner de feedback si se restaura o elimina */}
+                            {mensajeFeedback && (
+                                <div className={`mt-2 p-2 rounded-lg text-[11px] flex items-center justify-between gap-2 transition ${
+                                    mensajeFeedback.tipo === "exito"
+                                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                        : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                }`}>
+                                    <span className="font-semibold">{mensajeFeedback.texto}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setMensajeFeedback(null)}
+                                        className="text-inherit hover:opacity-75"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Filtros de estado rápido */}
+                            <div className="pt-2 flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setFiltroEstadoHistorial("TODOS")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                                        filtroEstadoHistorial === "TODOS"
+                                            ? "bg-[#5BC0DE] text-[#0B132B]"
+                                            : "bg-[#0B132B] text-[#5BC0DE] border border-[#3A506B] hover:bg-[#3A506B]/40"
+                                    }`}
+                                >
+                                    Todas ({historial.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFiltroEstadoHistorial("DESPACHADAS")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                                        filtroEstadoHistorial === "DESPACHADAS"
+                                            ? "bg-[#5BC0DE] text-[#0B132B]"
+                                            : "bg-[#0B132B] text-[#5BC0DE] border border-[#3A506B] hover:bg-[#3A506B]/40"
+                                    }`}
+                                >
+                                    Despachadas ({historial.filter((c) => c.estado === "Lista" || c.estado === "Entregada").length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFiltroEstadoHistorial("CERRADAS")}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                                        filtroEstadoHistorial === "CERRADAS"
+                                            ? "bg-[#5BC0DE] text-[#0B132B]"
+                                            : "bg-[#0B132B] text-[#5BC0DE] border border-[#3A506B] hover:bg-[#3A506B]/40"
+                                    }`}
+                                >
+                                    Cerradas ({historial.filter((c) => c.estado === "Cerrado").length})
+                                </button>
+                            </div>
+
                             {/* Buscador en historial */}
-                            <div className="pt-2">
+                            <div className="pt-2 relative">
                                 <input
                                     type="text"
-                                    placeholder="Buscar por mesa, mesero o plato..."
+                                    placeholder="Buscar por #CMD, mesa, cliente, plato..."
                                     value={busquedaHistorial}
                                     onChange={(e) => setBusquedaHistorial(e.target.value)}
-                                    className="w-full bg-[#0B132B] border border-[#3A506B] rounded-xl px-3 py-1.5 text-xs text-[#F4D6B0] placeholder-[#5BC0DE]/50 focus:outline-none focus:border-[#5BC0DE]"
+                                    className="w-full bg-[#0B132B] border border-[#3A506B] rounded-xl pl-3 pr-8 py-1.5 text-xs text-[#F4D6B0] placeholder-[#5BC0DE]/50 focus:outline-none focus:border-[#5BC0DE]"
                                 />
+                                {busquedaHistorial && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setBusquedaHistorial("")}
+                                        className="absolute right-2.5 top-3.5 text-[#5BC0DE] hover:text-[#F4D6B0]"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
                             </div>
 
                             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain py-3 pr-1">
                                 {historialFiltrado.length === 0 ? (
-                                    <p className="py-12 text-center text-xs text-[#5BC0DE]">
-                                        {historial.length === 0
-                                            ? "Aún no se ha despachado ninguna comanda."
-                                            : "No hay comandas que coincidan con la búsqueda."}
-                                    </p>
+                                    <div className="py-12 text-center text-xs text-[#5BC0DE] space-y-2">
+                                        <p>
+                                            {historial.length === 0
+                                                ? "Aún no se ha despachado ninguna comanda en esta sesión."
+                                                : "No hay comandas que coincidan con la búsqueda o filtro."}
+                                        </p>
+                                        {(busquedaHistorial || filtroEstadoHistorial !== "TODOS") && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setBusquedaHistorial("");
+                                                    setFiltroEstadoHistorial("TODOS");
+                                                }}
+                                                className="text-xs font-bold text-[#5BC0DE] underline hover:text-[#F4D6B0]"
+                                            >
+                                                Restablecer filtros
+                                            </button>
+                                        )}
+                                    </div>
                                 ) : (
-                                    historialFiltrado.slice(0, 100).map((c) => (
-                                        <div key={c.id} className="space-y-2 rounded-xl border border-[#3A506B] bg-[#0B132B] p-3">
-                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#3A506B] pb-2">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <span className="flex items-center gap-1 text-xs font-black text-[#5BC0DE]">
-                                                        <TableIcon className="h-3 w-3" />
-                                                        {c.mesa > 0 ? `Mesa ${c.mesa}` : "Caja"}
-                                                    </span>
-                                                    <span className="text-[11px] text-[#F4D6B0]">
-                                                        {c.mesero}
-                                                    </span>
-                                                    <span
-                                                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                                            c.estado === "Entregada"
-                                                                ? "bg-[#4ADE80]/15 text-[#4ADE80]"
-                                                                : c.estado === "Cerrado"
-                                                                  ? "bg-[#5BC0DE]/20 text-[#5BC0DE]"
-                                                                  : "bg-[#FBBF24]/15 text-[#FBBF24]"
-                                                        }`}
-                                                    >
-                                                        {c.estado === "Cerrado" ? "Cerrada / Pagada" : c.estado}
-                                                    </span>
+                                    historialFiltrado.slice(0, 100).map((c) => {
+                                        const estaRestaurando = restaurandoId === c.id;
+                                        return (
+                                            <div key={c.id} className="space-y-2 rounded-xl border border-[#3A506B] bg-[#0B132B] p-3 transition hover:border-[#5BC0DE]/60">
+                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#3A506B] pb-2">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-[10px] font-mono font-bold text-[#5BC0DE] bg-[#1C2541] px-1.5 py-0.5 rounded border border-[#3A506B]">
+                                                            #{c.id}
+                                                        </span>
+                                                        <span className="flex items-center gap-1 text-xs font-black text-[#5BC0DE]">
+                                                            <TableIcon className="h-3 w-3" />
+                                                            {c.mesa > 0 ? `Mesa ${c.mesa}` : "Caja"}
+                                                        </span>
+                                                        <span className="text-[11px] text-[#F4D6B0]">
+                                                            {c.mesero}
+                                                        </span>
+                                                        {c.cliente && (
+                                                            <span className="text-[10px] text-[#F4D6B0]/70 italic truncate max-w-[120px]">
+                                                                ({c.cliente})
+                                                            </span>
+                                                        )}
+                                                        <span
+                                                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                                                c.estado === "Entregada"
+                                                                    ? "bg-[#4ADE80]/15 text-[#4ADE80]"
+                                                                    : c.estado === "Cerrado"
+                                                                      ? "bg-[#5BC0DE]/20 text-[#5BC0DE]"
+                                                                      : "bg-[#FBBF24]/15 text-[#FBBF24]"
+                                                            }`}
+                                                        >
+                                                            {c.estado === "Cerrado" ? "Cerrada / Pagada" : c.estado}
+                                                        </span>
+                                                    </div>
+                                                    {puedeOperar && (
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => despacharImpresionFisica(c)}
+                                                                className="flex items-center gap-1 rounded-lg border border-[#5BC0DE]/40 bg-[#5BC0DE]/10 px-2 py-1 text-[11px] font-bold text-[#5BC0DE] transition hover:bg-[#5BC0DE]/30"
+                                                                title="Reimprimir comanda en la impresora conectada"
+                                                            >
+                                                                <Printer className="h-3 w-3" />
+                                                                <span className="hidden sm:inline">Imprimir</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void restaurar(c.id)}
+                                                                disabled={restaurandoId !== null}
+                                                                className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition shadow-sm ${
+                                                                    estaRestaurando
+                                                                        ? "border-[#5BC0DE] bg-[#5BC0DE]/30 text-[#5BC0DE] cursor-wait opacity-80"
+                                                                        : "border-[#5BC0DE] bg-[#5BC0DE]/20 text-[#5BC0DE] hover:bg-[#5BC0DE] hover:text-[#0B132B]"
+                                                                }`}
+                                                                title="Restaurar comanda a la cola de preparación en cocina"
+                                                            >
+                                                                {estaRestaurando ? (
+                                                                    <>
+                                                                        <RefreshCw className="h-3 w-3 animate-spin" />
+                                                                        <span>Restaurando...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <RotateCcw className="h-3 w-3" />
+                                                                        <span>Restaurar</span>
+                                                                    </>
+                                                                )}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => eliminarComandaHistorial(c.id)}
+                                                                className="rounded-lg border border-[#E57373]/50 bg-[#E57373]/10 p-1 text-[#E57373] transition hover:bg-[#E57373]/20"
+                                                                title="Eliminar del historial"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {puedeOperar && (
-                                                    <div className="flex items-center gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => despacharImpresionFisica(c)}
-                                                            className="flex items-center gap-1 rounded-lg border border-[#5BC0DE]/40 bg-[#5BC0DE]/10 px-2 py-1 text-[11px] font-bold text-[#5BC0DE] transition hover:bg-[#5BC0DE]/30"
-                                                            title="Reimprimir comanda en la impresora conectada"
-                                                        >
-                                                            <Printer className="h-3 w-3" />
-                                                            <span className="hidden sm:inline">Imprimir</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => restaurar(c.id)}
-                                                            className="flex items-center gap-1 rounded-lg border border-[#5BC0DE] bg-[#5BC0DE]/20 px-2 py-1 text-[11px] font-bold text-[#5BC0DE] transition hover:bg-[#5BC0DE]/40"
-                                                        >
-                                                            <RotateCcw className="h-3 w-3" />
-                                                            <span className="hidden sm:inline">Restaurar</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => eliminarComandaHistorial(c.id)}
-                                                            className="rounded-lg border border-[#E57373]/50 bg-[#E57373]/10 p-1 text-[#E57373] transition hover:bg-[#E57373]/20"
-                                                            title="Eliminar del historial"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
 
-                                            <div className="flex flex-wrap items-center justify-between gap-x-3 text-[10px] text-[#5BC0DE]">
-                                                <span>Creada: {formatoHora(c.creada)}</span>
-                                                <span>Despachada: {formatoHora(c.despachadaEn ?? c.creada, true)}</span>
-                                            </div>
+                                                <div className="flex flex-wrap items-center justify-between gap-x-3 text-[10px] text-[#5BC0DE]">
+                                                    <span>Creada: {formatoHora(c.creada)}</span>
+                                                    <span>Despachada: {formatoHora(c.despachadaEn ?? c.creada, true)}</span>
+                                                </div>
 
-                                            <div className="space-y-1 pt-1">
-                                                {c.items.map((i) => (
-                                                    <div key={`${i.producto}-${i.nota ?? ""}`} className="flex justify-between gap-2 text-[11px] text-[#F4D6B0]">
-                                                        <span className="min-w-0 break-words">• {i.producto}</span>
-                                                        <span className="shrink-0 font-bold text-[#5BC0DE]">x{i.cantidad}</span>
-                                                    </div>
-                                                ))}
+                                                <div className="space-y-1 pt-1 border-t border-[#3A506B]/40">
+                                                    {c.items.map((i, idx) => (
+                                                        <div key={`${c.id}-${i.producto}-${idx}`} className="flex justify-between gap-2 text-[11px] text-[#F4D6B0]">
+                                                            <span className="min-w-0 break-words">• {i.producto} {i.nota ? <span className="text-[#FBBF24] text-[10px] font-semibold italic">({i.nota})</span> : null}</span>
+                                                            <span className="shrink-0 font-bold text-[#5BC0DE]">x{i.cantidad}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
                         </motion.div>
@@ -928,195 +967,6 @@ function Cocina() {
                 />
             )}
         </div>
-    );
-}
-
-// ============================================================
-// TICKET DE COCINA (con max-h y scroll interno en items)
-// ============================================================
-function TicketCocina({
-    comanda,
-    ahora,
-    puedeOperar,
-    onEmpezar,
-    onDespachar,
-    onImprimir,
-}: {
-    comanda: Comanda;
-    ahora: number;
-    puedeOperar: boolean;
-    onEmpezar: () => void;
-    onDespachar: () => void;
-    onImprimir?: () => void;
-}) {
-    const [rasgando, setRasgando] = useState(false);
-    const minutos = minutosDesde(comanda.creada, ahora);
-
-    const insignia =
-        minutos > 20
-            ? "bg-[#E57373] text-white animate-pulse"
-            : minutos > 10
-              ? "bg-[#FBBF24] text-[#0B132B]"
-              : "bg-[#1C2541] text-[#F4D6B0] border border-[#3A506B]";
-
-    const rasgar = () => {
-        if (rasgando || !puedeOperar) return;
-        setRasgando(true);
-        window.setTimeout(onDespachar, 450);
-    };
-
-    return (
-        <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={
-                rasgando
-                    ? { y: 180, rotate: 12, opacity: 0, scale: 0.9 }
-                    : { y: 0, rotate: 0, opacity: 1, scale: 1 }
-            }
-            transition={{ duration: rasgando ? 0.45 : 0.25, ease: "easeIn" }}
-            // 🔧 max-h para que los botones no queden fuera de pantalla en móvil
-            className="relative flex select-none flex-col rounded-t-md border-t-4 border-[#5BC0DE] bg-[#FFF8E7] p-3 font-mono text-xs text-[#0B132B] shadow-xl h-full max-h-[calc(100dvh-220px)]"
-        >
-            <AnimatePresence>
-                {rasgando && (
-                    <motion.div
-                        initial={{ scale: 2, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="absolute inset-0 z-30 flex items-center justify-center rounded-t-md bg-[#0B132B]/20 backdrop-blur-[1px]"
-                    >
-                        <span className="-rotate-12 rounded-lg border-4 border-[#5BC0DE] bg-[#FFF8E7] px-4 py-1.5 text-xl font-black uppercase tracking-wider text-[#5BC0DE] shadow-2xl">
-                            Despachado
-                        </span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Contenido scrolleable si hay muchos items */}
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin] [scrollbar-color:#C5BFA9_transparent]">
-                <div className="mb-2 border-b border-dashed border-[#C5BFA9] pb-2">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-2">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-[#5BC0DE] bg-[#0B132B]">
-                                <div className="flex flex-col items-center leading-none">
-                                    <span className="text-[6px] font-bold uppercase text-[#5BC0DE] tracking-wider">{comanda.mesa > 0 ? "Mesa" : "Caja"}</span>
-                                    <span className="text-base font-black text-[#F4D6B0]">{comanda.mesa > 0 ? comanda.mesa : "Venta"}</span>
-                                </div>
-                            </div>
-                            <div className="min-w-0">
-                                <p className="flex items-center gap-1 text-[10px] font-bold text-[#0B132B] truncate">
-                                    <Users className="h-3 w-3 shrink-0 text-[#3A506B]" />
-                                    <span className="truncate">{comanda.mesero}</span>
-                                </p>
-                                <p className="text-[10px] font-mono text-[#3A506B] mt-0.5">
-                                    <Clock className="inline h-2.5 w-2.5 mr-0.5" />
-                                    {formatoHora(comanda.creada)}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${insignia}`}>
-                                {minutos} min
-                            </span>
-                            {comanda.estado === "En preparación" && (
-                                <span className="whitespace-nowrap rounded-full bg-[#5BC0DE] px-2 py-0.5 font-sans text-[9px] font-bold text-[#0B132B]">
-                                    En prep.
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                        <p className="text-[9px] font-mono text-[#3A506B]">
-                            CMD #{comanda.id}
-                        </p>
-                        {onImprimir && (
-                            <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); onImprimir(); }}
-                                className="flex items-center gap-1 text-[9px] font-bold text-[#0B132B] bg-[#C5BFA9]/30 hover:bg-[#C5BFA9]/60 px-1.5 py-0.5 rounded transition"
-                                title="Imprimir comanda térmica"
-                            >
-                                <Printer className="h-2.5 w-2.5 text-[#0B132B]" />
-                                Imprimir
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {comanda.nota && (
-                    <div className="mb-2.5 flex items-start gap-1 rounded border-l-2 border-[#FBBF24] bg-[#EAE4D2] p-1.5 font-sans text-[10px] font-semibold">
-                        <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-[#FBBF24]" />
-                        <span className="min-w-0 break-words text-[#0B132B]">{comanda.nota}</span>
-                    </div>
-                )}
-
-                <div className="mb-3 space-y-1.5">
-                    {comanda.items.map((it) => (
-                        <div
-                            key={`${it.producto}-${it.nota ?? ""}`}
-                            className="border-b border-[#EAE4D2] pb-1 last:border-none"
-                        >
-                            <div className="flex items-start justify-between font-sans gap-2">
-                                <span className="min-w-0 flex-1 break-words text-xs font-bold leading-tight text-[#0B132B]">
-                                    {it.producto}
-                                </span>
-                                <span className="shrink-0 rounded bg-[#0B132B] px-1.5 py-0.5 text-[10px] font-black text-[#FFF8E7]">
-                                    x{it.cantidad}
-                                </span>
-                            </div>
-                            {it.nota && (
-                                <p className="mt-0.5 break-words pl-1 font-sans text-[10px] font-bold text-[#E57373]">
-                                    * {it.nota}
-                                </p>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Botones fijos al fondo del ticket */}
-            <div className="shrink-0 flex flex-col gap-1.5 border-t border-dashed border-[#C5BFA9] pt-2">
-                {puedeOperar ? (
-                    <>
-                        {comanda.estado === "Pendiente" && (
-                            <button
-                                type="button"
-                                onClick={onEmpezar}
-                                disabled={rasgando}
-                                className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg border border-[#5BC0DE] px-3 py-2 font-sans text-xs font-bold text-[#0B132B] transition hover:bg-[#5BC0DE]/10 disabled:opacity-50"
-                            >
-                                <Play className="h-3.5 w-3.5 text-[#5BC0DE]" />
-                                Empezar a preparar
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={rasgar}
-                            disabled={rasgando}
-                            className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-lg bg-[#0B132B] px-3 py-2 font-sans text-xs font-bold text-[#F4D6B0] shadow transition hover:bg-[#1C2541] active:scale-95 disabled:opacity-70"
-                        >
-                            <CheckCircle2 className="h-4 w-4 text-[#4ADE80]" />
-                            Rasgar / Despachar
-                        </button>
-                    </>
-                ) : (
-                    <div className="flex items-center justify-center gap-1 rounded-lg border border-[#3A506B]/30 bg-[#EAE4D2] px-3 py-2 font-sans text-[10px] font-bold uppercase tracking-wider text-[#3A506B]">
-                        <Users className="h-3 w-3" />
-                        Solo lectura
-                    </div>
-                )}
-            </div>
-
-            <div className="pointer-events-none absolute -bottom-3 left-0 right-0 h-3 overflow-hidden">
-                <svg
-                    className="h-full w-full fill-current text-[#FFF8E7]"
-                    preserveAspectRatio="none"
-                    viewBox="0 0 100 10"
-                    aria-hidden="true"
-                >
-                    <polygon points="0,0 5,10 10,0 15,10 20,0 25,10 30,0 35,10 40,0 45,10 50,0 55,10 60,0 65,10 70,0 75,10 80,0 85,10 90,0 95,10 100,0" />
-                </svg>
-            </div>
-        </motion.div>
     );
 }
 
