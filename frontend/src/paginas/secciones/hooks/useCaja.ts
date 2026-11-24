@@ -62,6 +62,7 @@ export function useCaja() {
   const { comandas, crear, cambiarEstado, recargar } = useComandas();
 
   const [mesasRaw, setMesasRaw] = useState<MesaBackend[]>([]);
+  const [comandasCerradasLocal, setComandasCerradasLocal] = useState<Set<number>>(() => new Set());
   const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>([]);
   const [turnoActual, setTurnoActual] = useState<TurnoCajaDTO | null>(null);
   const [turnoAbierto, setTurnoAbierto] = useState<boolean>(() => {
@@ -489,59 +490,72 @@ export function useCaja() {
   const [montoEfectivoVenta, setMontoEfectivoVenta] = useState<number>(0);
   const [montoDigitalVenta, setMontoDigitalVenta] = useState<number>(0);
 
-  // Cobrar Mesas
+  // Cobrar Mesas (Indexación O(N + M) + cierre local inmediato)
   const mesasActivas = useMemo<MesaActiva[]>(() => {
-    if (mesasRaw.length === 0) return [];
+    if (mesasRaw.length === 0 || comandas.length === 0) return [];
+
+    const comandasPorIdMesa = new Map<number, typeof comandas>();
+    const comandasPorNumMesa = new Map<number, typeof comandas>();
+
+    for (const c of comandas) {
+      if (c.estado === 'Cerrado' || comandasCerradasLocal.has(c.id)) continue;
+      if (c.idMesa != null) {
+        const lista = comandasPorIdMesa.get(c.idMesa);
+        if (lista) lista.push(c);
+        else comandasPorIdMesa.set(c.idMesa, [c]);
+      } else if (c.mesa != null) {
+        const lista = comandasPorNumMesa.get(c.mesa);
+        if (lista) lista.push(c);
+        else comandasPorNumMesa.set(c.mesa, [c]);
+      }
+    }
 
     const activas: MesaActiva[] = [];
 
-    mesasRaw.forEach(m => {
-      const coms = comandas.filter(
-        c => (c.idMesa === m.id || c.mesa === m.numero) && c.estado !== 'Cerrado'
-      );
+    for (const m of mesasRaw) {
+      const coms = comandasPorIdMesa.get(m.id) || comandasPorNumMesa.get(m.numero);
+      if (!coms || coms.length === 0) continue;
 
-      if (coms.length > 0) {
-        const mapaVentas = new Map<string, { id: string; comandaId?: number; idVenta?: number; cliente: string; total: number; items: { idProducto?: number; nombre: string; cantidad: number; precio: number }[] }>();
+      const mapaVentas = new Map<string, SubVenta>();
 
-        coms.forEach(c => {
-          const clienteKey = (c.cliente || 'Cliente General').trim();
-          const itemsMapeados = c.items.map(it => ({
-            idProducto: it.idProducto,
-            nombre: it.producto,
-            cantidad: it.cantidad,
-            precio: it.precio || 0
-          }));
-          const totalC = c.total || itemsMapeados.reduce((sum, it) => sum + it.precio * it.cantidad, 0);
+      for (const c of coms) {
+        const clienteKey = (c.cliente || 'Cliente General').trim();
+        const itemsMapeados = c.items.map(it => ({
+          idProducto: it.idProducto,
+          nombre: it.producto,
+          cantidad: it.cantidad,
+          precio: it.precio || 0
+        }));
+        const totalC = c.total || itemsMapeados.reduce((sum, it) => sum + it.precio * it.cantidad, 0);
 
-          if (!mapaVentas.has(clienteKey)) {
-            mapaVentas.set(clienteKey, {
-              id: String(c.id),
-              comandaId: c.id,
-              idVenta: c.idVenta,
-              cliente: clienteKey,
-              total: totalC,
-              items: [...itemsMapeados]
-            });
-          } else {
-            const vExistente = mapaVentas.get(clienteKey)!;
-            vExistente.total += totalC;
-            vExistente.items.push(...itemsMapeados);
-          }
-        });
-
-        activas.push({
-          id: String(m.id),
-          idBackend: m.id,
-          nombre: `Mesa ${m.numero}`,
-          seccion: m.seccionNombre || 'Salón Principal',
-          mesero: coms[0]?.mesero || 'Mesero',
-          ventas: Array.from(mapaVentas.values())
-        });
+        const vExistente = mapaVentas.get(clienteKey);
+        if (!vExistente) {
+          mapaVentas.set(clienteKey, {
+            id: String(c.id),
+            comandaId: c.id,
+            idVenta: c.idVenta,
+            cliente: clienteKey,
+            total: totalC,
+            items: itemsMapeados
+          });
+        } else {
+          vExistente.total += totalC;
+          vExistente.items.push(...itemsMapeados);
+        }
       }
-    });
 
-    return activas.length > 0 ? activas : [];
-  }, [mesasRaw, comandas]);
+      activas.push({
+        id: String(m.id),
+        idBackend: m.id,
+        nombre: `Mesa ${m.numero}`,
+        seccion: m.seccionNombre || 'Salón Principal',
+        mesero: coms[0]?.mesero || 'Mesero',
+        ventas: Array.from(mapaVentas.values())
+      });
+    }
+
+    return activas;
+  }, [mesasRaw, comandas, comandasCerradasLocal]);
 
   const [busquedaMesa, setBusquedaMesa] = useState<string>('');
   const [filtroSeccion, setFiltroSeccion] = useState<string>('Todas');
@@ -604,7 +618,7 @@ export function useCaja() {
     return historialMesasFiltrado.reduce((acc, it) => acc + (it.monto || 0), 0);
   }, [historialMesasFiltrado]);
 
-  const recargarHistorial = async () => {
+  const recargarHistorial = useCallback(async () => {
     setCargandoHistorial(true);
     try {
       const [facturas, evs, mesas, usuarios] = await Promise.all([
@@ -672,9 +686,9 @@ export function useCaja() {
     } finally {
       setCargandoHistorial(false);
     }
-  };
+  }, []);
 
-  const agregarAlCarrito = (prod: Producto) => {
+  const agregarAlCarrito = useCallback((prod: Producto) => {
     if (!turnoAbierto) {
       alert('🔒 La caja está cerrada. Debes abrir un turno para agregar productos y realizar ventas.');
       setModalTurno(true);
@@ -692,9 +706,9 @@ export function useCaja() {
       }
       return [...prev, { producto: prod, cantidad: 1 }];
     });
-  };
+  }, [turnoAbierto]);
 
-  const actualizarCantidadItem = (id: string, nuevaCantidad: number) => {
+  const actualizarCantidadItem = useCallback((id: string, nuevaCantidad: number) => {
     if (!turnoAbierto) return;
     if (isNaN(nuevaCantidad) || nuevaCantidad <= 0) {
       setCarrito(prev => prev.filter(item => item.producto.id !== id));
@@ -703,7 +717,7 @@ export function useCaja() {
         item.producto.id === id ? { ...item, cantidad: nuevaCantidad } : item
       ));
     }
-  };
+  }, [turnoAbierto]);
 
   // Cálculos Venta Directa
   const totalCarrito = useMemo(() => {
@@ -728,9 +742,8 @@ export function useCaja() {
     return false;
   }, [metodoPagoVenta, montoRecibidoVenta, montoEfectivoVenta, montoDigitalVenta, totalCarrito]);
 
-  const cobrarComandaRapida = async () => {
-    if (cobrandoVentaDirecta) return;
-    if (carrito.length === 0) return;
+  const cobrarComandaRapida = async (imprimir: boolean = false) => {
+    if (cobrandoVentaDirecta || carrito.length === 0) return;
     if (!turnoAbierto) {
       setModalTurno(true);
       alert('Debes abrir el turno de caja antes de registrar un cobro.');
@@ -774,37 +787,6 @@ export function useCaja() {
         }))
       });
 
-      // Despachar a impresoras de cocina/barra
-      try {
-        let imps = impresorasConfig.filter((i) => i.activa);
-        if (imps.length === 0) {
-          try {
-            const frescas = await ConfiguracionServicio.listarImpresoras();
-            imps = (frescas || []).filter((i) => i.activa);
-          } catch {}
-        }
-
-        for (const imp of imps) {
-          const itemsFiltrados = carrito.filter((it) => {
-            if (!imp.categoriasIds || imp.categoriasIds.length === 0) return true;
-            const catId = it.producto.idCategoria;
-            return catId ? imp.categoriasIds.includes(catId) : true;
-          });
-
-          if (itemsFiltrados.length === 0) continue;
-
-          await ConfiguracionServicio.imprimirComandaDirecta(imp.id, {
-            mesa: 'Venta Directa',
-            cliente: clienteStr,
-            mesero: usuario?.nombre?.trim() || 'Cajero',
-            items: itemsFiltrados.map((it) => ({
-              nombre: it.producto.nombre,
-              cantidad: it.cantidad,
-            })),
-          }).catch(() => {});
-        }
-      } catch {}
-
       await CajaServicio.crearFactura({
         idMesa: null,
         idUsuario: idUsuarioActual,
@@ -828,25 +810,32 @@ export function useCaja() {
           .filter((it) => it.idProducto > 0),
       });
 
+      const itemsSnapshot = [...carrito];
+      const totalSnapshot = totalCarrito;
+      const metodoSnapshot = metodoPagoVenta.toUpperCase();
+      const itemsComprados = itemsSnapshot.map(it => ({
+        nombre: it.producto.nombre,
+        cantidad: it.cantidad,
+        precio: it.producto.precio
+      }));
+
       const nuevoMov: Movimiento = {
         id: Date.now().toString(),
         tipo: 'ingreso',
-        concepto: `Venta comanda rápida (${clienteStr}) - ${metodoPagoVenta.toUpperCase()}${detalleExtra}`,
-        monto: totalCarrito,
+        concepto: `Venta comanda rápida (${clienteStr}) - ${metodoSnapshot}${detalleExtra}`,
+        monto: totalSnapshot,
         hora: horaActual
       };
       setMovimientos(prev => [nuevoMov, ...prev]);
-
-      const itemsComprados = carrito.map(it => ({ nombre: it.producto.nombre, cantidad: it.cantidad, precio: it.producto.precio }));
 
       const nuevoHistorial: HistorialMesaItem = {
         id: `VD-${Date.now()}`,
         mesa: 'Venta directa',
         seccion: '',
         cliente: clienteStr,
-        monto: totalCarrito,
+        monto: totalSnapshot,
         mesero: usuario?.nombre?.trim() || 'Caja',
-        metodoPago: metodoPagoVenta.toUpperCase(),
+        metodoPago: metodoSnapshot,
         estado: 'Pagada',
         fechaApertura: new Date().toLocaleString(),
         fechaCierre: new Date().toLocaleString(),
@@ -854,6 +843,7 @@ export function useCaja() {
       };
       setHistorialMesas(prev => [nuevoHistorial, ...prev]);
 
+      // Cerrar modal y limpiar carrito inmediatamente
       setCarrito([]);
       setNombreCliente('');
       setMetodoPagoVenta('efectivo');
@@ -861,38 +851,69 @@ export function useCaja() {
       setMontoEfectivoVenta(0);
       setMontoDigitalVenta(0);
       setModalCobroVenta(false);
+      setCobrandoVentaDirecta(false);
 
-      if (window.confirm('Venta procesada exitosamente. ¿Deseas imprimir la factura / recibo de venta?')) {
+      if (imprimir) {
         setTicketAImprimir({
           titulo: 'Factura / Venta Directa',
           cliente: clienteStr,
           items: itemsComprados,
-          subtotal: totalCarrito,
-          total: totalCarrito,
-          metodoPago: metodoPagoVenta.toUpperCase(),
+          subtotal: totalSnapshot,
+          total: totalSnapshot,
+          metodoPago: metodoSnapshot,
           fecha: new Date().toLocaleDateString('es-CO'),
         });
       }
 
-      void recargar();
+      // Despachar a impresoras de cocina/barra y recargar en segundo plano
+      void (async () => {
+        try {
+          let imps = impresorasConfig.filter((i) => i.activa);
+          if (imps.length === 0) {
+            const frescas = await ConfiguracionServicio.listarImpresoras().catch(() => []);
+            imps = (frescas || []).filter((i) => i.activa);
+          }
+
+          await Promise.all(
+            imps.map(async (imp) => {
+              const itemsFiltrados = itemsSnapshot.filter((it) => {
+                if (!imp.categoriasIds || imp.categoriasIds.length === 0) return true;
+                const catId = it.producto.idCategoria;
+                return catId ? imp.categoriasIds.includes(catId) : true;
+              });
+              if (itemsFiltrados.length === 0) return;
+
+              await ConfiguracionServicio.imprimirComandaDirecta(imp.id, {
+                mesa: 'Venta Directa',
+                cliente: clienteStr,
+                mesero: usuario?.nombre?.trim() || 'Cajero',
+                items: itemsFiltrados.map((it) => ({
+                  nombre: it.producto.nombre,
+                  cantidad: it.cantidad,
+                })),
+              }).catch(() => {});
+            })
+          );
+          await recargar().catch(() => {});
+        } catch {}
+      })();
     } catch (err: any) {
-      alert('Error al procesar comanda rápida: ' + (err?.message || 'Error desconocido'));
-    } finally {
       setCobrandoVentaDirecta(false);
+      alert('Error al procesar comanda rápida: ' + (err?.message || 'Error desconocido'));
     }
   };
 
   // Cálculos Cobrar Mesas
   const mesasFiltradas = useMemo(() => {
+    const q = busquedaMesa.toLowerCase();
     return mesasActivas.filter(m => {
       const coincideSeccion = filtroSeccion === 'Todas' || m.seccion === filtroSeccion;
-      const coincideTexto = m.nombre.toLowerCase().includes(busquedaMesa.toLowerCase()) ||
-                            m.mesero.toLowerCase().includes(busquedaMesa.toLowerCase());
+      const coincideTexto = !q || m.nombre.toLowerCase().includes(q) || m.mesero.toLowerCase().includes(q);
       return coincideSeccion && coincideTexto;
     });
   }, [mesasActivas, filtroSeccion, busquedaMesa]);
 
-  const abrirCobroMesa = (mesa: MesaActiva) => {
+  const abrirCobroMesa = useCallback((mesa: MesaActiva) => {
     if (!turnoAbierto) {
       alert('🔒 La caja está cerrada. Debes abrir un turno para cobrar mesas.');
       setModalTurno(true);
@@ -906,7 +927,7 @@ export function useCaja() {
     setDescuento(0);
     setMontoEfectivo(0);
     setMontoDigital(0);
-  };
+  }, [turnoAbierto]);
 
   const subtotalMesa = useMemo(() => {
     if (!ventaSeleccionada) return 0;
@@ -920,7 +941,7 @@ export function useCaja() {
   const totalCobroMesa = useMemo(() => {
     if (!ventaSeleccionada) return 0;
     return Math.max(0, subtotalMesa - descuentoAplicado + (Number(propina) || 0));
-  }, [subtotalMesa, descuentoAplicado, propina]);
+  }, [ventaSeleccionada, subtotalMesa, descuentoAplicado, propina]);
 
   const cambioCalculado = useMemo(() => {
     let pagoTotal = 0;
@@ -940,9 +961,8 @@ export function useCaja() {
     return false;
   }, [metodoPago, montoRecibidoSimple, totalCobroMesa, montoEfectivo, montoDigital]);
 
-  const cobrarVentaMesa = async () => {
-    if (cobrandoMesa) return;
-    if (!mesaACobrar || !ventaSeleccionada) return;
+  const cobrarVentaMesa = async (imprimir: boolean = false) => {
+    if (cobrandoMesa || !mesaACobrar || !ventaSeleccionada) return;
     if (!turnoAbierto) {
       setModalTurno(true);
       alert('Debes abrir el turno de caja antes de registrar un cobro.');
@@ -955,8 +975,62 @@ export function useCaja() {
 
     setCobrandoMesa(true);
     try {
-      const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const fechaActual = new Date().toLocaleDateString() + ' - ' + horaActual;
+      const ahora = new Date();
+      const horaActual = ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const fechaActual = `${ahora.toLocaleDateString()} - ${horaActual}`;
+
+      const numMesa = Number(mesaACobrar.nombre.replace(/\D/g, ''));
+      const clienteTarget = ventaSeleccionada.cliente.trim().toLowerCase();
+
+      const comsACerrar = comandas.filter(
+        (c) =>
+          (c.idMesa === mesaACobrar.idBackend || c.mesa === numMesa) &&
+          (c.cliente || 'Cliente General').trim().toLowerCase() === clienteTarget &&
+          c.estado !== 'Cerrado'
+      );
+
+      const idsComandas = Array.from(
+        new Set([
+          ...comsACerrar.map((com) => com.id),
+          ...(ventaSeleccionada.comandaId ? [ventaSeleccionada.comandaId] : []),
+        ])
+      );
+      const idVenta = ventaSeleccionada.idVenta ?? comsACerrar.find((com) => com.idVenta)?.idVenta ?? null;
+
+      const mapaDetalles = new Map<string, { idProducto: number; cantidad: number; precioUnitario: number }>();
+      for (const item of ventaSeleccionada.items) {
+        if (!item.idProducto || item.cantidad <= 0) continue;
+        const clave = `${item.idProducto}-${item.precio}`;
+        const actual = mapaDetalles.get(clave);
+        if (actual) {
+          actual.cantidad += item.cantidad;
+        } else {
+          mapaDetalles.set(clave, {
+            idProducto: item.idProducto,
+            cantidad: item.cantidad,
+            precioUnitario: item.precio,
+          });
+        }
+      }
+
+      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
+
+      // Único await bloqueante: registrar la factura en backend
+      await CajaServicio.crearFactura({
+        idMesa: mesaACobrar.idBackend ?? null,
+        idUsuario: idUsuarioActual,
+        subtotal: ventaSeleccionada.total,
+        descuento: descuentoAplicado,
+        propina: Number(propina) || 0,
+        cliente: ventaSeleccionada.cliente,
+        metodoPago,
+        montoEfectivo: metodoPago === 'mixto' ? montoEfectivo : undefined,
+        montoTarjeta: metodoPago === 'mixto' ? montoDigital : undefined,
+        idTurnoCaja: turnoActual?.id,
+        idVenta,
+        idsComandas,
+        detalles: Array.from(mapaDetalles.values()),
+      });
 
       let detalleExtra = '';
       if (metodoPago === 'mixto') {
@@ -972,132 +1046,16 @@ export function useCaja() {
         detalleExtra += ` [Desc: -$${descuentoAplicado}]`;
       }
 
-      const comsACerrar = comandas.filter(
-        c => (c.idMesa === mesaACobrar.idBackend || c.mesa === Number(mesaACobrar.nombre.replace(/\D/g, ''))) &&
-             (c.cliente || 'Cliente General').trim().toLowerCase() === ventaSeleccionada.cliente.trim().toLowerCase() &&
-             c.estado !== 'Cerrado'
-      );
-
-      const idsComandas = Array.from(new Set([
-        ...comsACerrar.map((com) => com.id),
-        ...(ventaSeleccionada.comandaId ? [ventaSeleccionada.comandaId] : []),
-      ]));
-      const idVenta = ventaSeleccionada.idVenta ?? comsACerrar.find((com) => com.idVenta)?.idVenta ?? null;
-
-      const detallesFactura = Array.from(
-        ventaSeleccionada.items.reduce((mapa, item) => {
-          if (!item.idProducto || item.cantidad <= 0) return mapa;
-          const clave = `${item.idProducto}-${item.precio}`;
-          const actual = mapa.get(clave) || { idProducto: item.idProducto, cantidad: 0, precioUnitario: item.precio };
-          actual.cantidad += item.cantidad;
-          mapa.set(clave, actual);
-          return mapa;
-        }, new Map<string, { idProducto: number; cantidad: number; precioUnitario: number }>()).values()
-      );
-
-      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
-      await CajaServicio.crearFactura({
-        idMesa: mesaACobrar.idBackend ?? null,
-        idUsuario: idUsuarioActual,
-        subtotal: ventaSeleccionada.total,
-        descuento: descuentoAplicado,
-        propina: Number(propina) || 0,
-        cliente: ventaSeleccionada.cliente,
-        metodoPago,
-        montoEfectivo: metodoPago === 'mixto' ? montoEfectivo : undefined,
-        montoTarjeta: metodoPago === 'mixto' ? montoDigital : undefined,
-        idTurnoCaja: turnoActual?.id,
-        idVenta,
-        idsComandas,
-        detalles: detallesFactura,
-      });
-
-      const tareasActualizacion: Promise<unknown>[] = [];
-      if (idsComandas.length > 0) {
-        tareasActualizacion.push(...idsComandas.map((idCmd) => {
-          if (typeof cambiarEstado === 'function') {
-            return cambiarEstado(idCmd, 'Cerrado').catch(() => {});
-          }
-          return ComandaServicio.cambiarEstado(idCmd, 'Cerrado').catch(() => {});
-        }));
-      }
-      if (mesaACobrar.idBackend) {
-        tareasActualizacion.push(MesaServicio.actualizarMesa(mesaACobrar.idBackend, { estado: 'Libre' }).catch(() => {}));
-      }
-      if (tareasActualizacion.length > 0) {
-        await Promise.all(tareasActualizacion);
-      }
-
-      const nuevoHistorial: HistorialMesaItem = {
-        id: `HM-${Date.now().toString().slice(-3)}`,
-        mesa: mesaACobrar.nombre,
-        seccion: mesaACobrar.seccion,
-        cliente: ventaSeleccionada.cliente,
-        monto: totalCobroMesa,
-        mesero: mesaACobrar.mesero,
-        metodoPago: (
-          metodoPago === 'mixto'
-            ? `Mixto (Ef: $${montoEfectivo} / Dig: $${montoDigital})${propina > 0 ? ` + Prop: $${propina}` : ''}`
-            : metodoPago === 'tarjeta'
-              ? `Tarjeta${propina > 0 ? ` (Prop: $${propina})` : ''}`
-              : `${metodoPago.toUpperCase()}${montoRecibidoSimple > 0 ? ` (Recibido: $${montoRecibidoSimple})` : ''}${propina > 0 ? ` (Prop: $${propina})` : ''}`
-        ) + (descuentoAplicado > 0 ? ` (Desc: -$${descuentoAplicado})` : ''),
-        estado: 'Pagada',
-        fechaApertura: fechaActual,
-        fechaCierre: fechaActual,
-        items: ventaSeleccionada.items
-      };
-      setHistorialMesas(prev => [nuevoHistorial, ...prev]);
-
-      const nuevoMov: Movimiento = {
-        id: Date.now().toString(),
-        tipo: 'ingreso',
-        concepto: `Cobro ${mesaACobrar.nombre} - ${ventaSeleccionada.cliente} - ${metodoPago.toUpperCase()}${detalleExtra}`,
-        monto: totalCobroMesa,
-        hora: horaActual
-      };
-      setMovimientos(prev => [nuevoMov, ...prev]);
-
-      await Promise.all([
-        recargar().catch(() => {}),
-        MesaServicio.listarMesas().then(setMesasRaw).catch(() => {}),
-        MesaServicio.obtenerHistorial().then((evs) => {
-          if (evs && evs.length > 0) {
-            const mesaMap = new Map((mesasRaw || []).map(m => [m.id, m]));
-            const userMap = new Map(empleados.map(e => [e.idUsuario, e.nombre]));
-            setEventosMesas(evs.map((ev: any) => {
-              const mesaInfo = mesaMap.get(ev.idMesa);
-              const numMesa = mesaInfo?.numero ?? ev.idMesa;
-              const secNom = mesaInfo?.seccionNombre || (mesaInfo as any)?.seccion?.nombre || 'Salón';
-              const usrNom = userMap.get(ev.idUsuario) || (ev.idUsuario ? `Usuario #${ev.idUsuario}` : 'Sistema');
-              const fObj = ev.fechaAccion ? new Date(ev.fechaAccion) : new Date();
-              return {
-                id: ev.id,
-                idMesa: ev.idMesa,
-                mesa: `Mesa ${numMesa}`,
-                seccion: secNom,
-                idVenta: ev.idVenta,
-                idUsuario: ev.idUsuario,
-                usuario: usrNom,
-                estado: ev.estado || 'Actualización',
-                monto: ev.monto ?? null,
-                motivo: ev.motivo || 'Movimiento de mesa',
-                fecha: isNaN(fObj.getTime()) ? String(ev.fechaAccion) : fObj.toLocaleString('es-CO', {
-                  dateStyle: 'short',
-                  timeStyle: 'medium'
-                })
-              };
-            }));
-          }
-        }).catch(() => {})
-      ]);
-
-      const datosTicket = {
+      const datosTicket: TicketCaja = {
         titulo: 'Factura / Comprobante de Pago',
         cliente: ventaSeleccionada.cliente,
         mesa: mesaACobrar.nombre,
         seccion: mesaACobrar.seccion,
-        items: ventaSeleccionada.items.map(it => ({ nombre: it.nombre, cantidad: it.cantidad, precio: it.precio })),
+        items: ventaSeleccionada.items.map((it) => ({
+          nombre: it.nombre,
+          cantidad: it.cantidad,
+          precio: it.precio,
+        })),
         subtotal: ventaSeleccionada.total,
         descuento: descuentoAplicado,
         propina: Number(propina) || 0,
@@ -1106,6 +1064,48 @@ export function useCaja() {
         fecha: fechaActual,
       };
 
+      const nuevoHistorial: HistorialMesaItem = {
+        id: `HM-${Date.now().toString().slice(-3)}`,
+        mesa: mesaACobrar.nombre,
+        seccion: mesaACobrar.seccion,
+        cliente: ventaSeleccionada.cliente,
+        monto: totalCobroMesa,
+        mesero: mesaACobrar.mesero,
+        metodoPago:
+          (metodoPago === 'mixto'
+            ? `Mixto (Ef: $${montoEfectivo} / Dig: $${montoDigital})${propina > 0 ? ` + Prop: $${propina}` : ''}`
+            : metodoPago === 'tarjeta'
+              ? `Tarjeta${propina > 0 ? ` (Prop: $${propina})` : ''}`
+              : `${metodoPago.toUpperCase()}${montoRecibidoSimple > 0 ? ` (Recibido: $${montoRecibidoSimple})` : ''}${propina > 0 ? ` (Prop: $${propina})` : ''}`) +
+          (descuentoAplicado > 0 ? ` (Desc: -$${descuentoAplicado})` : ''),
+        estado: 'Pagada',
+        fechaApertura: fechaActual,
+        fechaCierre: fechaActual,
+        items: ventaSeleccionada.items,
+      };
+      setHistorialMesas((prev) => [nuevoHistorial, ...prev]);
+
+      const nuevoMov: Movimiento = {
+        id: Date.now().toString(),
+        tipo: 'ingreso',
+        concepto: `Cobro ${mesaACobrar.nombre} - ${ventaSeleccionada.cliente} - ${metodoPago.toUpperCase()}${detalleExtra}`,
+        monto: totalCobroMesa,
+        hora: horaActual,
+      };
+      setMovimientos((prev) => [nuevoMov, ...prev]);
+
+      // Ocultar comandas cobradas al instante en la vista
+      if (idsComandas.length > 0) {
+        setComandasCerradasLocal((prev) => {
+          const next = new Set(prev);
+          idsComandas.forEach((id) => next.add(id));
+          return next;
+        });
+      }
+
+      const idMesaBackend = mesaACobrar.idBackend;
+
+      // Cerrar modal y limpiar estados directamente
       setMesaACobrar(null);
       setVentaSeleccionada(null);
       setMontoEfectivo(0);
@@ -1114,14 +1114,76 @@ export function useCaja() {
       setDescuento(0);
       setMontoRecibidoSimple(0);
       setMetodoPago('efectivo');
+      setCobrandoMesa(false);
 
-      if (window.confirm(`Cobro de ${datosTicket.mesa} realizado con éxito. ¿Deseas imprimir la factura de venta?`)) {
+      // Si presionó el botón Imprimir, dispara la impresión sin preguntar
+      if (imprimir) {
         setTicketAImprimir(datosTicket);
       }
+
+      // Sincronización en segundo plano
+      void (async () => {
+        try {
+          const tareasActualizacion: Promise<unknown>[] = idsComandas.map((idCmd) =>
+            typeof cambiarEstado === 'function'
+              ? cambiarEstado(idCmd, 'Cerrado').catch(() => {})
+              : ComandaServicio.cambiarEstado(idCmd, 'Cerrado').catch(() => {})
+          );
+
+          if (idMesaBackend) {
+            tareasActualizacion.push(
+              MesaServicio.actualizarMesa(idMesaBackend, { estado: 'Libre' }).catch(() => {})
+            );
+          }
+
+          await Promise.all(tareasActualizacion);
+
+          await Promise.all([
+            recargar().catch(() => {}),
+            MesaServicio.listarMesas().then(setMesasRaw).catch(() => {}),
+            MesaServicio.obtenerHistorial()
+              .then((evs) => {
+                if (evs && evs.length > 0) {
+                  const mesaMap = new Map((mesasRaw || []).map((m) => [m.id, m]));
+                  const userMap = new Map(empleados.map((e) => [e.idUsuario, e.nombre]));
+                  setEventosMesas(
+                    evs.map((ev: any) => {
+                      const mesaInfo = mesaMap.get(ev.idMesa);
+                      const numM = mesaInfo?.numero ?? ev.idMesa;
+                      const secNom = mesaInfo?.seccionNombre || (mesaInfo as any)?.seccion?.nombre || 'Salón';
+                      const usrNom = userMap.get(ev.idUsuario) || (ev.idUsuario ? `Usuario #${ev.idUsuario}` : 'Sistema');
+                      const fObj = ev.fechaAccion ? new Date(ev.fechaAccion) : new Date();
+                      return {
+                        id: ev.id,
+                        idMesa: ev.idMesa,
+                        mesa: `Mesa ${numM}`,
+                        seccion: secNom,
+                        idVenta: ev.idVenta,
+                        idUsuario: ev.idUsuario,
+                        usuario: usrNom,
+                        estado: ev.estado || 'Actualización',
+                        monto: ev.monto ?? null,
+                        motivo: ev.motivo || 'Movimiento de mesa',
+                        fecha: isNaN(fObj.getTime())
+                          ? String(ev.fechaAccion)
+                          : fObj.toLocaleString('es-CO', {
+                              dateStyle: 'short',
+                              timeStyle: 'medium',
+                            }),
+                      };
+                    })
+                  );
+                }
+              })
+              .catch(() => {}),
+          ]);
+        } catch (bgErr) {
+          console.warn('Error sincronizando estado de mesa en segundo plano:', bgErr);
+        }
+      })();
     } catch (err: any) {
-      alert('Error al cobrar la venta: ' + (err?.message || 'Error desconocido'));
-    } finally {
       setCobrandoMesa(false);
+      alert('Error al cobrar la venta: ' + (err?.message || 'Error desconocido'));
     }
   };
 
@@ -1291,11 +1353,15 @@ export function useCaja() {
     });
   };
 
-  const empleadosFiltrados = empleados.filter(emp =>
-    emp.nombre.toLowerCase().includes(busquedaEmpleado.toLowerCase()) ||
-    emp.cedula.includes(busquedaEmpleado) ||
-    emp.cargo.toLowerCase().includes(busquedaEmpleado.toLowerCase())
-  );
+  const empleadosFiltrados = useMemo(() => {
+    const q = busquedaEmpleado.toLowerCase();
+    if (!q) return empleados;
+    return empleados.filter(emp =>
+      emp.nombre.toLowerCase().includes(q) ||
+      emp.cedula.includes(busquedaEmpleado) ||
+      emp.cargo.toLowerCase().includes(q)
+    );
+  }, [empleados, busquedaEmpleado]);
 
   return {
     // Auth / Context

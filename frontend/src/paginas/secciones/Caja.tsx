@@ -19,7 +19,6 @@ import {
   Filter,
   Clock,
   Layers,
-  Calendar,
   UserCheck,
   Eye,
   Search,
@@ -32,7 +31,7 @@ import {
   Power
 } from 'lucide-react';
 import FormatoTicketTermico from '../../componentes/FormatoTicketTermico';
-import { useCaja } from './hooks/useCaja';
+import { useCaja, type MesaActiva } from './hooks/useCaja';
 
 export interface TicketCaja {
   titulo: string;
@@ -71,23 +70,91 @@ export interface EventoHistorialMesa {
   fecha: string;
 }
 
+const TarjetaMesaCobro = React.memo(function TarjetaMesaCobro({
+  mesa,
+  turnoAbierto,
+  onAbrirCobro,
+  onAbrirModalTurno,
+}: {
+  mesa: MesaActiva;
+  turnoAbierto: boolean;
+  onAbrirCobro: (m: MesaActiva) => void;
+  onAbrirModalTurno: () => void;
+}) {
+  const totalMesa = mesa.ventas.reduce((acc, v) => acc + v.total, 0);
+  const todosLosItems = mesa.ventas.flatMap((v) => v.items);
+
+  return (
+    <div
+      onClick={() => onAbrirCobro(mesa)}
+      className="cursor-pointer p-3 rounded-2xl border bg-[#0B132B] border-[#3A506B] hover:border-[#5BC0DE] transition-all flex flex-col justify-between shadow-sm"
+    >
+      <div className="flex justify-between items-start mb-1.5 gap-1">
+        <div className="min-w-0 pr-1">
+          <span className="font-bold text-[#F4D6B0] text-sm truncate block">{mesa.nombre}</span>
+          <span className="block text-[10px] text-[#5BC0DE] truncate">
+            {mesa.seccion} • {(mesa.mesero || 'Mesero').split(' ')[0]}
+          </span>
+        </div>
+        <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-[#D97706]/15 text-[#D97706] text-[10px] font-bold border border-[#D97706]/30">
+          {mesa.ventas.length} Ventas
+        </span>
+      </div>
+
+      <div className="my-1.5 space-y-1 max-h-16 overflow-y-auto scrollbar-none bg-[#1C2541]/70 p-2 rounded-xl border border-[#3A506B]/50 text-[10px]">
+        {todosLosItems.slice(0, 3).map((it, idx) => (
+          <div key={idx} className="flex justify-between text-[#5BC0DE] truncate">
+            <span className="truncate">
+              {it.cantidad}x {it.nombre}
+            </span>
+            <span className="text-[#F4D6B0] ml-1 shrink-0 font-mono">
+              ${(it.precio * it.cantidad).toLocaleString()}
+            </span>
+          </div>
+        ))}
+        {todosLosItems.length > 3 && (
+          <span className="text-[9px] text-[#5BC0DE]/60 italic block text-center">
+            +{todosLosItems.length - 3} ítems más...
+          </span>
+        )}
+      </div>
+
+      <div className="flex justify-between items-center mt-1 pt-2 border-t border-[#3A506B] text-[11px]">
+        <span className="text-[#5BC0DE] font-semibold">Total:</span>
+        <span className="font-bold text-[#D97706] text-sm font-mono">${totalMesa.toLocaleString()}</span>
+      </div>
+      <button
+        disabled={!turnoAbierto}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!turnoAbierto) {
+            alert('🔒 La caja está cerrada. Debes abrir un turno para cobrar mesas.');
+            onAbrirModalTurno();
+            return;
+          }
+          onAbrirCobro(mesa);
+        }}
+        className="w-full mt-2 py-1.5 bg-[#5BC0DE]/10 text-[#5BC0DE] border border-[#5BC0DE]/30 rounded-xl text-[11px] font-bold hover:bg-[#5BC0DE]/20 transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
+      >
+        {!turnoAbierto ? <Lock size={12} /> : null}
+        {!turnoAbierto ? 'Abrir Turno' : 'Gestionar Cobro'}
+      </button>
+    </div>
+  );
+});
+
 export default function Caja(): React.ReactElement {
   const {
-    // Auth
-    usuario,
     // Turno
-    turnoActual,
     turnoAbierto,
     verificandoTurno,
     bannerCerradoDescartado, setBannerCerradoDescartado,
     baseInicial, setBaseInicial,
     montoCierre, setMontoCierre,
     modalTurno, setModalTurno,
-    cargando,
     // Ticket
     ticketAImprimir, setTicketAImprimir,
     negocioConfig,
-    facturacionConfig,
     // Cobro
     cobrandoMesa,
     cobrandoVentaDirecta,
@@ -98,7 +165,6 @@ export default function Caja(): React.ReactElement {
     nuevoMovMonto, setNuevoMovMonto,
     // Nómina
     nominas,
-    empleados,
     busquedaEmpleado, setBusquedaEmpleado,
     empleadoSeleccionado, setEmpleadoSeleccionado,
     mostrarSugerencias, setMostrarSugerencias,
@@ -117,8 +183,6 @@ export default function Caja(): React.ReactElement {
     // Tabs
     activeTab, setActiveTab,
     // Historial
-    historialMesas,
-    eventosMesas,
     busquedaHistorial, setBusquedaHistorial,
     filtroTipoHistorial, setFiltroTipoHistorial,
     filtroSeccionHistorial, setFiltroSeccionHistorial,
@@ -152,19 +216,16 @@ export default function Caja(): React.ReactElement {
     esDuenoOAdmin,
     categoriasDisponibles,
     productosFiltradosVenta,
-    mesasActivas,
     seccionesHistorial,
     historialMesasFiltrado,
     eventosMesasFiltrados,
     totalRecaudadoHistorial,
     totalCarrito,
-    cambioVenta,
     isPagoIncompletoVenta,
     mesasFiltradas,
     subtotalMesa,
     descuentoAplicado,
     totalCobroMesa,
-    cambioCalculado,
     isPagoIncompletoMesa,
     // Handlers
     cambiarCajaActiva,
@@ -547,59 +608,15 @@ export default function Caja(): React.ReactElement {
                   {mesasFiltradas.length === 0 ? (
                     <p className="text-[#5BC0DE] text-xs col-span-full text-center py-10">No hay mesas ocupadas activas.</p>
                   ) : (
-                    mesasFiltradas.map((m) => {
-                      const totalMesa = m.ventas.reduce((acc, v) => acc + v.total, 0);
-                      return (
-                        <div
-                          key={m.id}
-                          onClick={() => abrirCobroMesa(m)}
-                          className="cursor-pointer p-3 rounded-2xl border bg-[#0B132B] border-[#3A506B] hover:border-[#5BC0DE] transition-all flex flex-col justify-between shadow-sm"
-                        >
-                          <div className="flex justify-between items-start mb-1.5 gap-1">
-                            <div className="min-w-0 pr-1">
-                              <span className="font-bold text-[#F4D6B0] text-sm truncate block">{m.nombre}</span>
-                              <span className="block text-[10px] text-[#5BC0DE] truncate">{m.seccion} • {(m.mesero || 'Mesero').split(' ')[0]}</span>
-                            </div>
-                            <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-[#D97706]/15 text-[#D97706] text-[10px] font-bold border border-[#D97706]/30">{m.ventas.length} Ventas</span>
-                          </div>
-
-                          <div className="my-1.5 space-y-1 max-h-16 overflow-y-auto scrollbar-none bg-[#1C2541]/70 p-2 rounded-xl border border-[#3A506B]/50 text-[10px]">
-                            {m.ventas.flatMap(v => v.items).slice(0, 3).map((it, idx) => (
-                              <div key={idx} className="flex justify-between text-[#5BC0DE] truncate">
-                                <span className="truncate">{it.cantidad}x {it.nombre}</span>
-                                <span className="text-[#F4D6B0] ml-1 shrink-0 font-mono">${(it.precio * it.cantidad).toLocaleString()}</span>
-                              </div>
-                            ))}
-                            {m.ventas.flatMap(v => v.items).length > 3 && (
-                              <span className="text-[9px] text-[#5BC0DE]/60 italic block text-center">
-                                +{m.ventas.flatMap(v => v.items).length - 3} ítems más...
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex justify-between items-center mt-1 pt-2 border-t border-[#3A506B] text-[11px]">
-                            <span className="text-[#5BC0DE] font-semibold">Total:</span>
-                            <span className="font-bold text-[#D97706] text-sm font-mono">${totalMesa.toLocaleString()}</span>
-                          </div>
-                          <button
-                            disabled={!turnoAbierto}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!turnoAbierto) {
-                                alert('🔒 La caja está cerrada. Debes abrir un turno para cobrar mesas.');
-                                setModalTurno(true);
-                                return;
-                              }
-                              abrirCobroMesa(m);
-                            }}
-                            className="w-full mt-2 py-1.5 bg-[#5BC0DE]/10 text-[#5BC0DE] border border-[#5BC0DE]/30 rounded-xl text-[11px] font-bold hover:bg-[#5BC0DE]/20 transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
-                          >
-                            {!turnoAbierto ? <Lock size={12} /> : null}
-                            {!turnoAbierto ? 'Abrir Turno' : 'Gestionar Cobro'}
-                          </button>
-                        </div>
-                      );
-                    })
+                    mesasFiltradas.map((m) => (
+                      <TarjetaMesaCobro
+                        key={m.id}
+                        mesa={m}
+                        turnoAbierto={turnoAbierto}
+                        onAbrirCobro={abrirCobroMesa}
+                        onAbrirModalTurno={() => setModalTurno(true)}
+                      />
+                    ))
                   )}
                 </div>
               </div>
@@ -1193,7 +1210,7 @@ export default function Caja(): React.ReactElement {
         </div>
       </div>
 
-      {/* MODAL DE COBRO PARA VENTA DIRECTA - Estilo Mesas */}
+      {/* MODAL DE COBRO PARA VENTA DIRECTA */}
       {modalCobroVenta && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
           <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl sm:rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-full">
@@ -1268,6 +1285,39 @@ export default function Caja(): React.ReactElement {
                 </div>
               )}
 
+              {metodoPagoVenta === 'mixto' && (
+                <div className="space-y-3 bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]">
+                  <div>
+                    <label className="text-[11px] text-[#5BC0DE] block mb-1 font-bold">Efectivo ($)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="$0"
+                      value={montoEfectivoVenta || ''}
+                      onChange={(e) => setMontoEfectivoVenta(Number(e.target.value.replace(/\D/g, '')) || 0)}
+                      className="w-full bg-[#1C2541] border border-[#3A506B] px-3 py-2 rounded-lg text-[#F4D6B0] text-sm font-bold focus:outline-none focus:border-[#5BC0DE]"
+                    />
+                    <div className="flex gap-1.5 mt-2">
+                      <button type="button" onClick={() => setMontoEfectivoVenta(Math.max(0, totalCarrito - montoDigitalVenta))} className="flex-1 py-1.5 bg-[#1C2541] border border-[#3A506B] rounded-md text-[10px] font-bold text-[#5BC0DE] hover:bg-[#3A506B] transition-colors">Resto</button>
+                      {[20000, 50000, 100000].map(billete => (
+                        <button key={billete} type="button" onClick={() => setMontoEfectivoVenta(billete)} className="flex-1 py-1.5 bg-[#1C2541] border border-[#3A506B] rounded-md text-[10px] font-bold text-[#5BC0DE] hover:bg-[#3A506B] transition-colors">${billete / 1000}k</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-[#3A506B]/50">
+                    <label className="text-[11px] text-[#5BC0DE] block mb-1 font-bold">Digital/Tarjeta ($)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="$0"
+                      value={montoDigitalVenta || ''}
+                      onChange={(e) => setMontoDigitalVenta(Number(e.target.value.replace(/\D/g, '')) || 0)}
+                      className="w-full bg-[#1C2541] border border-[#3A506B] px-3 py-2 rounded-lg text-[#F4D6B0] text-sm font-bold focus:outline-none focus:border-[#5BC0DE]"
+                    />
+                  </div>
+                </div>
+              )}
+
               {(metodoPagoVenta === 'efectivo' || metodoPagoVenta === 'transferencia' || metodoPagoVenta === 'mixto') && (
                 <div className="flex justify-between items-center px-1 text-xs">
                   <span className="text-[#5BC0DE] font-bold">
@@ -1281,10 +1331,30 @@ export default function Caja(): React.ReactElement {
             </div>
 
             <div className="p-3 sm:p-5 pb-[max(0.70rem,env(safe-area-inset-bottom))] bg-[#0B132B] border-t border-[#3A506B] flex gap-2 shrink-0">
-              <button disabled={cobrandoVentaDirecta} onClick={() => setModalCobroVenta(false)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 disabled:opacity-40 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all h-[42px]">
+              <button
+                type="button"
+                disabled={cobrandoVentaDirecta}
+                onClick={() => setModalCobroVenta(false)}
+                className="px-3 bg-[#3A506B] hover:bg-[#3A506B]/80 disabled:opacity-40 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all h-[42px]"
+              >
                 Cancelar
               </button>
-              <button disabled={isPagoIncompletoVenta || cobrandoVentaDirecta} onClick={cobrarComandaRapida} className="flex-1 bg-[#5BC0DE] hover:bg-[#4CA8C4] disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 h-[42px]">
+              <button
+                type="button"
+                disabled={isPagoIncompletoVenta || cobrandoVentaDirecta}
+                onClick={() => void cobrarComandaRapida(true)}
+                title="Cobrar e imprimir factura"
+                className="px-3.5 bg-[#1C2541] hover:bg-[#3A506B] border border-[#5BC0DE]/50 disabled:opacity-40 disabled:cursor-not-allowed text-[#5BC0DE] font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 h-[42px]"
+              >
+                <Printer size={15} />
+                <span className="hidden sm:inline">Imprimir</span>
+              </button>
+              <button
+                type="button"
+                disabled={isPagoIncompletoVenta || cobrandoVentaDirecta}
+                onClick={() => void cobrarComandaRapida(false)}
+                className="flex-1 bg-[#5BC0DE] hover:bg-[#4CA8C4] disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 h-[42px]"
+              >
                 {cobrandoVentaDirecta ? (
                   <>
                     <span className="w-3.5 h-3.5 border-2 border-[#0B132B] border-t-transparent rounded-full animate-spin" />
@@ -1301,7 +1371,7 @@ export default function Caja(): React.ReactElement {
         </div>
       )}
 
-      {/* MODAL DE COBRO PARA MESAS - Estilo Mesas */}
+      {/* MODAL DE COBRO PARA MESAS */}
       {mesaACobrar && ventaSeleccionada && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
           <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl sm:rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-full">
@@ -1532,10 +1602,30 @@ export default function Caja(): React.ReactElement {
             </div>
 
             <div className="p-3 sm:p-5 pb-[max(0.70rem,env(safe-area-inset-bottom))] bg-[#0B132B] border-t border-[#3A506B] flex gap-2 shrink-0">
-              <button disabled={cobrandoMesa} onClick={() => setMesaACobrar(null)} className="flex-1 bg-[#3A506B] hover:bg-[#3A506B]/80 disabled:opacity-40 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all h-[42px]">
+              <button
+                type="button"
+                disabled={cobrandoMesa}
+                onClick={() => setMesaACobrar(null)}
+                className="px-3 bg-[#3A506B] hover:bg-[#3A506B]/80 disabled:opacity-40 text-[#F4D6B0] font-bold py-2.5 rounded-xl text-xs transition-all h-[42px]"
+              >
                 Cancelar
               </button>
-              <button disabled={isPagoIncompletoMesa || cobrandoMesa} onClick={cobrarVentaMesa} className="flex-1 bg-[#5BC0DE] hover:bg-[#4CA8C4] disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 h-[42px]">
+              <button
+                type="button"
+                disabled={isPagoIncompletoMesa || cobrandoMesa}
+                onClick={() => void cobrarVentaMesa(true)}
+                title="Cobrar e imprimir factura"
+                className="px-3.5 bg-[#1C2541] hover:bg-[#3A506B] border border-[#5BC0DE]/50 disabled:opacity-40 disabled:cursor-not-allowed text-[#5BC0DE] font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 h-[42px]"
+              >
+                <Printer size={15} />
+                <span className="hidden sm:inline">Imprimir</span>
+              </button>
+              <button
+                type="button"
+                disabled={isPagoIncompletoMesa || cobrandoMesa}
+                onClick={() => void cobrarVentaMesa(false)}
+                className="flex-1 bg-[#5BC0DE] hover:bg-[#4CA8C4] disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 h-[42px]"
+              >
                 {cobrandoMesa ? (
                   <>
                     <span className="w-3.5 h-3.5 border-2 border-[#0B132B] border-t-transparent rounded-full animate-spin" />
@@ -2007,7 +2097,6 @@ export default function Caja(): React.ReactElement {
         <FormatoTicketTermico
           tipo="factura"
           negocio={negocioConfig}
-          facturacion={facturacionConfig}
           titulo={ticketAImprimir.titulo || 'FACTURA DE VENTA'}
           mesa={ticketAImprimir.mesa}
           seccion={ticketAImprimir.seccion}
