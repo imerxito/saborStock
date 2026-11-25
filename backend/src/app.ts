@@ -35,13 +35,14 @@ const app = express();
 app.use(
     cors({
         origin: [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://sabor-stock-7qpi.vercel.app",
-        "https://sabor-stock-azure.vercel.app",
-        /^http:\/\/192\.168\.\d+\.\d+:5173$/,
-        /^http:\/\/localhost:\d+$/,
-        /^http:\/\/127\.0\.0\.1:\d+$/
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://sabor-stock-7qpi-beexr2n8o-imerxito.vercel.app",
+            "https://sabor-stock-7qpi.vercel.app",
+            "https://sabor-stock-azure.vercel.app",
+            /^http:\/\/192\.168\.\d+\.\d+:5173$/,
+            /^http:\/\/localhost:\d+$/,
+            /^http:\/\/127\.0\.0\.1:\d+$/
         ],
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
