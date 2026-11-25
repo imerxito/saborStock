@@ -63,6 +63,20 @@ export class FacturaServicio {
             idUsuario = primerUser?.id_usuario ?? 1;
         }
 
+        // ── Priorizar el mesero de la venta como responsable de la factura/propina ──
+        // Si hay una venta asociada y tiene mesero asignado (venta.id_usuario),
+        // ese mesero es el responsable real de la atención y debe recibir la propina.
+        if (datos.idVenta && datos.idVenta > 0) {
+            try {
+                const venta = await this.ventaRepo.obtenerPorId(datos.idVenta);
+                if (venta?.idUsuario && venta.idUsuario > 0) {
+                    idUsuario = venta.idUsuario;
+                }
+            } catch {
+                // Si falla la consulta, conservar el usuario del cajero
+            }
+        }
+
         const idMesa = datos.idMesa && datos.idMesa > 0 ? datos.idMesa : null;
         const subtotal = Math.max(0, Number(datos.subtotal ?? 0));
         const propina = Math.max(0, Number(datos.propina ?? 0));

@@ -8,7 +8,6 @@ const usuarioServicio = new UsuarioServicio();
 export class AuthControlador {
     async login(req: Request, res: Response): Promise<void> {
         try {
-            console.log('Body recibido:', req.body);
             const { correo, contrasena } = req.body;
 
             if (!correo || !contrasena) {

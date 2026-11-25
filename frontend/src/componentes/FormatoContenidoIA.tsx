@@ -9,7 +9,11 @@ import {
   Wallet, 
   Package,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Users,
+  HandCoins,
+  ClipboardList,
+  Store,
 } from "lucide-react";
 
 interface FormatoContenidoIAProps {
@@ -88,20 +92,32 @@ function formatearTextoInline(texto: string): React.ReactNode {
  */
 function obtenerIconoSeccion(titulo: string) {
   const t = titulo.toLowerCase();
-  if (t.includes("venta") || t.includes("ingreso") || t.includes("financ") || t.includes("caja")) {
+  if (t.includes("venta") || t.includes("ingreso") || t.includes("financ") || t.includes("caja") || t.includes("balance") || t.includes("resumen")) {
     return <Wallet className="w-4 h-4 text-[#5BC0DE] shrink-0" />;
   }
-  if (t.includes("plato") || t.includes("menú") || t.includes("comida") || t.includes("producto")) {
+  if (t.includes("propina") || t.includes("tip")) {
+    return <HandCoins className="w-4 h-4 text-[#FBBF24] shrink-0" />;
+  }
+  if (t.includes("mesero") || t.includes("personal") || t.includes("empleado") || t.includes("usuario")) {
+    return <Users className="w-4 h-4 text-[#A78BFA] shrink-0" />;
+  }
+  if (t.includes("plato") || t.includes("menú") || t.includes("comida") || t.includes("producto") || t.includes("categor")) {
     return <Utensils className="w-4 h-4 text-[#FBBF24] shrink-0" />;
   }
   if (t.includes("inventario") || t.includes("stock") || t.includes("insumo")) {
     return <Package className="w-4 h-4 text-[#E57373] shrink-0" />;
   }
-  if (t.includes("recomenda") || t.includes("estrateg") || t.includes("accion") || t.includes("consejo")) {
+  if (t.includes("recomenda") || t.includes("estrateg") || t.includes("accion") || t.includes("consejo") || t.includes("paso") || t.includes("cómo")) {
     return <Lightbulb className="w-4 h-4 text-[#4ADE80] shrink-0" />;
   }
   if (t.includes("alerta") || t.includes("diagnóst") || t.includes("atención")) {
     return <AlertTriangle className="w-4 h-4 text-[#F87171] shrink-0" />;
+  }
+  if (t.includes("nomina") || t.includes("nómina") || t.includes("pago") || t.includes("salario")) {
+    return <ClipboardList className="w-4 h-4 text-[#34D399] shrink-0" />;
+  }
+  if (t.includes("mesa") || t.includes("salon") || t.includes("sabor") || t.includes("stock ia")) {
+    return <Store className="w-4 h-4 text-[#5BC0DE] shrink-0" />;
   }
   return <Sparkles className="w-4 h-4 text-[#5BC0DE] shrink-0" />;
 }

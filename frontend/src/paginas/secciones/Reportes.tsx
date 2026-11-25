@@ -835,54 +835,105 @@ export default function AnalisisReportes() {
 
             <Card>
               <h3 className="text-xs sm:text-sm font-bold text-[#F4D6B0] mb-3">Resumen de Desempeño del Personal</h3>
-              
+
               {dataEmpleados.length === 0 ? (
                 <div className="text-center py-8 text-xs text-[#5BC0DE]/60">
                   No se encontraron registros de empleados en el sistema.
                 </div>
-              ) : (
-                <>
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
-                          <th className="pb-3 font-semibold">Empleado</th>
-                          <th className="pb-3 text-center font-semibold">Comandas</th>
-                          <th className="pb-3 text-right font-semibold">Ventas</th>
-                          <th className="pb-3 text-right font-semibold">Propinas</th>
-                          <th className="pb-3 text-center font-semibold">Último Turno</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dataEmpleados.map(emp => (
-                          <tr key={emp.id} onClick={() => setModalEmpleado(emp)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
-                            <td className="py-3 font-medium text-[#F4D6B0]">{emp.nombre} <span className="text-[10px] text-[#5BC0DE] block">{emp.rol}</span></td>
-                            <td className="py-3 text-center text-[#F4D6B0]">{emp.comandasAtendidas}</td>
-                            <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</td>
-                            <td className="py-3 text-right font-bold text-[#F4D6B0]">{formatearMoneda(emp.propinas)}</td>
-                            <td className="py-3 text-center text-xs text-[#5BC0DE]">{emp.ultimoDiaTrabajado}</td>
+              ) : (() => {
+                // Ordenar por propinas desc para ranking de medallas
+                const rankingPropinas = [...dataEmpleados].sort((a, b) => b.propinas - a.propinas);
+                const medallas: Record<number, string> = {};
+                rankingPropinas.slice(0, 3).forEach((e, i) => {
+                  medallas[e.id] = ["🥇", "🥈", "🥉"][i];
+                });
+                const badgeRol = (rol: string) => {
+                  const r = rol.toLowerCase();
+                  if (r.includes("mesero") || r.includes("mozo") || r.includes("waiter")) {
+                    return <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] bg-[#5BC0DE]/20 text-[#5BC0DE] border border-[#5BC0DE]/30">{rol}</span>;
+                  }
+                  return <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] bg-[#F4D6B0]/10 text-[#F4D6B0]/70 border border-[#F4D6B0]/20">{rol}</span>;
+                };
+                return (
+                  <>
+                    {/* Tabla desktop */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-[#3A506B] text-xs text-[#5BC0DE]">
+                            <th className="pb-3 font-semibold">#</th>
+                            <th className="pb-3 font-semibold">Empleado</th>
+                            <th className="pb-3 text-center font-semibold">Comandas</th>
+                            <th className="pb-3 text-right font-semibold">Ventas</th>
+                            <th className="pb-3 text-right font-semibold">Propinas</th>
+                            <th className="pb-3 text-right font-semibold">% Propina</th>
+                            <th className="pb-3 text-center font-semibold">Último Turno</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {dataEmpleados.map(emp => {
+                            const pct = emp.totalVendido > 0
+                              ? Math.round((emp.propinas / emp.totalVendido) * 100)
+                              : 0;
+                            const medalla = medallas[emp.id] ?? "";
+                            return (
+                              <tr key={emp.id} onClick={() => setModalEmpleado(emp)} className="border-b border-[#3A506B]/50 hover:bg-[#3A506B]/30 transition-colors cursor-pointer">
+                                <td className="py-3 text-base">{medalla || <span className="text-[#5BC0DE]/30 text-xs">—</span>}</td>
+                                <td className="py-3 font-medium text-[#F4D6B0]">
+                                  {emp.nombre}
+                                  <span className="block mt-0.5">{badgeRol(emp.rol)}</span>
+                                </td>
+                                <td className="py-3 text-center text-[#F4D6B0]">{emp.comandasAtendidas}</td>
+                                <td className="py-3 text-right font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</td>
+                                <td className="py-3 text-right font-bold text-[#F4D6B0]">{formatearMoneda(emp.propinas)}</td>
+                                <td className="py-3 text-right">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${pct >= 15 ? "bg-green-500/20 text-green-400" : pct >= 8 ? "bg-yellow-500/20 text-yellow-400" : "bg-[#3A506B]/40 text-[#5BC0DE]/60"}`}>
+                                    {pct}%
+                                  </span>
+                                </td>
+                                <td className="py-3 text-center text-xs text-[#5BC0DE]">{emp.ultimoDiaTrabajado}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
-                  <div className="md:hidden space-y-2">
-                    {dataEmpleados.map(emp => (
-                      <div key={emp.id} onClick={() => setModalEmpleado(emp)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm active:scale-[0.99]">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-xs text-[#F4D6B0]">{emp.nombre} <span className="text-[9px] text-[#5BC0DE]">({emp.rol})</span></span>
-                          <span className="text-[10px] font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</span>
-                        </div>
-                        <div className="flex justify-between text-[10px] text-[#5BC0DE] mt-1">
-                          <span>{emp.comandasAtendidas} comandas</span>
-                          <span>Prop: {formatearMoneda(emp.propinas)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+                    {/* Cards mobile */}
+                    <div className="md:hidden space-y-2">
+                      {dataEmpleados.map(emp => {
+                        const pct = emp.totalVendido > 0
+                          ? Math.round((emp.propinas / emp.totalVendido) * 100)
+                          : 0;
+                        const medalla = medallas[emp.id] ?? "";
+                        return (
+                          <div key={emp.id} onClick={() => setModalEmpleado(emp)} className="bg-[#0B132B] border border-[#3A506B] rounded-xl p-3 flex flex-col gap-1 shadow-sm active:scale-[0.99]">
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-xs text-[#F4D6B0]">
+                                {medalla && <span className="mr-1">{medalla}</span>}
+                                {emp.nombre}
+                              </span>
+                              <span className="text-[10px] font-bold text-[#5BC0DE]">{formatearMoneda(emp.totalVendido)}</span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {badgeRol(emp.rol)}
+                            </div>
+                            <div className="flex justify-between text-[10px] text-[#5BC0DE] mt-1">
+                              <span>{emp.comandasAtendidas} comandas</span>
+                              <span>
+                                Prop: {formatearMoneda(emp.propinas)}
+                                <span className={`ml-1 px-1.5 rounded-full font-semibold ${pct >= 15 ? "text-green-400" : pct >= 8 ? "text-yellow-400" : "text-[#5BC0DE]/50"}`}>
+                                  ({pct}%)
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
             </Card>
           </div>
         )}

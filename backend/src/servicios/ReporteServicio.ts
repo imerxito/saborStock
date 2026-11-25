@@ -337,7 +337,8 @@ export class ReporteServicio {
 
             supabase
                 .from("factura")
-                .select("*, detalle_factura(*, producto:id_producto(nombre, precio_venta, id_categoria, categoria:id_categoria(nombre)))")
+                // Incluir la venta para saber el mesero real (venta.id_usuario)
+                .select("*, detalle_factura(*, producto:id_producto(nombre, precio_venta, id_categoria, categoria:id_categoria(nombre))), venta:id_venta(id_venta, id_usuario, usuario:id_usuario(nombre, rol))")
                 .gte("fecha_emision", `${fechaInicioStr}T00:00:00`)
                 .lte("fecha_emision", `${fechaHoyStr}T23:59:59`)
                 .neq("estado", "Cancelada")
@@ -350,7 +351,7 @@ export class ReporteServicio {
 
             supabase
                 .from("usuario")
-                .select("*, comanda(*), factura(*)")
+                .select("*, comanda(*)")
                 .eq("activo", true),
 
             supabase
@@ -476,29 +477,44 @@ export class ReporteServicio {
         productos.sort((a, b) => b.ingresos - a.ingresos || b.unidadesVendidas - a.unidadesVendidas);
 
         // 3. Empleados / Rendimiento
+        // Las propinas se asignan al mesero de la VENTA (venta.id_usuario),
+        // ya que es el responsable real de la atención, no el cajero que cobró.
+        const facturasConVenta = facturasDb || [];
+
+        // Mapa: id_usuario_mesero → { total_vendido, propinas, facturas_count }
+        const mapaRendimiento = new Map<number, { totalVendido: number; propinas: number; cantidadFacturas: number }>();
+        for (const f of facturasConVenta as any[]) {
+            // Usar el id_usuario de la venta (mesero) si existe, sino el de la factura (cajero)
+            const idMesero = Number((f as any).venta?.id_usuario ?? f.id_usuario);
+            if (!idMesero || idMesero <= 0) continue;
+            const prev = mapaRendimiento.get(idMesero) ?? { totalVendido: 0, propinas: 0, cantidadFacturas: 0 };
+            mapaRendimiento.set(idMesero, {
+                totalVendido: prev.totalVendido + Number(f.total_pagar || 0),
+                propinas: prev.propinas + Number(f.propina || 0),
+                cantidadFacturas: prev.cantidadFacturas + 1,
+            });
+        }
+
         const empleados: DashboardEmpleado[] = (usuariosDb || []).map((u: any) => {
             const comandasEnPeriodo = (u.comanda || []).filter((c: any) => {
                 if (!c.fecha_creacion) return false;
                 const cFecha = String(c.fecha_creacion).slice(0, 10);
                 return cFecha >= fechaInicioStr && cFecha <= fechaHoyStr;
             });
-            const facturasUsuario = facturasEnPeriodo.filter((f: any) => f.id_usuario === u.id_usuario);
-            const totalVendido = facturasUsuario.reduce((acc: number, f: any) => acc + Number(f.total_pagar || 0), 0);
-            const propinas = facturasUsuario.reduce((acc: number, f: any) => acc + Number(f.propina || 0), 0);
+
+            const rendimiento = mapaRendimiento.get(Number(u.id_usuario)) ?? { totalVendido: 0, propinas: 0, cantidadFacturas: 0 };
 
             let ultimoDia = fechaHoyStr;
-            const ultFactura = u.factura?.[0]?.fecha_emision;
             const ultComanda = u.comanda?.[0]?.fecha_creacion;
-            if (ultFactura) ultimoDia = String(ultFactura).slice(0, 10);
-            else if (ultComanda) ultimoDia = String(ultComanda).slice(0, 10);
+            if (ultComanda) ultimoDia = String(ultComanda).slice(0, 10);
 
             return {
                 id: `EMP-${String(u.id_usuario).padStart(2, "0")}`,
                 nombre: u.nombre || "Empleado",
                 rol: u.rol || "Mesero",
                 comandasAtendidas: comandasEnPeriodo.length,
-                totalVendido,
-                propinas,
+                totalVendido: rendimiento.totalVendido,
+                propinas: rendimiento.propinas,
                 ultimoDiaTrabajado: ultimoDia,
             };
         });

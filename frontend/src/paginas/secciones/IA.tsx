@@ -159,7 +159,7 @@ function SeccionChat() {
         id: "welcome",
         rol: "assistant",
         contenido:
-            "Hola 👋 Soy tu asistente de negocio. Puedo analizar ventas, revisar stock bajo y darte recomendaciones. ¿Qué quieres consultar hoy?",
+            "Hola 👋 Soy tu asistente inteligente de **SaborStock**. Puedo analizar ventas, propinas por mesero, stock crítico, nómina y guiarte en cualquier módulo de la app. ¿Qué necesitas consultar hoy?\n\n> **Tip:** Puedo mostrarte tablas con propinas por mesero, elegir porcentaje de propina, ver las categorías más vendidas y mucho más. ¡Pregúntame con detalle!",
         fecha: new Date(),
     });
 
@@ -330,9 +330,13 @@ function SeccionChat() {
                         <div className="flex flex-wrap gap-2">
                             {[
                                 "📊 ¿Cuáles son los platos más vendidos de hoy?",
+                                "💵 Muéstrame la tabla de propinas por mesero del último mes",
+                                "💡 Calcula la propina al 10% sobre las ventas de hoy",
                                 "⚠️ ¿Qué insumos tienen stock bajo o crítico?",
-                                "💰 Resumen de balance neto e ingresos",
-                                "💡 ¿Cómo puedo optimizar márgenes y costos?",
+                                "💰 Resumen de balance neto e ingresos de los últimos 30 días",
+                                "📋 ¿Cómo registro una venta y genero una factura?",
+                                "👤 ¿Qué mesero tiene más propinas este mes?",
+                                "🏪 ¿Cómo abro un turno de caja?",
                             ].map((sugerencia, idx) => (
                                 <button
                                     key={idx}
@@ -383,7 +387,7 @@ function SeccionChat() {
                                 void enviar();
                             }
                         }}
-                        placeholder="Pregunta sobre ventas, stock o sube un archivo…"
+                        placeholder="Pregunta sobre propinas, ventas, stock, meseros, o cómo usar la app…"
                         className="flex-1 w-full bg-[#1C2541] border border-[#3A506B] text-[#F4D6B0] rounded-xl px-3 py-2.5 text-sm placeholder:text-[#5BC0DE]/40 focus:outline-none focus:border-[#5BC0DE] resize-none min-h-[42px] max-h-32 transition-colors"
                     />
                     <button

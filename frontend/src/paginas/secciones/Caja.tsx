@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lock,
@@ -26,7 +26,6 @@ import {
   RotateCw,
   Printer,
   Settings,
-  Edit2,
   Store,
   Power
 } from 'lucide-react';
@@ -246,6 +245,20 @@ export default function Caja(): React.ReactElement {
     imprimirComprobanteNomina,
     recargarHistorial,
   } = useCaja();
+
+  // Estado local para identificar el mesero que recibe la propina (bloqueado al mesero de la mesa)
+  const [meseroPropinaNombre, setMeseroPropinaNombre] = useState<string>('');
+
+  // La propina SIEMPRE se asigna al mesero de la mesa (nunca a quien cobra)
+  useEffect(() => {
+    if (mesaACobrar) {
+      const meseroAsignado =
+        mesaACobrar.mesero ||
+        (ventaSeleccionada as any)?.mesero ||
+        'Mesero asignado';
+      setMeseroPropinaNombre(meseroAsignado);
+    }
+  }, [mesaACobrar, ventaSeleccionada]);
 
   return (
     <div className="h-[100dvh] sm:h-full w-full flex flex-col bg-[#0B132B] text-[#F4D6B0] p-2.5 sm:p-3 font-sans overflow-hidden">
@@ -1101,7 +1114,7 @@ export default function Caja(): React.ReactElement {
                     </div>
 
                     <div>
-                      <label className="text-[#5BC0DE] mb-1 block text-[11px] font-semibold">Bono / Incentivo ($)</label>
+                      <label className="text-[#5BC0DE] mb-1 block text-[11px] font-semibold">Bono / Propina Acumulada ($)</label>
                       <input
                         type="number"
                         min="0"
@@ -1380,7 +1393,9 @@ export default function Caja(): React.ReactElement {
                 <h3 className="font-extrabold text-[#F4D6B0] text-sm sm:text-base flex items-center gap-2 truncate">
                   <Receipt className="w-4 h-4 text-[#5BC0DE] shrink-0" /> Cobrar {mesaACobrar.nombre}
                 </h3>
-                <p className="text-[11px] text-[#5BC0DE] mt-0.5 truncate">Sección: {mesaACobrar.seccion}</p>
+                <p className="text-[11px] text-[#5BC0DE] mt-0.5 truncate">
+                  Sección: {mesaACobrar.seccion} • Mesero: <strong className="text-[#F4D6B0]">{meseroPropinaNombre}</strong>
+                </p>
               </div>
               <button onClick={() => setMesaACobrar(null)} className="p-2 shrink-0 rounded-xl text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B] transition-colors">
                 <X size={20} />
@@ -1498,8 +1513,18 @@ export default function Caja(): React.ReactElement {
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-[#3A506B]/50">
-                  <label className="text-[11px] text-[#5BC0DE] block mb-1 font-bold">Propina ($) — opcional</label>
+                {/* SECCIÓN PROPINA ASIGNADA AL MESERO DE LA MESA (FIJA, SIN EDICIÓN) */}
+                <div className="pt-2 border-t border-[#3A506B]/50 space-y-2">
+                  <div className="flex justify-between items-center gap-2">
+                    <label className="text-[11px] text-[#5BC0DE] font-bold">
+                      Propina ($) — opcional
+                    </label>
+                    <span className="text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                      <UserCheck size={11} />
+                      Para: {meseroPropinaNombre}
+                    </span>
+                  </div>
+
                   <input
                     type="number"
                     min="0"
@@ -1508,6 +1533,39 @@ export default function Caja(): React.ReactElement {
                     onChange={(e) => setPropina(Number(e.target.value.replace(/\D/g, '')) || 0)}
                     className="w-full bg-[#1C2541] border border-[#3A506B] px-3 py-2 rounded-lg text-[#F4D6B0] text-sm font-bold focus:outline-none focus:border-[#5BC0DE]"
                   />
+
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPropina(0)}
+                      className="flex-1 py-1 bg-[#1C2541] border border-[#3A506B] rounded-md text-[10px] font-bold text-[#5BC0DE] hover:bg-[#3A506B] transition-colors"
+                    >
+                      Sin propina
+                    </button>
+                    {[5, 10].map((pct) => {
+                      const val = Math.round(subtotalMesa * (pct / 100));
+                      return (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => setPropina(val)}
+                          className={`flex-1 py-1 border rounded-md text-[10px] font-bold transition-colors ${
+                            propina === val && propina > 0
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                              : 'bg-[#1C2541] border-[#3A506B] text-[#5BC0DE] hover:bg-[#3A506B]'
+                          }`}
+                        >
+                          {pct}% (${val.toLocaleString()})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {propina > 0 && (
+                    <p className="text-[10px] text-emerald-400/90 font-medium">
+                      ✓ La propina se abonará directamente a <strong>{meseroPropinaNombre}</strong> (mesero de la mesa).
+                    </p>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-[#3A506B]/50 space-y-1.5">
@@ -1522,8 +1580,8 @@ export default function Caja(): React.ReactElement {
                     </div>
                   )}
                   {propina > 0 && (
-                    <div className="flex justify-between text-[11px] text-[#5BC0DE]">
-                      <span>Propina:</span>
+                    <div className="flex justify-between text-[11px] text-emerald-400">
+                      <span>Propina ({meseroPropinaNombre.split(' ')[0]}):</span>
                       <span className="font-mono">+${Number(propina).toLocaleString()}</span>
                     </div>
                   )}
@@ -1613,7 +1671,7 @@ export default function Caja(): React.ReactElement {
               <button
                 type="button"
                 disabled={isPagoIncompletoMesa || cobrandoMesa}
-                onClick={() => void cobrarVentaMesa(true)}
+                onClick={() => void cobrarVentaMesa(true, meseroPropinaNombre)}
                 title="Cobrar e imprimir factura"
                 className="px-3.5 bg-[#1C2541] hover:bg-[#3A506B] border border-[#5BC0DE]/50 disabled:opacity-40 disabled:cursor-not-allowed text-[#5BC0DE] font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 h-[42px]"
               >
@@ -1623,7 +1681,7 @@ export default function Caja(): React.ReactElement {
               <button
                 type="button"
                 disabled={isPagoIncompletoMesa || cobrandoMesa}
-                onClick={() => void cobrarVentaMesa(false)}
+                onClick={() => void cobrarVentaMesa(false, meseroPropinaNombre)}
                 className="flex-1 bg-[#5BC0DE] hover:bg-[#4CA8C4] disabled:opacity-40 disabled:cursor-not-allowed text-[#0B132B] font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 h-[42px]"
               >
                 {cobrandoMesa ? (
@@ -1909,214 +1967,6 @@ export default function Caja(): React.ReactElement {
           </div>
         </div>
       )}
-
-      {/* MODAL PERSONALIZAR CAJAS */}
-      {modalGestionCajas && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 z-50 animate-in fade-in duration-200">
-          <div className="bg-[#1C2541] border border-[#3A506B] rounded-2xl sm:rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-full">
-            <div className="p-3 sm:p-5 bg-[#0B132B] border-b border-[#3A506B] flex items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2">
-                <Store size={18} className="text-[#5BC0DE]" />
-                <div>
-                  <h3 className="font-extrabold text-[#F4D6B0] text-sm sm:text-base">Personalizar Cajas</h3>
-                  <p className="text-[11px] text-[#5BC0DE] mt-0.5">Configuración para Dueño / Admin.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setModalGestionCajas(false);
-                  setCajaEditandoId(null);
-                  setCajaEditandoNombre('');
-                }}
-                className="p-2 shrink-0 rounded-xl text-[#5BC0DE] hover:text-[#F4D6B0] hover:bg-[#3A506B] transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-4 sm:p-5 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[#5BC0DE]/50 flex-1 min-h-0 space-y-4">
-              <form onSubmit={crearCaja} className="bg-[#0B132B] p-3 rounded-xl border border-[#3A506B]">
-                <label className="text-[11px] text-[#5BC0DE] font-bold block mb-1.5">Nueva Caja / Punto de Cobro:</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Ej: Caja Barra, Caja Terraza..."
-                    value={nuevaCajaNombre}
-                    onChange={(e) => setNuevaCajaNombre(e.target.value)}
-                    className="flex-1 bg-[#1C2541] border border-[#3A506B] px-3 py-2 rounded-xl text-white text-xs focus:outline-none focus:border-[#5BC0DE] placeholder:text-[#5BC0DE]/40"
-                  />
-                  <button
-                    type="submit"
-                    disabled={guardandoCaja || !nuevaCajaNombre.trim()}
-                    className="px-3 py-2 bg-[#5BC0DE] hover:bg-[#4CA8C4] disabled:opacity-40 text-[#0B132B] font-bold rounded-xl text-xs transition-all flex items-center gap-1 shadow-sm shrink-0"
-                  >
-                    <Plus size={14} /> Crear
-                  </button>
-                </div>
-              </form>
-
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[11px] font-bold text-[#5BC0DE] uppercase tracking-wider">
-                    Cajas Registradas ({cajas.length})
-                  </span>
-                </div>
-
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-[#3A506B]">
-                  {cajas.map((c) => {
-                    const estaEditando = cajaEditandoId === c.id;
-                    const esCajaActual = cajaActivaId === c.id;
-
-                    return (
-                      <div
-                        key={c.id}
-                        className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
-                          esCajaActual
-                            ? 'bg-[#0B132B] border-[#5BC0DE]'
-                            : 'bg-[#0B132B]/80 border-[#3A506B]'
-                        }`}
-                      >
-                        {estaEditando ? (
-                          <div className="flex items-center gap-2 flex-1 w-full">
-                            <input
-                              type="text"
-                              value={cajaEditandoNombre}
-                              onChange={(e) => setCajaEditandoNombre(e.target.value)}
-                              className="flex-1 bg-[#1C2541] border border-[#5BC0DE] px-2.5 py-1.5 rounded-lg text-white text-xs focus:outline-none"
-                              autoFocus
-                            />
-                            <button
-                              type="button"
-                              onClick={() => void guardarEdicionCaja(c.id)}
-                              disabled={guardandoCaja || !cajaEditandoNombre.trim()}
-                              className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 transition-colors"
-                            >
-                              Guardar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCajaEditandoId(null);
-                                setCajaEditandoNombre('');
-                              }}
-                              className="px-2.5 py-1.5 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] rounded-lg text-xs transition-colors"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-2.5">
-                              <div className={`p-2 rounded-xl ${c.activo ? 'bg-[#5BC0DE]/15 text-[#5BC0DE]' : 'bg-gray-500/15 text-gray-400'}`}>
-                                <Store size={16} />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-[#F4D6B0] text-xs sm:text-sm">{c.nombre}</span>
-                                  {esCajaActual && (
-                                    <span className="text-[9px] bg-[#5BC0DE]/20 text-[#5BC0DE] border border-[#5BC0DE]/40 px-1.5 py-0.5 rounded font-semibold">
-                                      En Uso
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] text-[#5BC0DE]/70 mt-0.5">
-                                  <span>ID: #{c.id}</span>
-                                  <span>•</span>
-                                  <span className={c.activo ? 'text-emerald-400' : 'text-gray-400'}>
-                                    {c.activo ? 'Activa' : 'Inactiva'}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCajaEditandoId(c.id);
-                                  setCajaEditandoNombre(c.nombre);
-                                }}
-                                title="Editar nombre"
-                                className="p-1.5 bg-[#1C2541] hover:bg-[#3A506B] text-[#5BC0DE] rounded-lg transition-all"
-                              >
-                                <Edit2 size={13} />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => void alternarEstadoCaja(c)}
-                                title={c.activo ? "Desactivar caja" : "Activar caja"}
-                                className={`p-1.5 rounded-lg transition-all ${
-                                  c.activo
-                                    ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/30'
-                                    : 'bg-gray-500/15 text-gray-400 hover:bg-gray-500/30'
-                                }`}
-                              >
-                                <Power size={13} />
-                              </button>
-
-                              {cajas.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => void eliminarCaja(c)}
-                                  title="Eliminar caja"
-                                  className="p-1.5 bg-rose-500/15 text-rose-400 hover:bg-rose-500/30 rounded-lg transition-all"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 sm:p-5 pb-[max(0.70rem,env(safe-area-inset-bottom))] bg-[#0B132B] border-t border-[#3A506B] flex justify-end shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setModalGestionCajas(false);
-                  setCajaEditandoId(null);
-                  setCajaEditandoNombre('');
-                }}
-                className="px-5 py-2.5 bg-[#3A506B] hover:bg-[#3A506B]/80 text-[#F4D6B0] font-bold rounded-xl text-xs transition-all h-[42px]"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TICKET DE IMPRESIÓN */}
-      {ticketAImprimir && (
-        <FormatoTicketTermico
-          tipo="factura"
-          negocio={negocioConfig}
-          titulo={ticketAImprimir.titulo || 'FACTURA DE VENTA'}
-          mesa={ticketAImprimir.mesa}
-          seccion={ticketAImprimir.seccion}
-          cliente={ticketAImprimir.cliente}
-          fechaHora={ticketAImprimir.fecha}
-          metodoPago={ticketAImprimir.metodoPago}
-          items={ticketAImprimir.items.map(it => ({
-            nombre: it.nombre,
-            cantidad: it.cantidad,
-            precioUnitario: it.precio,
-            subtotal: it.precio * it.cantidad,
-          }))}
-          subtotal={ticketAImprimir.subtotal}
-          descuento={ticketAImprimir.descuento}
-          propina={ticketAImprimir.propina}
-          total={ticketAImprimir.total}
-          mensajePie="¡GRACIAS POR SU COMPRA!"
-        />
-      )}
-
     </div>
   );
 }

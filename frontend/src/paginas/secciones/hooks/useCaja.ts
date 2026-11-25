@@ -28,6 +28,8 @@ interface SubVenta {
   id: string;
   comandaId?: number;
   idVenta?: number;
+  idMesero?: number;
+  mesero?: string;
   cliente: string;
   total: number;
   items: { idProducto?: number; nombre: string; cantidad: number; precio: number }[];
@@ -53,6 +55,7 @@ export interface MesaActiva {
   idBackend?: number;
   nombre: string;
   seccion: string;
+  idMesero?: number;
   mesero: string;
   ventas: SubVenta[];
 }
@@ -527,6 +530,7 @@ export function useCaja() {
           precio: it.precio || 0
         }));
         const totalC = c.total || itemsMapeados.reduce((sum, it) => sum + it.precio * it.cantidad, 0);
+        const idMeseroCmd = Number((c as any).idUsuario ?? (c as any).id_usuario ?? (c as any).idMesero) || undefined;
 
         const vExistente = mapaVentas.get(clienteKey);
         if (!vExistente) {
@@ -534,6 +538,8 @@ export function useCaja() {
             id: String(c.id),
             comandaId: c.id,
             idVenta: c.idVenta,
+            idMesero: idMeseroCmd,
+            mesero: c.mesero || 'Mesero',
             cliente: clienteKey,
             total: totalC,
             items: itemsMapeados
@@ -541,15 +547,33 @@ export function useCaja() {
         } else {
           vExistente.total += totalC;
           vExistente.items.push(...itemsMapeados);
+          if (!vExistente.idMesero && idMeseroCmd) {
+            vExistente.idMesero = idMeseroCmd;
+          }
+          if ((!vExistente.mesero || vExistente.mesero === 'Mesero') && c.mesero) {
+            vExistente.mesero = c.mesero;
+          }
         }
       }
+
+      const comandaConMesero = coms.find((c) => Boolean((c as any).idUsuario ?? (c as any).id_usuario ?? c.mesero));
+      const idMeseroDesdeComanda = Number(
+        (comandaConMesero as any)?.idUsuario ??
+        (comandaConMesero as any)?.id_usuario ??
+        (comandaConMesero as any)?.idMesero
+      ) || undefined;
+
+      // ✅ PRIORIDAD: mesa.id_usuario (mesero asignado a la mesa) sobre la comanda,
+      // porque la comanda pudo haberla abierto el cajero.
+      const idMeseroDesdeMesa = Number((m as any).idUsuario ?? (m as any).id_usuario) || undefined;
 
       activas.push({
         id: String(m.id),
         idBackend: m.id,
         nombre: `Mesa ${m.numero}`,
         seccion: m.seccionNombre || 'Salón Principal',
-        mesero: coms[0]?.mesero || 'Mesero',
+        idMesero: idMeseroDesdeMesa ?? idMeseroDesdeComanda,
+        mesero: comandaConMesero?.mesero || coms[0]?.mesero || 'Mesero',
         ventas: Array.from(mapaVentas.values())
       });
     }
@@ -961,7 +985,7 @@ export function useCaja() {
     return false;
   }, [metodoPago, montoRecibidoSimple, totalCobroMesa, montoEfectivo, montoDigital]);
 
-  const cobrarVentaMesa = async (imprimir: boolean = false) => {
+  const cobrarVentaMesa = async (imprimir: boolean = false, meseroPropinaOverride?: string) => {
     if (cobrandoMesa || !mesaACobrar || !ventaSeleccionada) return;
     if (!turnoAbierto) {
       setModalTurno(true);
@@ -1013,15 +1037,61 @@ export function useCaja() {
         }
       }
 
-      const idUsuarioActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
+      const idCajeroActual = Number((usuario as any)?.id_usuario || (usuario as any)?.idUsuario || 1);
 
-      // Único await bloqueante: registrar la factura en backend
+      // Mesero de la mesa (nombre) para mostrar en el ticket / historial
+      const nombreMeseroFinal = (
+        meseroPropinaOverride ||
+        ventaSeleccionada.mesero ||
+        mesaACobrar.mesero ||
+        ''
+      ).trim();
+
+      const empleadoMesero = nombreMeseroFinal
+        ? empleados.find(
+            (emp) => emp.nombre.trim().toLowerCase() === nombreMeseroFinal.toLowerCase()
+          )
+        : undefined;
+
+      const comandaConUsuario = comsACerrar.find((c) => Number((c as any).idUsuario ?? (c as any).id_usuario));
+      const idMeseroDesdeComanda = Number(
+        (comandaConUsuario as any)?.idUsuario ??
+        (comandaConUsuario as any)?.id_usuario
+      ) || undefined;
+
+      const propinaNum = Number(propina) || 0;
+
+      // ✅ Excluir al cajero como candidato a "mesero beneficiario"
+      const esCajero = (id?: number) => id === idCajeroActual;
+
+      const idMeseroBeneficiario =
+        (mesaACobrar.idMesero && !esCajero(mesaACobrar.idMesero) ? mesaACobrar.idMesero : undefined) ??
+        (ventaSeleccionada.idMesero && !esCajero(ventaSeleccionada.idMesero) ? ventaSeleccionada.idMesero : undefined) ??
+        (idMeseroDesdeComanda && !esCajero(idMeseroDesdeComanda) ? idMeseroDesdeComanda : undefined) ??
+        empleadoMesero?.idUsuario;
+
+      // ✅ Si hay propina, el mesero es obligatorio (no puede quedar en el cajero)
+      if (propinaNum > 0 && !idMeseroBeneficiario) {
+        alert(
+          `No se pudo identificar al mesero de ${mesaACobrar.nombre} para asignar la propina.\n` +
+          `Asigna un mesero a la mesa o retira la propina antes de cobrar.`
+        );
+        setCobrandoMesa(false);
+        return;
+      }
+
+      // En la factura: mesero si existe; cajero solo si la mesa no tiene mesero y NO hay propina.
+      const idUsuarioFactura = idMeseroBeneficiario ?? idCajeroActual;
+
+      // Único await bloqueante: registrar la factura asignando la propina al mesero (idUsuario = mesero)
       await CajaServicio.crearFactura({
         idMesa: mesaACobrar.idBackend ?? null,
-        idUsuario: idUsuarioActual,
+        idUsuario: idUsuarioFactura,
+        idCajero: idCajeroActual,
+        idMeseroPropina: propinaNum > 0 ? idMeseroBeneficiario : null,
         subtotal: ventaSeleccionada.total,
         descuento: descuentoAplicado,
-        propina: Number(propina) || 0,
+        propina: propinaNum,
         cliente: ventaSeleccionada.cliente,
         metodoPago,
         montoEfectivo: metodoPago === 'mixto' ? montoEfectivo : undefined,
@@ -1030,17 +1100,19 @@ export function useCaja() {
         idVenta,
         idsComandas,
         detalles: Array.from(mapaDetalles.values()),
-      });
+      } as any);
 
       let detalleExtra = '';
       if (metodoPago === 'mixto') {
         const totalMixto = montoEfectivo + montoDigital;
         const vueltoMixto = Math.max(0, totalMixto - totalCobroMesa);
-        detalleExtra = ` (Ef: $${montoEfectivo} / Dig: $${montoDigital})${vueltoMixto > 0 ? ` [Cambio: $${vueltoMixto}]` : ''}${propina > 0 ? ` {Propina: $${propina}}` : ''}`;
+        detalleExtra = ` (Ef: $${montoEfectivo} / Dig: $${montoDigital})${vueltoMixto > 0 ? ` [Cambio: $${vueltoMixto}]` : ''}${propinaNum > 0 ? ` {Propina ${nombreMeseroFinal}: $${propinaNum}}` : ''}`;
       } else if (metodoPago === 'tarjeta') {
-        detalleExtra = propina > 0 ? ` {Propina: $${propina}}` : '';
+        detalleExtra = propinaNum > 0 ? ` {Propina ${nombreMeseroFinal}: $${propinaNum}}` : '';
       } else if ((metodoPago === 'efectivo' || metodoPago === 'transferencia') && montoRecibidoSimple > 0) {
-        detalleExtra = ` (Recibido: $${montoRecibidoSimple} / Cambio: $${cambioCalculado})${propina > 0 ? ` {Propina: $${propina}}` : ''}`;
+        detalleExtra = ` (Recibido: $${montoRecibidoSimple} / Cambio: $${cambioCalculado})${propinaNum > 0 ? ` {Propina ${nombreMeseroFinal}: $${propinaNum}}` : ''}`;
+      } else if (propinaNum > 0) {
+        detalleExtra = ` {Propina ${nombreMeseroFinal}: $${propinaNum}}`;
       }
       if (descuentoAplicado > 0) {
         detalleExtra += ` [Desc: -$${descuentoAplicado}]`;
@@ -1058,7 +1130,7 @@ export function useCaja() {
         })),
         subtotal: ventaSeleccionada.total,
         descuento: descuentoAplicado,
-        propina: Number(propina) || 0,
+        propina: propinaNum,
         total: totalCobroMesa,
         metodoPago: metodoPago.toUpperCase(),
         fecha: fechaActual,
@@ -1070,13 +1142,13 @@ export function useCaja() {
         seccion: mesaACobrar.seccion,
         cliente: ventaSeleccionada.cliente,
         monto: totalCobroMesa,
-        mesero: mesaACobrar.mesero,
+        mesero: nombreMeseroFinal || (usuario?.nombre?.trim() || 'Caja'),
         metodoPago:
           (metodoPago === 'mixto'
-            ? `Mixto (Ef: $${montoEfectivo} / Dig: $${montoDigital})${propina > 0 ? ` + Prop: $${propina}` : ''}`
+            ? `Mixto (Ef: $${montoEfectivo} / Dig: $${montoDigital})${propinaNum > 0 ? ` + Prop (${nombreMeseroFinal}): $${propinaNum}` : ''}`
             : metodoPago === 'tarjeta'
-              ? `Tarjeta${propina > 0 ? ` (Prop: $${propina})` : ''}`
-              : `${metodoPago.toUpperCase()}${montoRecibidoSimple > 0 ? ` (Recibido: $${montoRecibidoSimple})` : ''}${propina > 0 ? ` (Prop: $${propina})` : ''}`) +
+              ? `Tarjeta${propinaNum > 0 ? ` (Prop ${nombreMeseroFinal}: $${propinaNum})` : ''}`
+              : `${metodoPago.toUpperCase()}${montoRecibidoSimple > 0 ? ` (Recibido: $${montoRecibidoSimple})` : ''}${propinaNum > 0 ? ` (Prop ${nombreMeseroFinal}: $${propinaNum})` : ''}`) +
           (descuentoAplicado > 0 ? ` (Desc: -$${descuentoAplicado})` : ''),
         estado: 'Pagada',
         fechaApertura: fechaActual,
