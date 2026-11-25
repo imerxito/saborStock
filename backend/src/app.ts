@@ -37,11 +37,14 @@ app.use(
         origin: [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
+            "https://sabor-stock-7qpi.vercel.app",
             /^http:\/\/192\.168\.\d+\.\d+:5173$/,
             /^http:\/\/localhost:\d+$/,
             /^http:\/\/127\.0\.0\.1:\d+$/
         ],
         credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"]
     })
 );
 
