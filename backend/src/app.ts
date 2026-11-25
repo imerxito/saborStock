@@ -37,16 +37,22 @@ app.use(
         origin: [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
-            "https://sabor-stock-7qpi-beexr2n8o-imerxito.vercel.app",
             "https://sabor-stock-7qpi.vercel.app",
             "https://sabor-stock-azure.vercel.app",
+            // Cualquier preview: sabor-stock-7qpi-<hash>-imerxito.vercel.app
+            /^https:\/\/sabor-stock-7qpi-[a-z0-9]+-imerxito\.vercel\.app$/,
             /^http:\/\/192\.168\.\d+\.\d+:5173$/,
             /^http:\/\/localhost:\d+$/,
             /^http:\/\/127\.0\.0\.1:\d+$/
         ],
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"]
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "X-User-Role",
+            "X-User-Id"
+        ]
     })
 );
 

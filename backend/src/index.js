@@ -1,16 +1,47 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
+import express from 'express';
+import cors from 'cors';
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+const corsOptions= {
+  origin: (origin, callback) => {
+    const permitido =
+      !origin || // Postman, curl, etc.
+      origin === 'http://localhost:5173' ||
+      /^https:\/\/sabor-stock.*\.vercel\.app$/.test(origin);
+
+    callback(null, permitido);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Role', 'X-User-Id'],
+  optionsSuccessStatus: 204,
 };
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const app = (0, express_1.default)();
-const PORT = 3000;
-app.use(express_1.default.json());
+
+// Antes de las rutas. También responde los preflight (OPTIONS).
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// ---- Rutas ----
 app.get('/api/inventario', (req, res) => {
-    res.json({ mensaje: '¡Hola desde el backend de saborStock!' });
+  res.json({ mensaje: '¡Hola desde el backend de saborStock!' });
 });
-app.listen(PORT, () => {
+
+app.post('/auth/login', (req, res) => {
+  // tu lógica de login
+});
+
+app.get('/api/comandas', (req, res) => {
+  // tu lógica de comandas
+});
+// ---------------
+
+// Solo escucha en local; en Vercel no se usa listen()
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
     console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
-});
-//# sourceMappingURL=index.js.map
+  });
+}
+
+// Obligatorio para Vercel
+export default app;
